@@ -1,4 +1,8 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+import UserNotifications
+#endif
 
 public struct ConnectionView: View {
     @Environment(Connection.self) private var connection
@@ -21,6 +25,14 @@ public struct ConnectionView: View {
                 }.padding(24).studioPanel()
                 LabeledContent("Device", value: connection.deviceID).font(.system(.callout, design: .monospaced)).textSelection(.enabled)
                 DisclosureGroup("Public Pairing Key") { Text(connection.publicKey).font(.system(.caption, design: .monospaced)).textSelection(.enabled) }
+                #if os(iOS)
+                Button("Enable Apple Notifications") {
+                    Task {
+                        do { if try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { UIApplication.shared.registerForRemoteNotifications() } }
+                        catch { connection.error = error.localizedDescription }
+                    }
+                }.buttonStyle(.bordered).disabled(!connection.connected)
+                #endif
                 Text("Development boundary").font(.headline)
                 Text("The local server is bound to loopback. Host isolation, APNs provisioning, account connectors, payments, and Cloud model qualification are not enabled by pairing.").foregroundStyle(.secondary)
                 if let error = connection.error { Text(error).foregroundStyle(.red).textSelection(.enabled) }

@@ -16,6 +16,7 @@ import { profileCSV } from '../data/analysis.js';
 import { renderHTML } from '../documents/documents.js';
 import { MemoryStore } from '../memory/memory.js';
 import { Scheduler } from '../scheduler/scheduler.js';
+import { Notifications } from '../notifier/apns.js';
 
 export const publicKinds = ['task','policy','message','action','artifact','inbox','automation','memory','identity','capability','browser','workflow','source','citation','deployment_evidence'];
 const wire = (value: unknown): Json => z.json().parse(value);
@@ -59,6 +60,10 @@ export class Coordinator {
         case 'automation.save': return wire(this.scheduler.save(key,expected,payload));
         case 'memory.save': return wire(this.memory.save(z.strictObject({ text: z.string(),project: z.string(),identityId: z.string(),source: z.string(),provenance: z.literal('owner') }).parse(payload)));
         case 'memory.forget': return wire(this.memory.forget(key,expected));
+        case 'device.register_push': {
+          const value = z.strictObject({ token: z.string(),topic: z.string().min(1),environment: z.enum(['sandbox','production']) }).parse(payload);
+          return wire(new Notifications(this.db).register(command.deviceId,value.token,value.topic,value.environment));
+        }
         case 'device.revoke': return wire(this.devices.revoke(key,expected));
         default: throw new Fault('unknown_command','Unsupported command',400);
       }

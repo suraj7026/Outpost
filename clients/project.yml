@@ -1,0 +1,51 @@
+name: Outpost
+options:
+  bundleIdPrefix: dev.outpost
+  deploymentTarget:
+    iOS: '17.0'
+    macOS: '14.0'
+packages:
+  OutpostClients:
+    path: .
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    CODE_SIGN_STYLE: Automatic
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 0.1.0
+targets:
+  OutpostPhone:
+    type: application
+    platform: iOS
+    sources: [iOS]
+    dependencies:
+      - package: OutpostClients
+        product: OutpostKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.outpost.ios
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Outpost
+        INFOPLIST_KEY_NSFaceIDUsageDescription: Authenticate exact Outpost decisions.
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        TARGETED_DEVICE_FAMILY: '1,2'
+    info:
+      path: iOS/Info.plist
+      properties:
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSFaceIDUsageDescription: Authenticate exact Outpost decisions.
+        UILaunchScreen: {}
+  OutpostMac:
+    type: application
+    platform: macOS
+    sources: [macOS]
+    dependencies:
+      - package: OutpostClients
+        product: OutpostKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.outpost.mac
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSFaceIDUsageDescription: Authenticate exact Outpost decisions.
