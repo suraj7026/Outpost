@@ -7,6 +7,10 @@ import UserNotifications
 public struct ConnectionView: View {
     @Environment(Connection.self) private var connection
     @State private var token = ""
+    @State private var newDeviceID = ""
+    @State private var newDeviceName = ""
+    @State private var newDeviceKey = ""
+    @State private var revoking: ServerRecord?
     public init() {}
     public var body: some View {
         @Bindable var connection = connection
@@ -25,6 +29,32 @@ public struct ConnectionView: View {
                 }.padding(24).studioPanel()
                 LabeledContent("Device", value: connection.deviceID).font(.system(.callout, design: .monospaced)).textSelection(.enabled)
                 DisclosureGroup("Public Pairing Key") { Text(connection.publicKey).font(.system(.caption, design: .monospaced)).textSelection(.enabled) }
+                if connection.connected {
+                    DisclosureGroup("Enroll Another Device") {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Copy the Device ID and Public Pairing Key from the other device. Enrolling it grants owner access to this server workspace.").font(.callout).foregroundStyle(.secondary)
+                            TextField("Device Name", text: $newDeviceName)
+                            TextField("Device ID", text: $newDeviceID)
+                            TextField("Public Key (Base64)", text: $newDeviceKey)
+                            Button("Authenticate & Enroll") {
+                                Task {
+                                    await connection.enrollDevice(id: newDeviceID.trimmingCharacters(in: .whitespacesAndNewlines), name: newDeviceName, publicKey: newDeviceKey.trimmingCharacters(in: .whitespacesAndNewlines))
+                                    if connection.error == nil { newDeviceID = ""; newDeviceName = ""; newDeviceKey = "" }
+                                }
+                            }.buttonStyle(.borderedProminent).disabled(connection.busy || newDeviceID.isEmpty || newDeviceName.isEmpty || newDeviceKey.isEmpty)
+                        }.textFieldStyle(.roundedBorder).padding(.vertical, 12)
+                    }
+                    DisclosureGroup("Trusted Devices") {
+                        ForEach(connection.records("device")) { device in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(device.title + (device.id == connection.deviceID ? " · This Device" : "")).font(.headline)
+                                Text(device.id).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                                if device.data["revoked"] == .bool(true) { Text("Revoked").foregroundStyle(.secondary) }
+                                else { Button("Revoke Device", role: .destructive) { revoking = device }.disabled(connection.busy) }
+                            }.padding(.vertical, 12)
+                        }
+                    }
+                }
                 #if os(iOS)
                 Button("Enable Apple Notifications") {
                     Task {
@@ -38,6 +68,9 @@ public struct ConnectionView: View {
                 if let error = connection.error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
             }.padding(32).frame(maxWidth: 760, alignment: .leading)
         }.navigationTitle("Connection")
+        .confirmationDialog("Revoke this device? Its future signed requests will be rejected. This does not undo completed actions.", isPresented: Binding(get: { revoking != nil }, set: { if !$0 { revoking = nil } })) {
+            if let device = revoking { Button("Revoke " + device.title, role: .destructive) { Task { await connection.send("device.revoke", id: device.id, revision: device.revision, authenticate: true) }; revoking = nil } }
+        }
     }
 }
 struct CatalogueView: View {

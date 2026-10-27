@@ -101,6 +101,17 @@ private struct CachedConnection: Codable {
             try await self.refreshSnapshot()
         }
     }
+    public func enrollDevice(id: String, name: String, publicKey: String) async {
+        guard connected, projectionServerURL == serverURL else { error = "Connect this trusted device first."; return }
+        await perform {
+            guard UUID(uuidString: id) != nil, Data(base64Encoded: publicKey)?.count == 32 else { throw ClientFailure.message("Enter the other device's exact UUID and 32-byte public key.") }
+            let context = LAContext()
+            guard try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Trust this additional Outpost device with your server workspace") else { throw ClientFailure.message("Authentication cancelled") }
+            _ = try await self.request("v1/pair-device", self.envelope("pair", payload: ["deviceId": .string(id.lowercased()), "name": .string(name), "publicKey": .string(publicKey)]))
+            self.commandStatus = "Device enrolled — reconnect from the new device"
+            try await self.refreshSnapshot()
+        }
+    }
     public func connect() async { await perform { try await self.refreshSnapshot() } }
     private func refreshSnapshot() async throws {
         let data = try await request("v1/query", envelope("snapshot")); try projection.replace(JSONDecoder().decode(Snapshot.self, from: data))
@@ -138,7 +149,7 @@ private struct CachedConnection: Codable {
         guard var command = pendingCommand else { return }
         guard pendingServerURL == serverURL else { error = "Reconnect to the original server before resolving its pending command."; return }
         await perform {
-            if ["approval.decide", "policy.change"].contains(command["type"]?.text ?? "") {
+            if ["approval.decide", "policy.change", "device.revoke"].contains(command["type"]?.text ?? "") {
                 let context = LAContext()
                 guard try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Reconfirm this pending Outpost decision") else { throw ClientFailure.message("Authentication cancelled") }
             }
@@ -181,7 +192,7 @@ private struct CachedConnection: Codable {
         defer { busy = false; try? saveCache() }
         do { try await operation() } catch {
             self.error = error.localizedDescription
-            if case ClientFailure.rejected = error { pendingCommand = nil; commandStatus = "Server rejected the command — nothing new was accepted" }
+            if case ClientFailure.rejected = error, pendingCommand != nil { pendingCommand = nil; commandStatus = "Server rejected this submission — inspect the current server state" }
             else if pendingCommand != nil { commandStatus = "Acceptance unknown — retry uses the same operation key" }
         }
     }

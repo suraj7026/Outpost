@@ -18,7 +18,7 @@ import { MemoryStore } from '../memory/memory.js';
 import { Scheduler } from '../scheduler/scheduler.js';
 import { Notifications } from '../notifier/apns.js';
 
-export const publicKinds = ['task','policy','message','action','artifact','inbox','automation','memory','identity','capability','browser','workflow','source','citation','deployment_evidence','operation'];
+export const publicKinds = ['task','policy','message','action','artifact','inbox','automation','memory','identity','capability','browser','workflow','source','citation','deployment_evidence','operation','device'];
 const wire = (value: unknown): Json => z.json().parse(value);
 export class Coordinator {
   readonly devices: Devices; readonly tasks: Tasks; readonly artifacts: Artifacts; readonly memory: MemoryStore; readonly scheduler: Scheduler;
