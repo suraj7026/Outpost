@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct TaskWorkbench: View {
     @Environment(Connection.self) private var connection
@@ -6,6 +7,7 @@ struct TaskWorkbench: View {
     @State private var reply = ""
     @State private var pane = "Conversation"
     @State private var confirmCancel = false
+    @State private var importing = false
     private var task: ServerRecord? { connection.records("task").first { $0.id == taskID } }
     private var policy: ServerRecord? { connection.records("policy").first { $0.id == taskID } }
     var body: some View {
@@ -31,6 +33,15 @@ struct TaskWorkbench: View {
                 }
             }
         }.padding(24).navigationTitle("Task")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.item]) { result in
+            switch result {
+            case .success(let url): Task { await connection.upload(url, taskID: taskID) }
+            case .failure(let error): connection.error = error.localizedDescription
+            }
+        }
         .confirmationDialog("Cancel this task? Already completed external effects cannot be undone.", isPresented: $confirmCancel) {
             Button("Cancel Task", role: .destructive) { if let task { Task { await connection.send("task.cancel", id: taskID, revision: task.revision) } } }
         }
@@ -70,7 +81,8 @@ struct TaskWorkbench: View {
             VStack(alignment: .leading, spacing: 12) {
                 TextField("Reply or give Outpost a next step…", text: $reply, axis: .vertical).lineLimit(2...6).textFieldStyle(.plain).accessibilityLabel("Steer this task")
                 HStack {
-                    Text("Ollama Cloud · server execution").font(.caption).foregroundStyle(.secondary)
+                    Button { importing = true } label: { Label("Attach File", systemImage: "paperclip") }.buttonStyle(.borderless).disabled(!connection.connected || connection.busy)
+                    Text("Server execution").font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Button { let text = reply; Task { if let task { await connection.send("task.steer", id: taskID, revision: task.revision, payload: ["text": .string(text)]); if connection.error == nil { reply = "" } } } } label: { Label("Send", systemImage: "arrow.up") }.buttonStyle(.borderedProminent).keyboardShortcut(.return, modifiers: .command).disabled(reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || connection.busy || !connection.connected)
                 }
@@ -83,6 +95,9 @@ struct TaskWorkbench: View {
                 Text("Evidence & Decisions").font(.headline)
                 Text("Exact actions and observed results. Approval is not completion.").font(.callout).foregroundStyle(.secondary)
                 ForEach(connection.records("action", taskID: taskID)) { action in ActionCard(action: action); Divider() }
+                ForEach(connection.records("operation", taskID: taskID).filter { $0.text("state") == "unknown" }) { operation in
+                    Label(operation.text("error") + ". Check the recorded action before retrying.", systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
+                }
                 if connection.records("action", taskID: taskID).isEmpty { Text("No tool actions yet.").foregroundStyle(.secondary) }
                 Button("Inspect Machine", systemImage: "server.rack") { Task { await connection.send("action.propose", id: taskID, revision: task?.revision ?? 0, payload: ["tool": .string("system.inspect"), "arguments": .object([:])]) } }.buttonStyle(.bordered).disabled(!connection.connected || connection.busy)
                 Text("Creates a real, read-only action under this task’s current control mode.").font(.caption).foregroundStyle(.secondary)

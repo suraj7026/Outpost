@@ -37,6 +37,24 @@ targets:
           NSAllowsLocalNetworking: true
         NSFaceIDUsageDescription: Authenticate exact Outpost decisions.
         UILaunchScreen: {}
+  OutpostPhoneUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: OutpostPhone
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+  OutpostMacUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources: [UITests]
+    dependencies:
+      - target: OutpostMac
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
   OutpostMac:
     type: application
     platform: macOS

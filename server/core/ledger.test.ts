@@ -18,6 +18,10 @@ test('acceptance, record, event and outbox commit atomically with replay-safe ke
   assert.throws(() => db.transaction(() => { db.put('task',id(),0,{}); throw Error('crash'); }));
   assert.equal(db.events().length,1);
   assert.throws(() => db.put('task',cmd.aggregateId,0,{}),/stale_revision/);
+  db.db.exec("CREATE TRIGGER reject_event BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'fixture_event_failure'); END");
+  assert.throws(() => db.put('task','atomic',0,{}),/fixture_event_failure/);
+  assert.equal(db.get('task','atomic'),undefined);
+  db.db.exec('DROP TRIGGER reject_event');
   assert.deepEqual(db.events(1),[]);
   assert.throws(() => db.events(2),/invalid_cursor/);
   db.close();

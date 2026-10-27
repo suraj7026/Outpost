@@ -48,12 +48,16 @@ public struct Projection: Sendable {
     public mutating func apply(_ page: EventPage) throws {
         guard page.nextCursor >= cursor else { throw ClientFailure.message("Replay cursor moved backwards") }
         var last = cursor
+        var next = records
         for event in page.events where event.feedCursor > cursor {
             guard event.protocolVersion == 1, event.feedCursor > last, event.feedCursor <= page.nextCursor else { throw ClientFailure.message("Invalid event ordering; reconnect to resnapshot") }
             last = event.feedCursor; let record = event.payload, key = "\(record.kind):\(record.id)"
-            if record.revision > (records[key]?.revision ?? 0) { records[key] = record }
+            if record.revision > (next[key]?.revision ?? 0) { next[key] = record }
         }
-        cursor = page.nextCursor
+        records = next; cursor = page.nextCursor
     }
 }
-public enum ClientFailure: LocalizedError { case message(String); public var errorDescription: String? { switch self { case .message(let value): value } } }
+public enum ClientFailure: LocalizedError {
+    case message(String), rejected(String)
+    public var errorDescription: String? { switch self { case .message(let value), .rejected(let value): value } }
+}

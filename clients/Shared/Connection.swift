@@ -8,6 +8,7 @@ public struct DeviceIdentity {
     public let id: String
     let key: Curve25519.Signing.PrivateKey
     public var publicKey: String { key.publicKey.rawRepresentation.base64EncodedString() }
+    var cacheKey: SymmetricKey { SymmetricKey(data: SHA256.hash(data: key.rawRepresentation)) }
     public static func load() throws -> DeviceIdentity {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "dev.outpost.identity", kSecAttrAccount as String: "device"]
         var result: CFTypeRef?
@@ -24,6 +25,11 @@ public struct DeviceIdentity {
         guard saved == errSecSuccess else { throw ClientFailure.message("Could not save device key (\(saved))") }; return identity
     }
 }
+private struct CachedConnection: Codable {
+    let snapshot: Snapshot
+    let pendingCommand: [String: JSONValue]?
+    let commandStatus: String
+}
 @MainActor @Observable public final class Connection {
     public var serverURL: String
     public private(set) var projection = Projection()
@@ -34,7 +40,37 @@ public struct DeviceIdentity {
     public private(set) var commandStatus = ""
     private var identity: DeviceIdentity?
     private var pendingCommand: [String: JSONValue]?
-    public init() { serverURL = UserDefaults.standard.string(forKey: "outpost.server") ?? "http://127.0.0.1:4318"; do { identity = try DeviceIdentity.load() } catch { self.error = error.localizedDescription } }
+    private var pendingServerURL: String?
+    private var projectionServerURL: String?
+    public init() {
+        serverURL = UserDefaults.standard.string(forKey: "outpost.server") ?? "http://127.0.0.1:4318"
+        do {
+            identity = try DeviceIdentity.load()
+            if let identity, let data = try? Data(contentsOf: cacheURL()) {
+                let clear = try AES.GCM.open(AES.GCM.SealedBox(combined: data), using: identity.cacheKey)
+                if let cache = try? JSONDecoder().decode(CachedConnection.self, from: clear) {
+                    try projection.replace(cache.snapshot)
+                    pendingCommand = cache.pendingCommand
+                    pendingServerURL = pendingCommand == nil ? nil : serverURL
+                    commandStatus = cache.commandStatus
+                } else { try projection.replace(JSONDecoder().decode(Snapshot.self, from: clear)) }
+                projectionServerURL = serverURL
+            }
+        } catch { self.error = "Device key or cached history unavailable: \(error.localizedDescription)" }
+    }
+    private func cacheURL() throws -> URL {
+        let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("Outpost", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let server = SHA256.hash(data: Data(serverURL.utf8)).map { String(format: "%02x", $0) }.joined()
+        return directory.appendingPathComponent(server + ".sealed")
+    }
+    private func saveCache() throws {
+        guard let identity, projectionServerURL == serverURL, pendingCommand == nil || pendingServerURL == serverURL else { return }
+        let snapshot = Snapshot(protocolVersion: 1, cursor: projection.cursor, records: Array(projection.records.values))
+        let bytes = try JSONEncoder().encode(CachedConnection(snapshot: snapshot, pendingCommand: pendingCommand, commandStatus: commandStatus))
+        guard let sealed = try AES.GCM.seal(bytes, using: identity.cacheKey).combined else { throw ClientFailure.message("Could not encrypt local history") }
+        try sealed.write(to: cacheURL(), options: [.atomic])
+    }
     public var deviceID: String { identity?.id ?? "Unavailable" }
     public var publicKey: String { identity?.publicKey ?? "" }
     public func records(_ kind: String, taskID: String? = nil) -> [ServerRecord] {
@@ -50,7 +86,9 @@ public struct DeviceIdentity {
         let (body, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let failure = try? JSONDecoder().decode([String: JSONValue].self, from: body)
-            throw ClientFailure.message(failure?["message"]?.text ?? "Server rejected the request")
+            let message = failure?["message"]?.text ?? "Server rejected the request"
+            if let http = response as? HTTPURLResponse, (400..<500).contains(http.statusCode) { throw ClientFailure.rejected(message) }
+            throw ClientFailure.message(message)
         }
         return body
     }
@@ -66,21 +104,22 @@ public struct DeviceIdentity {
     public func connect() async { await perform { try await self.refreshSnapshot() } }
     private func refreshSnapshot() async throws {
         let data = try await request("v1/query", envelope("snapshot")); try projection.replace(JSONDecoder().decode(Snapshot.self, from: data))
-        connected = true; lastSync = Date(); UserDefaults.standard.set(serverURL, forKey: "outpost.server")
+        projectionServerURL = serverURL; connected = true; lastSync = Date(); UserDefaults.standard.set(serverURL, forKey: "outpost.server"); try saveCache()
     }
     public func sync() async {
         guard !busy, connected else { return }
+        guard projectionServerURL == serverURL else { connected = false; return }
         do {
             var more = true
             while more {
                 let data = try await request("v1/query", envelope("events", payload: ["after": .number(Double(projection.cursor))]))
                 let page = try JSONDecoder().decode(EventPage.self, from: data); try projection.apply(page); more = page.hasMore
             }
-            lastSync = Date()
+            lastSync = Date(); try saveCache()
         } catch { connected = false; self.error = "Offline — last-known records retained. \(error.localizedDescription)" }
     }
     public func send(_ type: String, id: String, revision: Int, payload: [String: JSONValue] = [:], authenticate: Bool = false) async {
-        guard connected, !busy, pendingCommand == nil else { error = "Reconnect or resolve the pending command before sending another."; return }
+        guard connected, projectionServerURL == serverURL, !busy, pendingCommand == nil else { error = "Reconnect or resolve the pending command before sending another."; return }
         await perform {
             if authenticate {
                 let context = LAContext(); let allowed = try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Confirm this exact Outpost decision")
@@ -88,7 +127,8 @@ public struct DeviceIdentity {
             }
             var command = self.envelope(type, payload: payload)
             command["protocolVersion"] = .number(1); command["commandId"] = .string(UUID().uuidString.lowercased()); command["idempotencyKey"] = .string(UUID().uuidString.lowercased()); command["aggregateId"] = .string(id); command["expectedRevision"] = .number(Double(revision))
-            self.pendingCommand = command; self.commandStatus = "Sending — not yet accepted"
+            self.pendingCommand = command; self.pendingServerURL = self.serverURL; self.commandStatus = "Sending — not yet accepted"
+            try self.saveCache()
             _ = try await self.request("v1/commands", command)
             self.pendingCommand = nil; self.commandStatus = "Accepted by server — execution may still be pending"; try await self.refreshSnapshot()
         }
@@ -96,9 +136,35 @@ public struct DeviceIdentity {
     public var hasPendingCommand: Bool { pendingCommand != nil }
     public func retryPending() async {
         guard var command = pendingCommand else { return }
+        guard pendingServerURL == serverURL else { error = "Reconnect to the original server before resolving its pending command."; return }
         await perform {
+            if ["approval.decide", "policy.change"].contains(command["type"]?.text ?? "") {
+                let context = LAContext()
+                guard try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Reconfirm this pending Outpost decision") else { throw ClientFailure.message("Authentication cancelled") }
+            }
             command["issuedAt"] = .number(floor(Date().timeIntervalSince1970*1000))
             _ = try await self.request("v1/commands", command); self.pendingCommand = nil; self.commandStatus = "Server acceptance confirmed"; try await self.refreshSnapshot()
+        }
+    }
+    public func upload(_ url: URL, taskID: String) async {
+        guard connected, projectionServerURL == serverURL, pendingCommand == nil else { error = "Reconnect or resolve the pending command before uploading."; return }
+        await perform {
+            let scoped = url.startAccessingSecurityScopedResource(); defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            let bytes = try Data(contentsOf: url)
+            guard bytes.count <= 64*1024*1024 else { throw ClientFailure.message("Attachment limit is 64 MiB") }
+            let hash = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+            @MainActor func submit(_ type: String, _ id: String, _ payload: [String: JSONValue]) async throws -> ServerRecord {
+                var command = self.envelope(type, payload: payload)
+                command["protocolVersion"] = .number(1); command["commandId"] = .string(UUID().uuidString.lowercased()); command["idempotencyKey"] = .string(UUID().uuidString.lowercased()); command["aggregateId"] = .string(id); command["expectedRevision"] = .number(0)
+                let result = try await self.request("v1/commands", command)
+                return try JSONDecoder().decode(ServerRecord.self, from: result)
+            }
+            let upload = try await submit("artifact.begin", taskID, ["name": .string(url.lastPathComponent), "mime": .string("application/octet-stream"), "size": .number(Double(bytes.count)), "hash": .string(hash)])
+            for offset in stride(from: 0, to: bytes.count, by: 512*1024) {
+                let chunk = bytes.subdata(in: offset..<min(bytes.count, offset+512*1024))
+                _ = try await submit("artifact.chunk", upload.id, ["offset": .number(Double(offset)), "base64": .string(chunk.base64EncodedString())])
+            }
+            _ = try await submit("artifact.complete", upload.id, [:]); try await self.refreshSnapshot()
         }
     }
     public func download(_ artifact: ServerRecord) async throws -> URL {
@@ -112,7 +178,11 @@ public struct DeviceIdentity {
     }
     private func perform(_ operation: () async throws -> Void) async {
         guard !busy else { return }; busy = true; error = nil
-        defer { busy = false }
-        do { try await operation() } catch { self.error = error.localizedDescription; if pendingCommand != nil { commandStatus = "Acceptance unknown — retry uses the same operation key" } }
+        defer { busy = false; try? saveCache() }
+        do { try await operation() } catch {
+            self.error = error.localizedDescription
+            if case ClientFailure.rejected = error { pendingCommand = nil; commandStatus = "Server rejected the command — nothing new was accepted" }
+            else if pendingCommand != nil { commandStatus = "Acceptance unknown — retry uses the same operation key" }
+        }
     }
 }

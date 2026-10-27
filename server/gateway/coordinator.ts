@@ -18,7 +18,7 @@ import { MemoryStore } from '../memory/memory.js';
 import { Scheduler } from '../scheduler/scheduler.js';
 import { Notifications } from '../notifier/apns.js';
 
-export const publicKinds = ['task','policy','message','action','artifact','inbox','automation','memory','identity','capability','browser','workflow','source','citation','deployment_evidence'];
+export const publicKinds = ['task','policy','message','action','artifact','inbox','automation','memory','identity','capability','browser','workflow','source','citation','deployment_evidence','operation'];
 const wire = (value: unknown): Json => z.json().parse(value);
 export class Coordinator {
   readonly devices: Devices; readonly tasks: Tasks; readonly artifacts: Artifacts; readonly memory: MemoryStore; readonly scheduler: Scheduler;
@@ -27,6 +27,7 @@ export class Coordinator {
     this.devices = new Devices(db); this.tasks = new Tasks(db); this.artifacts = new Artifacts(db,join(root,'artifacts')); this.memory = new MemoryStore(db); this.scheduler = new Scheduler(db,this.tasks);
     this.tasks.recover();
     db.db.prepare("UPDATE outbox SET state='unknown' WHERE state='claimed'").run();
+    for (const operation of db.list('operation')) if (operation.data.state === 'running') db.put('operation',operation.id,operation.revision,{ ...operation.data,state: 'unknown',error: 'Coordinator restarted; reconcile before retry' });
     for (const action of db.list<Action>('action')) if (action.data.state === 'dispatching') db.put('action',action.id,action.revision,{ ...action.data,state: 'unknown',result: { error: 'Coordinator restarted; reconcile before retry' } });
   }
   gate(taskId: string) {
@@ -35,9 +36,20 @@ export class Coordinator {
     const reviewer = this.options.apiKey && this.options.roles ? cloudReviewer(this.options.apiKey,this.options.roles) : undefined;
     gate = new Gate(this.db,reviewer); const workspace = new Workspace(join(this.root,'workspaces',taskId));
     workspace.register(gate); registerInventory(gate); registerCommands(gate,workspace,new Set(this.options.executables ?? []));
+    gate.register('artifact.read_text',{ version: 1,effects: ['workspace.read'],parse: input => z.strictObject({ artifactId: z.uuid() }).parse(input),target: args => String(args.artifactId),execute: async args => {
+      const artifact = this.db.need('artifact',String(args.artifactId)); requireThat(artifact.data.taskId === taskId,'artifact_scope_denied');
+      const bytes = this.artifacts.read(artifact.id); requireThat(bytes.length <= 1024*1024 && !bytes.includes(0),'text_artifact_required');
+      return { name: artifact.data.name ?? '',text: bytes.toString('utf8'),hash: artifact.data.hash ?? '' };
+    } });
     gate.register('data.profile',{ version: 1,effects: ['workspace.read'],parse: input => z.strictObject({ path: z.string() }).parse(input),target: args => String(args.path),execute: async args => profileCSV(workspace.read(String(args.path))) });
     gate.register('document.report',{ version: 1,effects: ['workspace.write'],parse: input => z.record(z.string(),z.json()).parse(input),target: () => 'task artifacts',execute: async args => wire(this.artifacts.publish(taskId,'report.html','text/html',Buffer.from(renderHTML(args)))) });
     this.gates.set(taskId,gate); return gate;
+  }
+  private queueOperation(taskId: string, topic: string, payload: Record<string,Json>) {
+    const operationId = id();
+    this.db.put('operation',operationId,0,{ taskId,topic,state: 'accepted',error: null });
+    this.db.enqueue(topic,{ ...payload,taskId,operationId },operationId);
+    return { operationId,status: 'accepted' };
   }
   command(input: unknown) {
     const command = Command.parse(input); requireThat(Math.abs(Date.now()-command.issuedAt) < 300000,'expired_command');
@@ -54,9 +66,18 @@ export class Coordinator {
         }
         case 'action.propose': {
           this.db.need('task',key); const tool = z.string().parse(payload.tool), args = z.record(z.string(),z.json()).parse(payload.arguments);
-          const operationId = id(); this.db.enqueue('action.propose',{ operationId,taskId: key,tool,arguments: args },operationId); return { operationId,status: 'accepted' };
+          return this.queueOperation(key,'action.propose',{ tool,arguments: args });
         }
-        case 'action.dispatch': { const action = this.db.need<Action>('action',key); requireThat(action.data.state === 'authorized','not_authorized'); const operationId = id(); this.db.enqueue('action.dispatch',{ actionId: key },operationId); return { operationId,status: 'accepted' }; }
+        case 'action.dispatch': { const action = this.db.need<Action>('action',key); requireThat(action.revision === expected,'stale_revision'); requireThat(action.data.state === 'authorized','not_authorized'); return this.queueOperation(action.data.taskId,'action.dispatch',{ actionId: key }); }
+        case 'artifact.begin': {
+          const value = z.strictObject({ name: z.string(),mime: z.string(),size: z.number().int(),hash: z.string() }).parse(payload);
+          return wire(this.artifacts.begin(key,value.name,value.mime,value.size,value.hash));
+        }
+        case 'artifact.chunk': {
+          const value = z.strictObject({ offset: z.number().int().nonnegative(),base64: z.string().max(700000) }).parse(payload);
+          return wire(this.artifacts.chunk(key,value.offset,Buffer.from(value.base64,'base64')));
+        }
+        case 'artifact.complete': return wire(this.artifacts.complete(key));
         case 'automation.save': return wire(this.scheduler.save(key,expected,payload));
         case 'memory.save': return wire(this.memory.save(z.strictObject({ text: z.string(),project: z.string(),identityId: z.string(),source: z.string(),provenance: z.literal('owner') }).parse(payload)));
         case 'memory.forget': return wire(this.memory.forget(key,expected));
@@ -84,13 +105,15 @@ export class Coordinator {
     throw new Fault('unknown_query','Unsupported query',400);
   }
   async drain() {
-    const rows = this.db.db.prepare("SELECT id,topic,payload FROM outbox WHERE state='pending' ORDER BY created_at LIMIT 20").all();
+    const rows = this.db.db.prepare("SELECT id,topic,payload FROM outbox WHERE state='pending' AND topic!='notice' ORDER BY created_at LIMIT 20").all();
     for (const row of rows) {
       const key = String(row.id), topic = String(row.topic); if (this.jobs.has(key) || topic === 'notice') continue;
       const data = z.record(z.string(),z.json()).parse(JSON.parse(String(row.payload)));
       this.db.db.prepare("UPDATE outbox SET state='claimed' WHERE id=? AND state='pending'").run(key); this.jobs.add(key);
+      const operation = this.db.get('operation',key);
+      if (operation) this.db.put('operation',key,operation.revision,{ ...operation.data,state: 'running' });
       try {
-        if (topic === 'action.propose') await this.gate(String(data.taskId)).propose(String(data.taskId),String(data.tool),data.arguments);
+        if (topic === 'action.propose') await this.gate(String(data.taskId)).propose(String(data.taskId),String(data.tool),data.arguments,String(data.operationId));
         else if (topic === 'action.dispatch') { const action = this.db.need<Action>('action',String(data.actionId)); await this.gate(action.data.taskId).dispatch(String(data.actionId)); }
         else if (topic === 'task.pause' || topic === 'task.cancel') await this.runtimes.get(String(data.taskId))?.abort(String(data.taskId));
         else if (topic === 'task.steer') await this.runtimes.get(String(data.taskId))?.steer(String(data.taskId),String(data.text));
@@ -108,7 +131,13 @@ export class Coordinator {
           }
         }
         this.db.db.prepare("UPDATE outbox SET state='done' WHERE id=?").run(key);
-      } catch { this.db.db.prepare("UPDATE outbox SET state='unknown' WHERE id=?").run(key); }
+        const finished = this.db.get('operation',key);
+        if (finished) this.db.put('operation',key,finished.revision,{ ...finished.data,state: 'handled' });
+      } catch (error) {
+        this.db.db.prepare("UPDATE outbox SET state='unknown' WHERE id=?").run(key);
+        const failed = this.db.get('operation',key);
+        if (failed) this.db.put('operation',key,failed.revision,{ ...failed.data,state: 'unknown',error: error instanceof Fault ? error.code : 'Operation failed; reconcile before retry' });
+      }
       finally { this.jobs.delete(key); }
     }
   }

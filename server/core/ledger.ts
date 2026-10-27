@@ -21,8 +21,9 @@ export class Ledger {
   }
   close() { this.db.close(); }
   transaction<T>(fn: () => T): T {
-    const level = this.depth++;
+    const level = this.depth;
     this.db.exec(level === 0 ? 'BEGIN IMMEDIATE' : `SAVEPOINT nested_${level}`);
+    this.depth++;
     try {
       const result = fn(); requireThat(!(result instanceof Promise), 'async_transaction');
       this.db.exec(level === 0 ? 'COMMIT' : `RELEASE nested_${level}`); return result;
@@ -41,6 +42,7 @@ export class Ledger {
     return this.db.prepare('SELECT id FROM records WHERE kind=? ORDER BY updated_at DESC,id').all(kind).map(row => this.need<T>(kind, String(row.id)));
   }
   put<T extends object>(kind: string, key: string, expected: number, data: T, eventType = `${kind}.changed`): RecordValue<T> {
+    if (this.depth === 0) return this.transaction(() => this.put(kind,key,expected,data,eventType));
     const current = this.get(kind, key);
     requireThat((current?.revision ?? 0) === expected, 'stale_revision');
     const revision = expected + 1, updatedAt = now();

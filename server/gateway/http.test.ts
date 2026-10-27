@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { generateKeyPairSync, sign } from 'node:crypto';
+import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -26,9 +26,20 @@ test('two signed clients converge through HTTP, queued tool approval and durable
     const proposal = command('action.propose',taskId,1,{ tool: 'system.inspect',arguments: {} });
     assert.equal((await request('/v1/commands',proposal)).status,200); await coordinator.drain();
     const action = db.list('action')[0]!;
+    assert.equal(db.need('operation',action.id).data.state,'handled');
+    assert.equal(db.db.prepare("SELECT count(*) AS n FROM outbox WHERE topic='notice'").get()?.n,1);
     assert.equal((await request('/v1/commands',command('approval.decide',action.id,1,{ nonce: action.data.nonce,actionDigest: action.data.actionDigest,decision: 'approve' }))).status,200);
     assert.equal((await request('/v1/commands',command('action.dispatch',action.id,2,{}))).status,200); await coordinator.drain();
     assert.equal(db.need('action',action.id).data.state,'succeeded');
+    const bytes = Buffer.from('invoice,total\nfixture,4200\n'), hash = createHash('sha256').update(bytes).digest('hex');
+    const begin = await request('/v1/commands',command('artifact.begin',taskId,0,{ name: 'fixture.csv',mime: 'text/csv',size: bytes.length,hash }));
+    const upload = await begin.json() as { id: string };
+    const chunk = command('artifact.chunk',upload.id,0,{ offset: 0,base64: bytes.toString('base64') });
+    assert.equal((await request('/v1/commands',chunk)).status,200);
+    assert.equal((await request('/v1/commands',chunk)).status,200);
+    assert.equal((await request('/v1/commands',command('artifact.complete',upload.id,0,{}))).status,200);
+    const downloaded = await request('/v1/artifact',query('artifact',{ artifactId: upload.id },phone),phone);
+    assert.deepEqual(Buffer.from(await downloaded.arrayBuffer()),bytes);
     const one = await (await request('/v1/query',query('snapshot'))).json();
     const two = await (await request('/v1/query',query('snapshot',{},phone),phone)).json(); assert.deepEqual(one,two);
     assert.equal(db.list('task').length,1);

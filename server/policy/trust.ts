@@ -55,7 +55,7 @@ export class Gate {
     requireThat(!action.effects.some(effect => /^(trust|payment|owner|host)\./.test(effect)),'protected_effect');
     return tool;
   }
-  async propose(taskId: string, name: string, input: unknown) {
+  async propose(taskId: string, name: string, input: unknown, operationId: string = id()) {
     const tool = this.tools.get(name); requireThat(tool,'unavailable_tool');
     const args = tool.parse(input), policy = this.policy(taskId);
     const envelope = { taskId, tool: name, toolVersion: tool.version, arguments: args, target: tool.target(args), identityRef: 'agent-local', effects: tool.effects, policyVersion: policy.revision, expiresAt: Date.now()+300_000 };
@@ -72,10 +72,10 @@ export class Gate {
     }
     return this.db.transaction(() => {
       this.current(action);
-      const record = this.db.put('action',id(),0,action,'action.proposed');
+      const record = this.db.put('action',operationId,0,action,'action.proposed');
       if (action.state === 'pending') {
         this.db.put('inbox',record.id,0,{ taskId, category: 'approval', state: 'pending', title: 'An action needs your decision' });
-        this.db.enqueue('notice',{ noticeId: record.id, taskId },record.id);
+        this.db.enqueue('notice',{ noticeId: record.id, taskId },`notice:${record.id}`);
       }
       return record;
     });
