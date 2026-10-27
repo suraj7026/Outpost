@@ -28,7 +28,7 @@ export class Tasks {
     requireThat(!terminal.has(task.data.state),'terminal_task');
     if (intent === 'resume') requireThat(['paused','interrupted','failed','waiting_for_capacity'].includes(task.data.state),'invalid_transition');
     const state = intent === 'pause' ? 'paused' : intent === 'cancel' ? 'cancelled' : 'queued';
-    const updated = this.db.put('task',taskId,expected,{ ...task.data,state,blocker: null },`task.${intent}`);
+    const updated = this.db.put('task',taskId,expected,{ ...task.data,state,runId: intent === 'resume' ? id() : task.data.runId,blocker: null },`task.${intent}`);
     this.db.enqueue(`task.${intent}`,{ taskId,runId: task.data.runId }); return updated;
   }
   claim(taskId: string, workerId: string) {

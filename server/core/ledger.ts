@@ -6,6 +6,7 @@ import type { Command, Data, Event, Json, RecordValue } from './contracts.js';
 
 export class Ledger {
   readonly db: DatabaseSync;
+  private depth = 0;
   constructor(readonly path = ':memory:') {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(path);
@@ -20,9 +21,14 @@ export class Ledger {
   }
   close() { this.db.close(); }
   transaction<T>(fn: () => T): T {
-    this.db.exec('BEGIN IMMEDIATE');
-    try { const result = fn(); requireThat(!(result instanceof Promise), 'async_transaction'); this.db.exec('COMMIT'); return result; }
-    catch (error) { this.db.exec('ROLLBACK'); throw error; }
+    const level = this.depth++;
+    this.db.exec(level === 0 ? 'BEGIN IMMEDIATE' : `SAVEPOINT nested_${level}`);
+    try {
+      const result = fn(); requireThat(!(result instanceof Promise), 'async_transaction');
+      this.db.exec(level === 0 ? 'COMMIT' : `RELEASE nested_${level}`); return result;
+    } catch (error) {
+      this.db.exec(level === 0 ? 'ROLLBACK' : `ROLLBACK TO nested_${level}; RELEASE nested_${level}`); throw error;
+    } finally { this.depth--; }
   }
   get<T = Data>(kind: string, key: string): RecordValue<T> | undefined {
     const row = this.db.prepare('SELECT * FROM records WHERE kind=? AND id=?').get(kind, key);

@@ -1,0 +1,1892 @@
+[
+  {
+    "id": "TASK-01",
+    "name": "Outcome-based requests",
+    "requirement": "Accept a goal in natural language; identify deliverables, relevant machine/accounts, constraints, and completion evidence before substantial work.",
+    "module": "01. Tasks and the Pi runtime",
+    "stage": "C"
+  },
+  {
+    "id": "TASK-02",
+    "name": "One task across tools",
+    "requirement": "Continue from research to browser, terminal, code, documents, and service management without making the owner recreate the request in another mode.",
+    "module": "01. Tasks and the Pi runtime",
+    "stage": "C"
+  },
+  {
+    "id": "TASK-03",
+    "name": "Visible working plan",
+    "requirement": "Show a concise editable plan with completed, active, blocked, and deferred steps; distinguish an estimate from an execution guarantee.",
+    "module": "01. Tasks and the Pi runtime",
+    "stage": "C"
+  },
+  {
+    "id": "TASK-04",
+    "name": "Durable run lifecycle",
+    "requirement": "Persist queued, running, waiting, verifying, completed, failed, interrupted, and cancelled states independently of connected clients.",
+    "module": "01. Tasks and the Pi runtime",
+    "stage": "C"
+  },
+  {
+    "id": "TASK-05",
+    "name": "Steering and queued follow-ups",
+    "requirement": "Let the user correct the active goal or queue another instruction; show when the correction was accepted and prevent obsolete work continuing silently.",
+    "module": "01. Tasks and the Pi runtime",
+    "stage": "C"
+  },
+  {
+    "id": "TASK-06",
+    "name": "Pause, cancel, and resume",
+    "requirement": "Stop at a safe boundary when possible; record subprocesses and external effects that cannot be instantly cancelled; resume from a durable checkpoint.",
+    "module": "01. Tasks and the Pi runtime",
+    "stage": "C"
+  },
+  {
+    "id": "TASK-07",
+    "name": "Independent conversations",
+    "requirement": "Support concurrent tasks on one machine with explicit file/service locks, resource quotas, and account identity; do not confuse shared OS access with isolation.",
+    "module": "01. Tasks and the Pi runtime",
+    "stage": "C"
+  },
+  {
+    "id": "TASK-08",
+    "name": "Task branches and retries",
+    "requirement": "Fork a task from a checkpoint, retry a failed step, compare outcomes, and retain abandoned branches without repeating irreversible actions.",
+    "module": "01. Tasks and the Pi runtime",
+    "stage": "E"
+  },
+  {
+    "id": "TASK-09",
+    "name": "Long-running missions",
+    "requirement": "Work for hours or days through waits, provider failures, machine restarts, and human approval; use structured checkpoints instead of relying on one context window.",
+    "module": "01. Tasks and the Pi runtime",
+    "stage": "E"
+  },
+  {
+    "id": "TASK-10",
+    "name": "Evidence-based handoff",
+    "requirement": "Finish with changed files, URLs, service state, command/test results, receipts, remaining blockers, and a clear statement of what was actually verified.",
+    "module": "01. Tasks and the Pi runtime",
+    "stage": "C"
+  },
+  {
+    "id": "FS-01",
+    "name": "Personal home directory",
+    "requirement": "Maintain an agent home with projects, documents, downloads, outputs, scratch, and task state; survive reboots and app updates.",
+    "module": "02. Server files and artifacts",
+    "stage": "C"
+  },
+  {
+    "id": "FS-02",
+    "name": "Full file operations",
+    "requirement": "Read, write, edit, move, copy, rename, archive, extract, and search files; surface symlinks, permissions, encoding, and size limits.",
+    "module": "02. Server files and artifacts",
+    "stage": "C"
+  },
+  {
+    "id": "FS-03",
+    "name": "Fast discovery",
+    "requirement": "Use ripgrep/glob and indexed metadata, then scoped semantic retrieval where useful; search hidden files only when relevant and authorized.",
+    "module": "02. Server files and artifacts",
+    "stage": "C"
+  },
+  {
+    "id": "FS-04",
+    "name": "Reliable transfers",
+    "requirement": "Resumable upload/download with checksums, progress, cancellation, conflict choices, and destination visibility on both clients.",
+    "module": "02. Server files and artifacts",
+    "stage": "C"
+  },
+  {
+    "id": "FS-05",
+    "name": "Structured artifacts",
+    "requirement": "Attach files and directories to tasks with type, size, provenance, version, preview, and final/intermediate status.",
+    "module": "02. Server files and artifacts",
+    "stage": "C"
+  },
+  {
+    "id": "FS-06",
+    "name": "Version and restore",
+    "requirement": "Checkpoint task-owned files and offer restore previews; distinguish file restore, Git restore, and whole-machine recovery.",
+    "module": "02. Server files and artifacts",
+    "stage": "C"
+  },
+  {
+    "id": "FS-07",
+    "name": "Shared and isolated folders",
+    "requirement": "Reuse common reference material while isolating unrelated work; warn before two tasks modify the same shared asset.",
+    "module": "02. Server files and artifacts",
+    "stage": "C"
+  },
+  {
+    "id": "FS-08",
+    "name": "Storage services and connectors",
+    "requirement": "Keep artifact/object storage on the Ubuntu server, optionally through a self-hosted compatible service. External Drive/NAS/account connectors are explicit task targets, not required backend storage.",
+    "module": "02. Server files and artifacts",
+    "stage": "E"
+  },
+  {
+    "id": "FS-09",
+    "name": "File intake pipeline",
+    "requirement": "Detect duplicates, classify documents, extract metadata/OCR, quarantine suspicious inputs, and create searchable local indexes.",
+    "module": "02. Server files and artifacts",
+    "stage": "E"
+  },
+  {
+    "id": "FS-10",
+    "name": "Storage lifecycle",
+    "requirement": "Show disk use, temporary-file retention, trash, backups, and artifacts pinned against cleanup; require approval for broad destructive cleanup.",
+    "module": "02. Server files and artifacts",
+    "stage": "C"
+  },
+  {
+    "id": "RUN-01",
+    "name": "Noninteractive shell",
+    "requirement": "Execute commands with explicit cwd, arguments, environment, timeout, exit code, and bounded model-facing output; retain complete logs as artifacts.",
+    "module": "03. Agent commands and processes",
+    "stage": "C"
+  },
+  {
+    "id": "RUN-02",
+    "name": "Agent-only interactive PTY",
+    "requirement": "Handle REPLs, prompts, SSH and terminal programs inside the server worker. Return captured activity/evidence to clients; do not expose a user terminal console.",
+    "module": "03. Agent commands and processes",
+    "stage": "E"
+  },
+  {
+    "id": "RUN-03",
+    "name": "Background processes",
+    "requirement": "Start, attach, inspect, signal, and stop long processes; track descendants and distinguish command completion from a service remaining healthy.",
+    "module": "03. Agent commands and processes",
+    "stage": "C"
+  },
+  {
+    "id": "RUN-04",
+    "name": "Resource supervision",
+    "requirement": "Limit CPU, RAM, disk, process count, runtime, browser slots, and GPU concurrency per task; explain queueing and out-of-memory failures.",
+    "module": "03. Agent commands and processes",
+    "stage": "C"
+  },
+  {
+    "id": "RUN-05",
+    "name": "Cancellation propagation",
+    "requirement": "Propagate aborts through Pi, tool calls, subprocess groups, browsers, and downloads; record orphan cleanup rather than falsely claiming immediate cancellation.",
+    "module": "03. Agent commands and processes",
+    "stage": "C"
+  },
+  {
+    "id": "RUN-06",
+    "name": "Structured command tools",
+    "requirement": "Offer typed wrappers for common operations while retaining general shell; sensitive wrappers enforce resource and argument restrictions outside the guest.",
+    "module": "03. Agent commands and processes",
+    "stage": "C"
+  },
+  {
+    "id": "RUN-07",
+    "name": "Remote SSH operations",
+    "requirement": "Connect to explicitly enrolled hosts using scoped credentials; preserve host-key checking and show which machine every command targets.",
+    "module": "03. Agent commands and processes",
+    "stage": "E"
+  },
+  {
+    "id": "RUN-08",
+    "name": "Headless application automation",
+    "requirement": "Use CLI/API and headless conversion interfaces for installed software; return logs, screenshots and artifacts. Linux desktop environments and generic desktop automation are out of scope.",
+    "module": "03. Agent commands and processes",
+    "stage": "E"
+  },
+  {
+    "id": "RUN-09",
+    "name": "Environment profiles",
+    "requirement": "Select language/runtime/tool versions and task-specific env without leaking one project's credentials or dependency state into another.",
+    "module": "03. Agent commands and processes",
+    "stage": "C"
+  },
+  {
+    "id": "RUN-10",
+    "name": "Reusable procedures",
+    "requirement": "Save a verified sequence as a versioned recipe with parameters, prerequisites, permissions, rollback notes, and tests.",
+    "module": "03. Agent commands and processes",
+    "stage": "E"
+  },
+  {
+    "id": "SYS-01",
+    "name": "Machine inventory",
+    "requirement": "Inspect OS, architecture, CPU/GPU, RAM, storage, ports, users, network, running services, and installed tool versions.",
+    "module": "04. Sudo and machine administration",
+    "stage": "C"
+  },
+  {
+    "id": "SYS-02",
+    "name": "Approved sudo",
+    "requirement": "Request a scoped administrative action with a reason and impact preview; execute it through the protected privilege path and return the result.",
+    "module": "04. Sudo and machine administration",
+    "stage": "C"
+  },
+  {
+    "id": "SYS-03",
+    "name": "Root maintenance lease",
+    "requirement": "Allow the owner to grant broad root over the agent's Ubuntu workspace for a bounded maintenance window, clearly showing reduced internal enforcement.",
+    "module": "04. Sudo and machine administration",
+    "stage": "E"
+  },
+  {
+    "id": "SYS-04",
+    "name": "Service management",
+    "requirement": "Create/update/restart/stop task-owned systemd services, inspect journals, set restart policy, and verify health; system-wide changes follow admin policy.",
+    "module": "04. Sudo and machine administration",
+    "stage": "C"
+  },
+  {
+    "id": "SYS-05",
+    "name": "Package and runtime maintenance",
+    "requirement": "Install, pin, update, and remove OS packages or runtimes, including approved non-default repositories; preserve inventory and rollback information.",
+    "module": "04. Sudo and machine administration",
+    "stage": "C"
+  },
+  {
+    "id": "SYS-06",
+    "name": "Users and permissions",
+    "requirement": "Manage task accounts, groups, file ownership, SSH access and service identities through explicitly scoped admin operations.",
+    "module": "04. Sudo and machine administration",
+    "stage": "E"
+  },
+  {
+    "id": "SYS-07",
+    "name": "Network administration",
+    "requirement": "Diagnose DNS/routes/TLS/firewall; preview externally reachable ports and protect the remote recovery channel before applying changes.",
+    "module": "04. Sudo and machine administration",
+    "stage": "E"
+  },
+  {
+    "id": "SYS-08",
+    "name": "Reboot-aware work",
+    "requirement": "Plan updates and reboots, save state, warn affected tasks, boot automatically, and verify workers/services rejoin.",
+    "module": "04. Sudo and machine administration",
+    "stage": "E"
+  },
+  {
+    "id": "SYS-09",
+    "name": "Storage administration",
+    "requirement": "Manage task volumes, mounts, quotas, logs and image cleanup; require stronger approval for formatting, destructive migrations, or broad deletions.",
+    "module": "04. Sudo and machine administration",
+    "stage": "E"
+  },
+  {
+    "id": "SYS-10",
+    "name": "External rescue",
+    "requirement": "Restore a snapshot, replace a broken guest, revoke its broker credentials, or attach recovery media without relying on the damaged agent OS.",
+    "module": "04. Sudo and machine administration",
+    "stage": "C"
+  },
+  {
+    "id": "PKG-01",
+    "name": "Missing-tool discovery",
+    "requirement": "Recognize when a task needs a tool; inspect available versions and trusted installation routes before proposing an installation.",
+    "module": "05. Software and capability installation",
+    "stage": "C"
+  },
+  {
+    "id": "PKG-02",
+    "name": "Standard package ecosystems",
+    "requirement": "Support apt, project-local pip/uv, npm/pnpm, containers, and language-native tooling; prefer isolated project installs where appropriate.",
+    "module": "05. Software and capability installation",
+    "stage": "C"
+  },
+  {
+    "id": "PKG-03",
+    "name": "Capability catalogue",
+    "requirement": "Show available packs, installed state, dependencies, permissions, licences, external services, disk footprint, and required secrets.",
+    "module": "05. Software and capability installation",
+    "stage": "E"
+  },
+  {
+    "id": "PKG-04",
+    "name": "Install plans",
+    "requirement": "Present exact source/version, packages, elevated steps, new services/ports, estimated resource use, and any recurring spend.",
+    "module": "05. Software and capability installation",
+    "stage": "C"
+  },
+  {
+    "id": "PKG-05",
+    "name": "Installation grants",
+    "requirement": "Approve a bounded installation plan once instead of prompting for every harmless substep; reject changes that expand its scope.",
+    "module": "05. Software and capability installation",
+    "stage": "C"
+  },
+  {
+    "id": "PKG-06",
+    "name": "Version and provenance record",
+    "requirement": "Track package/image digests, source URLs, maintainer identity where available, install scripts, dependency lockfiles, and the task that requested them.",
+    "module": "05. Software and capability installation",
+    "stage": "C"
+  },
+  {
+    "id": "PKG-07",
+    "name": "Health and smoke checks",
+    "requirement": "Run a capability's declared test after installation and before advertising it as usable; surface missing accounts separately from missing software.",
+    "module": "05. Software and capability installation",
+    "stage": "C"
+  },
+  {
+    "id": "PKG-08",
+    "name": "Update and rollback",
+    "requirement": "Review capability updates, stage them, compare changed permissions, roll back failures, and uninstall without losing unrelated user data.",
+    "module": "05. Software and capability installation",
+    "stage": "E"
+  },
+  {
+    "id": "PKG-09",
+    "name": "Agent-authored tools",
+    "requirement": "Let Pi build a new adapter or recipe in a staging area; require checks and owner approval before giving it new trust, privileged execution, or secrets.",
+    "module": "05. Software and capability installation",
+    "stage": "E"
+  },
+  {
+    "id": "PKG-10",
+    "name": "Rebuildable machine",
+    "requirement": "Export an environment manifest and reconstruct tools on a replacement Ubuntu machine; exclude secret values and verify application data restoration separately.",
+    "module": "05. Software and capability installation",
+    "stage": "E"
+  },
+  {
+    "id": "WEB-01",
+    "name": "Headless server browser",
+    "requirement": "Run Chromium headlessly on Ubuntu Server; preserve task ownership, tabs, downloads and process health. Viewing/takeover is browser-scoped and does not require a Linux desktop.",
+    "module": "06. Headless browser and live takeover",
+    "stage": "C"
+  },
+  {
+    "id": "WEB-02",
+    "name": "Observe-act-verify tools",
+    "requirement": "Navigate, inspect semantic snapshots, click, type, select, scroll, upload, download, and verify the changed state using fresh page references.",
+    "module": "06. Headless browser and live takeover",
+    "stage": "C"
+  },
+  {
+    "id": "WEB-03",
+    "name": "Visual perception",
+    "requirement": "Use screenshots and an evaluated open vision model for image/canvas-based interfaces; fall back to human takeover when perception is insufficient.",
+    "module": "06. Headless browser and live takeover",
+    "stage": "E"
+  },
+  {
+    "id": "WEB-04",
+    "name": "Durable browser identities",
+    "requirement": "Reuse explicitly chosen identities across tasks while isolating accounts and preventing concurrent mutation of the same profile.",
+    "module": "06. Headless browser and live takeover",
+    "stage": "C"
+  },
+  {
+    "id": "WEB-05",
+    "name": "Live browser viewer",
+    "requirement": "Watch the server browser on Mac/iPhone with URL, active account, task, and current action; do not confuse a remote frame with a locally authenticated website.",
+    "module": "06. Headless browser and live takeover",
+    "stage": "C"
+  },
+  {
+    "id": "WEB-06",
+    "name": "Human takeover",
+    "requirement": "Pause agent input, give the owner exclusive control, handle login/challenges or delicate interactions, then explicitly return control.",
+    "module": "06. Headless browser and live takeover",
+    "stage": "C"
+  },
+  {
+    "id": "WEB-07",
+    "name": "Multi-tab research",
+    "requirement": "Organize tabs by task, handle popups/frames/dialogs, retain useful pages, and close abandoned sessions under resource policy.",
+    "module": "06. Headless browser and live takeover",
+    "stage": "C"
+  },
+  {
+    "id": "WEB-08",
+    "name": "Reliable page data",
+    "requirement": "Extract tables, forms, text, links, PDFs, and screenshots with source and timestamp; preserve original downloads alongside transformed data.",
+    "module": "06. Headless browser and live takeover",
+    "stage": "C"
+  },
+  {
+    "id": "WEB-09",
+    "name": "Debug and test websites",
+    "requirement": "Inspect console/network/errors, emulate viewports, capture traces, run browser tests, and compare visual states on task-owned apps.",
+    "module": "06. Headless browser and live takeover",
+    "stage": "C"
+  },
+  {
+    "id": "WEB-10",
+    "name": "Browser session recovery",
+    "requirement": "Persist permitted task/identity state and restore browser sessions after crashes or restarts; retain downloads/evidence and reacquire human control safely. No Linux desktop fallback.",
+    "module": "06. Headless browser and live takeover",
+    "stage": "C"
+  },
+  {
+    "id": "ID-01",
+    "name": "Account inventory",
+    "requirement": "Show connected services, account identity, scopes, profile location, last use, expiry, and whether an identity is broker-protected or delegated to the machine.",
+    "module": "07. Agent and owner identities",
+    "stage": "C"
+  },
+  {
+    "id": "ID-02",
+    "name": "OAuth and delegated access",
+    "requirement": "Prefer official OAuth/device flows and narrow service credentials where supported; separate read, draft, send, admin, and billing privileges.",
+    "module": "07. Agent and owner identities",
+    "stage": "C"
+  },
+  {
+    "id": "ID-03",
+    "name": "Fresh server login",
+    "requirement": "Open a selected account in the protected server browser and let the owner sign in; persist only the state required for the delegated workflow.",
+    "module": "07. Agent and owner identities",
+    "stage": "C"
+  },
+  {
+    "id": "ID-04",
+    "name": "Local Chrome companion",
+    "requirement": "Consent-based Mac bridge for selected local tabs or an approved browser session; visible connection indicator, short lease, revocation, and no open public debugging port.",
+    "module": "07. Agent and owner identities",
+    "stage": "E"
+  },
+  {
+    "id": "ID-05",
+    "name": "Selected credential migration",
+    "requirement": "Preview and approve chosen account credentials, transfer them encrypted to a protected vault, and report exactly what was imported; avoid an automatic whole-password-store export.",
+    "module": "07. Agent and owner identities",
+    "stage": "E"
+  },
+  {
+    "id": "ID-06",
+    "name": "Selected session transfer",
+    "requirement": "Copy supported origin-scoped session state only after explicit review; record expiry and source; detect reauthentication requirements rather than promise transparent cross-OS login.",
+    "module": "07. Agent and owner identities",
+    "stage": "E"
+  },
+  {
+    "id": "ID-07",
+    "name": "Secret-use requests",
+    "requirement": "Resolve opaque secret references for an approved origin/purpose; keep plaintext out of Pi prompts, ordinary logs, task files, screenshots, and shell history wherever the broker controls them.",
+    "module": "07. Agent and owner identities",
+    "stage": "C"
+  },
+  {
+    "id": "ID-08",
+    "name": "MFA, OTP, and passkeys",
+    "requirement": "Hand off user presence, hardware key, passkey and financial challenges; support narrow one-time code input without storing authenticator recovery material in the agent home.",
+    "module": "07. Agent and owner identities",
+    "stage": "C"
+  },
+  {
+    "id": "ID-09",
+    "name": "Account lifecycle",
+    "requirement": "Refresh scoped tokens, detect logout/expiry, revoke grants, disconnect accounts, rotate exposed credentials, and show affected tasks.",
+    "module": "07. Agent and owner identities",
+    "stage": "C"
+  },
+  {
+    "id": "ID-10",
+    "name": "Agent-first identity separation",
+    "requirement": "Default to dedicated agent-owned accounts created by the owner; support separately scoped owner identities, explicit selection per task and no silent fallback to a more privileged owner account.",
+    "module": "07. Agent and owner identities",
+    "stage": "C"
+  },
+  {
+    "id": "CAP-01",
+    "name": "Challenge recognition",
+    "requirement": "Distinguish CAPTCHA, login, MFA, permission denial, rate limit, paywall, and page failure; choose the correct waiting state.",
+    "module": "08. Verification challenges and human assistance",
+    "stage": "C"
+  },
+  {
+    "id": "CAP-02",
+    "name": "Resume after a challenge",
+    "requirement": "Preserve task/tab/form state, request help once, and resume from a verified page state after resolution.",
+    "module": "08. Verification challenges and human assistance",
+    "stage": "C"
+  },
+  {
+    "id": "CAP-03",
+    "name": "Self-hosted solver plugins",
+    "requirement": "Expose installed local challenge helpers to Pi for supported authorized workflows; any model reasoning uses the approved Ollama Cloud route. No hosted CAPTCHA-solving vendor is a default dependency.",
+    "module": "08. Verification challenges and human assistance",
+    "stage": "E"
+  },
+  {
+    "id": "CAP-04",
+    "name": "Local solving experiments",
+    "requirement": "Evaluate open OCR/vision models for supported non-sensitive challenge tasks; label measured coverage and failure rates, not \"solves any CAPTCHA.\"",
+    "module": "08. Verification challenges and human assistance",
+    "stage": "A"
+  },
+  {
+    "id": "CAP-05",
+    "name": "Challenge budget",
+    "requirement": "Bound local solver attempts, runtime and Ollama Cloud inference use; stop and request human help when the approved budget or capability is exhausted.",
+    "module": "08. Verification challenges and human assistance",
+    "stage": "E"
+  },
+  {
+    "id": "CAP-06",
+    "name": "Human challenge UI",
+    "requirement": "Open the exact live browser state on Mac or phone; pause competing input and confirm a resolution before the agent continues.",
+    "module": "08. Verification challenges and human assistance",
+    "stage": "C"
+  },
+  {
+    "id": "CAP-07",
+    "name": "Challenge memory",
+    "requirement": "Record that a site/account often needs help and prefer a stable authorized session or official API where possible; do not store reusable challenge secrets.",
+    "module": "08. Verification challenges and human assistance",
+    "stage": "E"
+  },
+  {
+    "id": "CAP-08",
+    "name": "Respect explicit denial",
+    "requirement": "If a service denies access or forbids the workflow, stop or use an authorized alternative; do not turn challenge handling into evasion of an access restriction.",
+    "module": "08. Verification challenges and human assistance",
+    "stage": "C"
+  },
+  {
+    "id": "CAP-09",
+    "name": "Challenge observability",
+    "requirement": "Show site, challenge class, elapsed wait, attempts, cost, and what is needed from the owner; redact sensitive challenge content in retained logs.",
+    "module": "08. Verification challenges and human assistance",
+    "stage": "C"
+  },
+  {
+    "id": "CAP-10",
+    "name": "Provider conformance",
+    "requirement": "Test timeout, cancellation, unsupported challenge, duplicate callbacks and failed solutions; solver success alone never proves the intended task succeeded.",
+    "module": "08. Verification challenges and human assistance",
+    "stage": "E"
+  },
+  {
+    "id": "DEV-01",
+    "name": "Repository understanding",
+    "requirement": "Inspect project instructions, architecture, build/test commands, dependency graph, and recent changes before modifying code.",
+    "module": "09. Coding and software engineering",
+    "stage": "C"
+  },
+  {
+    "id": "DEV-02",
+    "name": "Reproduce and debug",
+    "requirement": "Reproduce failures, gather logs/stack traces, create a minimal case where helpful, and test the suspected cause before declaring a fix.",
+    "module": "09. Coding and software engineering",
+    "stage": "C"
+  },
+  {
+    "id": "DEV-03",
+    "name": "Precise edits",
+    "requirement": "Use patches/unique-match edits with conflict detection; preserve unrelated changes and reject stale edits rather than overwrite silently.",
+    "module": "09. Coding and software engineering",
+    "stage": "C"
+  },
+  {
+    "id": "DEV-04",
+    "name": "Semantic code tools",
+    "requirement": "LSP diagnostics, symbols, definitions/references, rename/refactor assistance, and code-aware search through installable language packs.",
+    "module": "09. Coding and software engineering",
+    "stage": "E"
+  },
+  {
+    "id": "DEV-05",
+    "name": "Build and test",
+    "requirement": "Discover and run appropriate unit/integration/end-to-end checks; retain outputs and distinguish failure, skipped checks, and passing checks.",
+    "module": "09. Coding and software engineering",
+    "stage": "C"
+  },
+  {
+    "id": "DEV-06",
+    "name": "Feature implementation",
+    "requirement": "Implement UI/backend/scripts, update relevant docs, handle migrations, and produce a reviewable change set with acceptance evidence.",
+    "module": "09. Coding and software engineering",
+    "stage": "C"
+  },
+  {
+    "id": "DEV-07",
+    "name": "Browser-driven development",
+    "requirement": "Start preview servers, inspect pages, exercise flows, collect console/network evidence, and iterate on screenshots within the same task.",
+    "module": "09. Coding and software engineering",
+    "stage": "C"
+  },
+  {
+    "id": "DEV-08",
+    "name": "Code review",
+    "requirement": "Review local diffs or PRs for correctness, tests, security, performance and regressions; attach evidence to precise changed locations.",
+    "module": "09. Coding and software engineering",
+    "stage": "E"
+  },
+  {
+    "id": "DEV-09",
+    "name": "Change checkpoints",
+    "requirement": "View changes per turn and full branch; undo files and coordinate Pi context so an abandoned edit is not still assumed to exist.",
+    "module": "09. Coding and software engineering",
+    "stage": "C"
+  },
+  {
+    "id": "DEV-10",
+    "name": "Platform-specific build handoff",
+    "requirement": "Ubuntu handles Linux-capable builds. Xcode/iOS signing needs the owner's Mac as an explicit local-client handoff, not a required second Outpost backend or hosted build service.",
+    "module": "09. Coding and software engineering",
+    "stage": "A"
+  },
+  {
+    "id": "GIT-01",
+    "name": "GitHub CLI",
+    "requirement": "Install and use `gh` for authorized repository, issue, PR, checks, release and API work; show account/repository context before mutations.",
+    "module": "10. Git hosting and delivery",
+    "stage": "C"
+  },
+  {
+    "id": "GIT-02",
+    "name": "Repository lifecycle",
+    "requirement": "Clone, initialize, fork and publish repositories; ask before changing visibility, deleting a repository, or exposing private material.",
+    "module": "10. Git hosting and delivery",
+    "stage": "C"
+  },
+  {
+    "id": "GIT-03",
+    "name": "Branches and worktrees",
+    "requirement": "Isolate task branches, manage remotes/upstreams, preserve dirty worktrees, and clean up only after a verified handoff or owner rule.",
+    "module": "10. Git hosting and delivery",
+    "stage": "C"
+  },
+  {
+    "id": "GIT-04",
+    "name": "Commits and PRs",
+    "requirement": "Generate useful commit messages and PR descriptions, attach issues/evidence, request reviewers, and keep final titles aligned with actual scope.",
+    "module": "10. Git hosting and delivery",
+    "stage": "C"
+  },
+  {
+    "id": "GIT-05",
+    "name": "CI investigation",
+    "requirement": "Read checks, bounded logs/artifacts, and annotations; diagnose failures, propose reruns where authorized, and fix them without fabricated success.",
+    "module": "10. Git hosting and delivery",
+    "stage": "C"
+  },
+  {
+    "id": "GIT-06",
+    "name": "Review-response work",
+    "requirement": "Incorporate reviewer comments, track resolved/unresolved items, and prepare responses for approved submission.",
+    "module": "10. Git hosting and delivery",
+    "stage": "E"
+  },
+  {
+    "id": "GIT-07",
+    "name": "Merge and release",
+    "requirement": "Prepare merge/release summaries and artifacts; execute merges, tags, production deployments or rollback only under applicable authority.",
+    "module": "10. Git hosting and delivery",
+    "stage": "E"
+  },
+  {
+    "id": "GIT-08",
+    "name": "Conflicts and history",
+    "requirement": "Rebase/merge with conflict resolution; preview force-push/reset/history-rewrite effects and retain a recovery reference.",
+    "module": "10. Git hosting and delivery",
+    "stage": "C"
+  },
+  {
+    "id": "GIT-09",
+    "name": "Git hosting adapters",
+    "requirement": "Optional GitLab, Forgejo/Gitea and other hosts through their APIs/CLIs; retain host/account-specific authorization.",
+    "module": "10. Git hosting and delivery",
+    "stage": "E"
+  },
+  {
+    "id": "GIT-10",
+    "name": "Repository event tasks",
+    "requirement": "Turn approved issue/PR/CI webhooks into scoped tasks, deduplicate events, and avoid executing instructions embedded in untrusted comments as owner authority.",
+    "module": "10. Git hosting and delivery",
+    "stage": "E"
+  },
+  {
+    "id": "OPS-01",
+    "name": "Diagnose running services",
+    "requirement": "Inspect health, processes, logs, ports, queues, dependency failures and disk pressure; correlate evidence before changing the service.",
+    "module": "11. Server operations and deployments",
+    "stage": "C"
+  },
+  {
+    "id": "OPS-02",
+    "name": "Container operations",
+    "requirement": "Build images, run Compose/Podman/Docker workloads, inspect logs and health, and manage task-owned volumes/networks under explicit host authority.",
+    "module": "11. Server operations and deployments",
+    "stage": "C"
+  },
+  {
+    "id": "OPS-03",
+    "name": "Deployment workflow",
+    "requirement": "Build, stage, test, compare versions and deploy; capture rollout/rollback evidence and actual environment ownership.",
+    "module": "11. Server operations and deployments",
+    "stage": "E"
+  },
+  {
+    "id": "OPS-04",
+    "name": "Infrastructure as code",
+    "requirement": "Prepare and explain Terraform/OpenTofu/Ansible changes, review plans, and apply only within an approved resource/cost scope.",
+    "module": "11. Server operations and deployments",
+    "stage": "E"
+  },
+  {
+    "id": "OPS-05",
+    "name": "Cloud and hosting adapters",
+    "requirement": "Install provider CLIs/connectors for explicitly connected accounts; inspect resources, troubleshoot builds, manage approved changes and record provider operation IDs.",
+    "module": "11. Server operations and deployments",
+    "stage": "E"
+  },
+  {
+    "id": "OPS-06",
+    "name": "Domain/DNS/TLS work",
+    "requirement": "Inspect and prepare domain records and certificates; show mail/verification impacts and request approval for public routing or domain purchases.",
+    "module": "11. Server operations and deployments",
+    "stage": "E"
+  },
+  {
+    "id": "OPS-07",
+    "name": "Databases and migrations",
+    "requirement": "Run authorized queries, inspect plans, back up and restore, prepare migrations, and distinguish production from disposable development data.",
+    "module": "11. Server operations and deployments",
+    "stage": "E"
+  },
+  {
+    "id": "OPS-08",
+    "name": "Incident procedures",
+    "requirement": "Execute a preapproved playbook, gather an incident timeline, apply bounded remediation, and escalate instead of widening authority when it fails.",
+    "module": "11. Server operations and deployments",
+    "stage": "E"
+  },
+  {
+    "id": "OPS-09",
+    "name": "Cost-aware resource lifecycle",
+    "requirement": "Estimate provisioning charges, enforce external limits where available, tag ownership, track expiry, and clean up only resources covered by the task.",
+    "module": "11. Server operations and deployments",
+    "stage": "E"
+  },
+  {
+    "id": "OPS-10",
+    "name": "Agent self-maintenance",
+    "requirement": "Diagnose its own worker/browser/tool failures and prepare updates; a separate trusted supervisor owns coordinator updates, credential policy and recovery.",
+    "module": "11. Server operations and deployments",
+    "stage": "C"
+  },
+  {
+    "id": "RES-01",
+    "name": "Self-hosted search",
+    "requirement": "Run a search adapter/metasearch service on Ubuntu, expose it to Pi, and query public upstream sources under their access limits; no managed search API is required.",
+    "module": "12. Research and source collection",
+    "stage": "C"
+  },
+  {
+    "id": "RES-02",
+    "name": "Source-grounded answers",
+    "requirement": "Record source URL/title, access time, relevant evidence, publication date when available, and confidence; distinguish observation from inference.",
+    "module": "12. Research and source collection",
+    "stage": "C"
+  },
+  {
+    "id": "RES-03",
+    "name": "Deep research tasks",
+    "requirement": "Decompose questions, compare sources, follow citations, track unresolved claims, and deliver a report with a supporting evidence folder.",
+    "module": "12. Research and source collection",
+    "stage": "E"
+  },
+  {
+    "id": "RES-04",
+    "name": "Structured extraction",
+    "requirement": "Extract public or authorized account data into tables/JSON/CSV with schemas, deduplication, unit/currency normalization, and validation.",
+    "module": "12. Research and source collection",
+    "stage": "C"
+  },
+  {
+    "id": "RES-05",
+    "name": "Responsible crawling",
+    "requirement": "Scope domains/pages, rate-limit, checkpoint, honor applicable access restrictions, and stop on explicit blocks rather than silently escalating methods.",
+    "module": "12. Research and source collection",
+    "stage": "E"
+  },
+  {
+    "id": "RES-06",
+    "name": "Change monitoring",
+    "requirement": "Watch selected pages, docs, releases, prices or public records; retain before/after evidence and alert only on user-defined meaningful change.",
+    "module": "12. Research and source collection",
+    "stage": "E"
+  },
+  {
+    "id": "RES-07",
+    "name": "Mixed-source research",
+    "requirement": "Combine repo files, PDFs, spreadsheets, browser pages and connected knowledge sources with provenance for each claim.",
+    "module": "12. Research and source collection",
+    "stage": "C"
+  },
+  {
+    "id": "RES-08",
+    "name": "Comparison dossiers",
+    "requirement": "Build vendor/tool/travel/product comparisons including total costs, availability uncertainty, trade-offs, and links without making a purchase.",
+    "module": "12. Research and source collection",
+    "stage": "E"
+  },
+  {
+    "id": "RES-09",
+    "name": "Reproducible datasets",
+    "requirement": "Retain extraction code, source versions, filters and refresh procedures; show gaps and failed pages instead of hiding incomplete coverage.",
+    "module": "12. Research and source collection",
+    "stage": "E"
+  },
+  {
+    "id": "RES-10",
+    "name": "Research-to-action handoff",
+    "requirement": "Turn a verified finding into a proposed code change, server action, draft communication or purchase plan while preserving the next action's approval boundary.",
+    "module": "12. Research and source collection",
+    "stage": "E"
+  },
+  {
+    "id": "DOC-01",
+    "name": "Read heterogeneous documents",
+    "requirement": "Parse PDF, office files, HTML, Markdown, text and scanned images; retain page/sheet/section references and mark extraction failures.",
+    "module": "13. Documents and deliverables",
+    "stage": "C"
+  },
+  {
+    "id": "DOC-02",
+    "name": "Write reports and documents",
+    "requirement": "Produce DOCX, PDF, Markdown and HTML with headings, tables, citations, charts and reusable owner templates.",
+    "module": "13. Documents and deliverables",
+    "stage": "C"
+  },
+  {
+    "id": "DOC-03",
+    "name": "Spreadsheet work",
+    "requirement": "Create and edit XLSX/CSV, formulas, formatting and charts; recalculate with a compatible engine and check representative formula results.",
+    "module": "13. Documents and deliverables",
+    "stage": "C"
+  },
+  {
+    "id": "DOC-04",
+    "name": "Slide decks",
+    "requirement": "Generate PPTX and rendered previews from research, data or a reference deck; inspect layouts instead of claiming a saved file is presentation-ready.",
+    "module": "13. Documents and deliverables",
+    "stage": "E"
+  },
+  {
+    "id": "DOC-05",
+    "name": "PDF workflows",
+    "requirement": "Merge/split, extract, annotate, fill supported forms, redact where technically validated, and generate PDFs while preserving original evidence.",
+    "module": "13. Documents and deliverables",
+    "stage": "E"
+  },
+  {
+    "id": "DOC-06",
+    "name": "Render and inspect",
+    "requirement": "Render final documents to pages/slides and check clipping, pagination, fonts, charts and missing content; store previews beside the original artifact.",
+    "module": "13. Documents and deliverables",
+    "stage": "C"
+  },
+  {
+    "id": "DOC-07",
+    "name": "Revision and review",
+    "requirement": "Compare document versions, apply requested changes, show meaningful diffs or redlines when supported, and retain a recoverable earlier version.",
+    "module": "13. Documents and deliverables",
+    "stage": "E"
+  },
+  {
+    "id": "DOC-08",
+    "name": "Batch transformations",
+    "requirement": "Convert, rename, classify, summarize and organize large document collections with restartable progress and per-file failures.",
+    "module": "13. Documents and deliverables",
+    "stage": "E"
+  },
+  {
+    "id": "DOC-09",
+    "name": "Template library",
+    "requirement": "Owner-approved branding, layouts, writing conventions, spreadsheets and reports that can be selected per task without granting new external authority.",
+    "module": "13. Documents and deliverables",
+    "stage": "E"
+  },
+  {
+    "id": "DOC-10",
+    "name": "Delivery workflow",
+    "requirement": "Package outputs, show provenance and unresolved issues, then download/share/upload/send only under the destination's applicable permission.",
+    "module": "13. Documents and deliverables",
+    "stage": "C"
+  },
+  {
+    "id": "DATA-01",
+    "name": "Local analysis",
+    "requirement": "Use Python, pandas/Polars, SQL or DuckDB-style tooling for cleaning, joining, aggregation, validation and reproducible calculations.",
+    "module": "14. Data analysis and databases",
+    "stage": "C"
+  },
+  {
+    "id": "DATA-02",
+    "name": "Data quality reports",
+    "requirement": "Identify missing values, duplicate records, schema drift, inconsistent units, outliers and rejected rows with counts and reproducible checks.",
+    "module": "14. Data analysis and databases",
+    "stage": "C"
+  },
+  {
+    "id": "DATA-03",
+    "name": "Charts and explanations",
+    "requirement": "Produce appropriate charts/tables with labelled units, filters, assumptions and a link to the data and calculation used.",
+    "module": "14. Data analysis and databases",
+    "stage": "C"
+  },
+  {
+    "id": "DATA-04",
+    "name": "Query connected databases",
+    "requirement": "Connect to approved databases with read-only roles by default; show database/environment, row limits and query cost controls.",
+    "module": "14. Data analysis and databases",
+    "stage": "E"
+  },
+  {
+    "id": "DATA-05",
+    "name": "Approved data mutations",
+    "requirement": "Preview update/delete scope, take a viable backup where possible, use transactions, verify counts, and require write authority distinct from read access.",
+    "module": "14. Data analysis and databases",
+    "stage": "E"
+  },
+  {
+    "id": "DATA-06",
+    "name": "Data pipelines",
+    "requirement": "Build restartable import/export and transformation jobs with checkpoints, schemas, lineage and explicit destination permissions.",
+    "module": "14. Data analysis and databases",
+    "stage": "E"
+  },
+  {
+    "id": "DATA-07",
+    "name": "API datasets",
+    "requirement": "Paginate, respect rate limits, resume extraction, reconcile totals, and preserve source IDs rather than silently drop failed pages.",
+    "module": "14. Data analysis and databases",
+    "stage": "E"
+  },
+  {
+    "id": "DATA-08",
+    "name": "Notebook and script outputs",
+    "requirement": "Deliver runnable scripts/notebooks, dependency manifests and a concise method, with sensitive values represented as references.",
+    "module": "14. Data analysis and databases",
+    "stage": "E"
+  },
+  {
+    "id": "DATA-09",
+    "name": "Large-data execution",
+    "requirement": "Stream or chunk oversized inputs, estimate disk/RAM, avoid loading everything into model context, and fail clearly when resources are insufficient.",
+    "module": "14. Data analysis and databases",
+    "stage": "E"
+  },
+  {
+    "id": "DATA-10",
+    "name": "Business/finance preparation",
+    "requirement": "Prepare reconciliations, invoice summaries, expense categorization and operational reports with traceable calculations; submissions or transfers use separate authority.",
+    "module": "14. Data analysis and databases",
+    "stage": "E"
+  },
+  {
+    "id": "COM-01",
+    "name": "Email reading and triage",
+    "requirement": "Search/summarize approved mailboxes, extract action items and attachments, and organize labels under configured authority.",
+    "module": "15. Communication and calendar",
+    "stage": "E"
+  },
+  {
+    "id": "COM-02",
+    "name": "Draft and send mail",
+    "requirement": "Draft context-aware replies, show exact recipients/content/attachments, and send only with current-task or standing send authorization.",
+    "module": "15. Communication and calendar",
+    "stage": "E"
+  },
+  {
+    "id": "COM-03",
+    "name": "Calendar assistance",
+    "requirement": "Find availability, propose times, prepare events and handle recurrence/time zones; distinguish a private reminder from sending attendees invitations.",
+    "module": "15. Communication and calendar",
+    "stage": "E"
+  },
+  {
+    "id": "COM-04",
+    "name": "Chat integrations",
+    "requirement": "Optional Telegram, Slack, Discord, Matrix or other official connectors with explicit channel, sender identity and outbound scope.",
+    "module": "15. Communication and calendar",
+    "stage": "E"
+  },
+  {
+    "id": "COM-05",
+    "name": "Meeting preparation",
+    "requirement": "Compile agendas, relevant files, prior decisions, open questions and follow-up drafts from authorized sources.",
+    "module": "15. Communication and calendar",
+    "stage": "E"
+  },
+  {
+    "id": "COM-06",
+    "name": "Contact and relationship context",
+    "requirement": "Store owner-reviewed contact identities and preferred channels; disambiguate similar names before an external send.",
+    "module": "15. Communication and calendar",
+    "stage": "E"
+  },
+  {
+    "id": "COM-07",
+    "name": "Task intake from messages",
+    "requirement": "Turn approved incoming requests into queued work; treat third-party content as data and never as automatic authority to spend or elevate.",
+    "module": "15. Communication and calendar",
+    "stage": "E"
+  },
+  {
+    "id": "COM-08",
+    "name": "Notification routing",
+    "requirement": "Persist completion/failure/action-required notices in the server inbox and stream them to connected clients; optional owner-connected channels are task destinations, not a hosted notification backend.",
+    "module": "15. Communication and calendar",
+    "stage": "C"
+  },
+  {
+    "id": "COM-09",
+    "name": "Shared systems administration",
+    "requirement": "Optional ticketing, project boards, CRM, knowledge bases and business tools through installable adapters, with audit and resource-specific permission.",
+    "module": "15. Communication and calendar",
+    "stage": "A"
+  },
+  {
+    "id": "COM-10",
+    "name": "Delivery reconciliation",
+    "requirement": "Detect whether a send or update already succeeded before retrying; retain provider IDs and mark uncertain outcomes for inspection.",
+    "module": "15. Communication and calendar",
+    "stage": "E"
+  },
+  {
+    "id": "LIFE-01",
+    "name": "Account administration",
+    "requirement": "Retrieve statements/invoices, inspect settings, prepare profile updates, and execute approved account changes through supported sites/APIs.",
+    "module": "16. Personal workflows and errands",
+    "stage": "E"
+  },
+  {
+    "id": "LIFE-02",
+    "name": "Travel and appointments",
+    "requirement": "Research options, compare complete prices and constraints, prepare booking details, then stop for required booking/payment confirmation.",
+    "module": "16. Personal workflows and errands",
+    "stage": "E"
+  },
+  {
+    "id": "LIFE-03",
+    "name": "Forms and applications",
+    "requirement": "Assemble required documents, fill authorized forms, show declarations and final fields, and obtain permission for submission or attestation.",
+    "module": "16. Personal workflows and errands",
+    "stage": "E"
+  },
+  {
+    "id": "LIFE-04",
+    "name": "Shopping and procurement",
+    "requirement": "Compare stock/specifications, construct a cart, calculate total cost, and ask for the transaction-specific purchase described in PAY.",
+    "module": "16. Personal workflows and errands",
+    "stage": "E"
+  },
+  {
+    "id": "LIFE-05",
+    "name": "Subscription management",
+    "requirement": "Inventory explicitly connected subscriptions, track renewal dates, flag price changes, and prepare or perform approved cancellations.",
+    "module": "16. Personal workflows and errands",
+    "stage": "E"
+  },
+  {
+    "id": "LIFE-06",
+    "name": "Returns and support",
+    "requirement": "Gather order evidence, prepare support tickets, request approved returns/refunds, and track response/status without inventing a successful resolution.",
+    "module": "16. Personal workflows and errands",
+    "stage": "E"
+  },
+  {
+    "id": "LIFE-07",
+    "name": "Personal file organization",
+    "requirement": "Organize receipts, records, photos and downloads; show proposed mass changes and preserve originals/backups.",
+    "module": "16. Personal workflows and errands",
+    "stage": "E"
+  },
+  {
+    "id": "LIFE-08",
+    "name": "Deadline preparation",
+    "requirement": "Track renewals, application deadlines and owner-defined obligations; collect required material and remind only under an approved schedule.",
+    "module": "16. Personal workflows and errands",
+    "stage": "E"
+  },
+  {
+    "id": "LIFE-09",
+    "name": "Multi-step errands",
+    "requirement": "Combine research, document preparation, browser actions, correspondence and payment preparation under one visible task and authority envelope.",
+    "module": "16. Personal workflows and errands",
+    "stage": "A"
+  },
+  {
+    "id": "LIFE-10",
+    "name": "Home and lab integrations",
+    "requirement": "Optional enrolled home-server, NAS or device APIs; expose device state and require specific approval for changes with physical consequences.",
+    "module": "16. Personal workflows and errands",
+    "stage": "A"
+  },
+  {
+    "id": "PAY-01",
+    "name": "Purchase preparation",
+    "requirement": "Research, select items, prepare a cart and calculate total including currency, tax, shipping, deposits and recurring terms before requesting payment.",
+    "module": "17. Payment workflows and purchases",
+    "stage": "E"
+  },
+  {
+    "id": "PAY-02",
+    "name": "Whole payment workflow approval",
+    "requirement": "On either native client, approve merchant/payee, purpose, items, funding alias, maximum total/currency, delivery, recurrence, expiry and included checkout-to-receipt steps; require current owner authentication.",
+    "module": "17. Payment workflows and purchases",
+    "stage": "E"
+  },
+  {
+    "id": "PAY-03",
+    "name": "Authorized workflow execution and handoff",
+    "requirement": "Execute the owner-approved payment workflow through a supported broker/provider route; do not repeat prompts for included routine steps. Hand off issuer authentication or unsupported final checkout, and reconcile the real result.",
+    "module": "17. Payment workflows and purchases",
+    "stage": "E"
+  },
+  {
+    "id": "PAY-04",
+    "name": "Brokered payment method",
+    "requirement": "Use tokenized/provider-supported payment credentials outside the root-capable machine; never place the owner's general-purpose card or wallet secrets in Pi context.",
+    "module": "17. Payment workflows and purchases",
+    "stage": "E"
+  },
+  {
+    "id": "PAY-05",
+    "name": "Bounded virtual instrument",
+    "requirement": "Optional provider-issued virtual card or delegated instrument with available merchant/category/amount/time controls; only if the owner's location and account are eligible.",
+    "module": "17. Payment workflows and purchases",
+    "stage": "A"
+  },
+  {
+    "id": "PAY-06",
+    "name": "Standing purchase mandate",
+    "requirement": "Explicit opt-in rules for narrow repeat purchases: supplier, purpose, per-order/cumulative budget, currency, frequency, expiry and allowed recurrence; owner can revoke.",
+    "module": "17. Payment workflows and purchases",
+    "stage": "A"
+  },
+  {
+    "id": "PAY-07",
+    "name": "Step-up authentication",
+    "requirement": "Pause for bank/card/UPI/wallet authentication where required; the owner completes PIN, biometrics, passkey or OTP in the appropriate trusted interface.",
+    "module": "17. Payment workflows and purchases",
+    "stage": "E"
+  },
+  {
+    "id": "PAY-08",
+    "name": "No duplicate purchases",
+    "requirement": "Maintain a purchase ledger and operation key, reserve concurrent budget, verify provider/order state after timeouts, and never blindly replay a checkout click.",
+    "module": "17. Payment workflows and purchases",
+    "stage": "E"
+  },
+  {
+    "id": "PAY-09",
+    "name": "Receipts and aftercare",
+    "requirement": "Save invoices/receipts, record order and subscription IDs, track delivery/refund state, and prepare approved cancellation or return actions.",
+    "module": "17. Payment workflows and purchases",
+    "stage": "E"
+  },
+  {
+    "id": "PAY-10",
+    "name": "Spending control centre",
+    "requirement": "Show pending/committed/settled spend, recurring commitments, budget reservations, failed attempts and disputed or unknown outcomes; reconcile against provider records.",
+    "module": "17. Payment workflows and purchases",
+    "stage": "E"
+  },
+  {
+    "id": "AUTO-01",
+    "name": "One-time and recurring work",
+    "requirement": "Natural-language schedules, explicit time zone, next-run preview, start/end dates, and support for one-off, interval and calendar schedules.",
+    "module": "18. Scheduling and monitoring",
+    "stage": "C"
+  },
+  {
+    "id": "AUTO-02",
+    "name": "Meaningful monitors",
+    "requirement": "Watch a URL, repo, service, folder, CI run, invoice or other resource; wake the model only when a condition or useful interval warrants it.",
+    "module": "18. Scheduling and monitoring",
+    "stage": "E"
+  },
+  {
+    "id": "AUTO-03",
+    "name": "Durable scheduling semantics",
+    "requirement": "Record scheduled occurrence IDs, missed-run policy, retries and deduplication; define catch-up behavior after outages and daylight-saving changes.",
+    "module": "18. Scheduling and monitoring",
+    "stage": "C"
+  },
+  {
+    "id": "AUTO-04",
+    "name": "Webhook and event triggers",
+    "requirement": "Authenticate incoming events, deduplicate/replay safely, rate-limit, and map them to a constrained task rather than unrestricted prompt execution.",
+    "module": "18. Scheduling and monitoring",
+    "stage": "E"
+  },
+  {
+    "id": "AUTO-05",
+    "name": "Heartbeat goals",
+    "requirement": "Periodically inspect an owner-authorized objective and continue useful work; remain quiet on unchanged/non-actionable state.",
+    "module": "18. Scheduling and monitoring",
+    "stage": "E"
+  },
+  {
+    "id": "AUTO-06",
+    "name": "Bounded automatic remediation",
+    "requirement": "Run a tested procedure only on specified services/resources, with rate/attempt limits, rollback and escalation.",
+    "module": "18. Scheduling and monitoring",
+    "stage": "E"
+  },
+  {
+    "id": "AUTO-07",
+    "name": "Approval while unattended",
+    "requirement": "Persist requests, notify once under policy, stop at the protected step, and expire or reschedule safely when no owner responds.",
+    "module": "18. Scheduling and monitoring",
+    "stage": "C"
+  },
+  {
+    "id": "AUTO-08",
+    "name": "Resource and spend budgets",
+    "requirement": "Limit model runtime, browser slots, API fees, cloud use and purchase authority per automation; prevent overlapping instances unless explicitly allowed.",
+    "module": "18. Scheduling and monitoring",
+    "stage": "E"
+  },
+  {
+    "id": "AUTO-09",
+    "name": "Automation management",
+    "requirement": "List, explain, test, pause, resume, edit and delete automations; show their permissions, last results, next run and change history.",
+    "module": "18. Scheduling and monitoring",
+    "stage": "C"
+  },
+  {
+    "id": "AUTO-10",
+    "name": "Schedules are explicit authority",
+    "requirement": "A memory note or generated plan does not silently create recurring work; scheduler/standing grants require an owner-authorized operation and record.",
+    "module": "18. Scheduling and monitoring",
+    "stage": "C"
+  },
+  {
+    "id": "MEM-01",
+    "name": "Explicit durable memory",
+    "requirement": "Save owner preferences, project conventions, decisions and known service facts with source, date, scope and correction history.",
+    "module": "19. Memory and retrieval",
+    "stage": "C"
+  },
+  {
+    "id": "MEM-02",
+    "name": "Episodic task history",
+    "requirement": "Search previous work, results, errors and supporting artifacts; summarize what happened without replacing retained evidence.",
+    "module": "19. Memory and retrieval",
+    "stage": "C"
+  },
+  {
+    "id": "MEM-03",
+    "name": "Local semantic retrieval",
+    "requirement": "Use approved local embeddings plus keyword search; keep indexes rebuildable and respect source/account boundaries.",
+    "module": "19. Memory and retrieval",
+    "stage": "E"
+  },
+  {
+    "id": "MEM-04",
+    "name": "Task working state",
+    "requirement": "Save current plan, facts, files, active processes, pending decisions and next action before context compaction or a long wait.",
+    "module": "19. Memory and retrieval",
+    "stage": "C"
+  },
+  {
+    "id": "MEM-05",
+    "name": "Provenance and freshness",
+    "requirement": "Mark direct observation, owner instruction, imported note and inference; revalidate stale operational facts before consequential action.",
+    "module": "19. Memory and retrieval",
+    "stage": "C"
+  },
+  {
+    "id": "MEM-06",
+    "name": "Inspect, correct, and forget",
+    "requirement": "Provide a memory browser, edit/supersede/delete actions and deletion propagation to indexes; explain retained audit/backup limits.",
+    "module": "19. Memory and retrieval",
+    "stage": "E"
+  },
+  {
+    "id": "MEM-07",
+    "name": "Knowledge collections",
+    "requirement": "Index selected repos, folders and connected sources into named collections with update schedules and access scopes.",
+    "module": "19. Memory and retrieval",
+    "stage": "E"
+  },
+  {
+    "id": "MEM-08",
+    "name": "Procedure learning",
+    "requirement": "Propose a reusable skill from a successful task, include prerequisites and verification, and request review before expanding its authority.",
+    "module": "19. Memory and retrieval",
+    "stage": "E"
+  },
+  {
+    "id": "MEM-09",
+    "name": "Memory never grants permission",
+    "requirement": "Keep remembered preferences and past approvals separate from live policy/grants; a retrieved page cannot promote itself into owner instructions.",
+    "module": "19. Memory and retrieval",
+    "stage": "C"
+  },
+  {
+    "id": "MEM-10",
+    "name": "Controlled consolidation",
+    "requirement": "Deduplicate and condense notes in the background, preserve source links, flag contradictions, and keep an owner-readable change history.",
+    "module": "19. Memory and retrieval",
+    "stage": "A"
+  },
+  {
+    "id": "TEAM-01",
+    "name": "Worker roles",
+    "requirement": "Optional coding, browser, research, document, operations and verification workers, all implemented on Pi-compatible integration paths where practical.",
+    "module": "20. Specialist workers and coordination",
+    "stage": "E"
+  },
+  {
+    "id": "TEAM-02",
+    "name": "Bounded delegation",
+    "requirement": "Parent assigns a concrete deliverable, resources, budget, deadline and tool loadout; child authority is a subset of the parent's current grant.",
+    "module": "20. Specialist workers and coordination",
+    "stage": "E"
+  },
+  {
+    "id": "TEAM-03",
+    "name": "Task dependency graph",
+    "requirement": "Model prerequisites, parallel steps and joins; persist progress and avoid declaring a mission done while required children remain unresolved.",
+    "module": "20. Specialist workers and coordination",
+    "stage": "E"
+  },
+  {
+    "id": "TEAM-04",
+    "name": "Workspace coordination",
+    "requirement": "Separate worktrees or folders, account/profile leases, service locks, and explicit merge/handoff of shared results.",
+    "module": "20. Specialist workers and coordination",
+    "stage": "E"
+  },
+  {
+    "id": "TEAM-05",
+    "name": "Cloud-capacity-aware queue",
+    "requirement": "Schedule Pi model calls within Ollama Cloud account limits and task budgets; show quota/backoff state and separately bound local browser/tool workers.",
+    "module": "20. Specialist workers and coordination",
+    "stage": "C"
+  },
+  {
+    "id": "TEAM-06",
+    "name": "Independent verification",
+    "requirement": "Run deterministic checks or a separately scoped verifier; label model-based review as supporting judgment, not proof of correctness.",
+    "module": "20. Specialist workers and coordination",
+    "stage": "E"
+  },
+  {
+    "id": "TEAM-07",
+    "name": "Budget inheritance",
+    "requirement": "Charge nested tools/workers to the initiating task, prevent recursive runaway spawning, and cap depth/concurrency.",
+    "module": "20. Specialist workers and coordination",
+    "stage": "E"
+  },
+  {
+    "id": "TEAM-08",
+    "name": "Worker recovery",
+    "requirement": "Replace a crashed worker, attach its durable state, and reconcile outstanding effects before retrying the assigned step.",
+    "module": "20. Specialist workers and coordination",
+    "stage": "E"
+  },
+  {
+    "id": "TEAM-09",
+    "name": "Owner-visible delegation",
+    "requirement": "Show what each worker is doing, machine/account used, pending approval and final artifact; hide noisy internal chatter by default.",
+    "module": "20. Specialist workers and coordination",
+    "stage": "E"
+  },
+  {
+    "id": "TEAM-10",
+    "name": "Same-server worker expansion",
+    "requirement": "Scale isolated worker processes, containers or VMs on the same Ubuntu server with capability discovery, leases and quotas. A multi-server fleet is outside the current hosting scope.",
+    "module": "20. Specialist workers and coordination",
+    "stage": "A"
+  },
+  {
+    "id": "EXT-01",
+    "name": "Pi extension support",
+    "requirement": "Load approved, pinned extensions and skills through the chosen SDK adapter; expose compatible configuration and clear runtime failures.",
+    "module": "21. Extensions, skills and MCP",
+    "stage": "C"
+  },
+  {
+    "id": "EXT-02",
+    "name": "Self-hosted MCP connectors",
+    "requirement": "Run MCP adapters/servers on Ubuntu over stdio or local authenticated transport, expose them to Pi, and mediate their authorized calls to external task services.",
+    "module": "21. Extensions, skills and MCP",
+    "stage": "E"
+  },
+  {
+    "id": "EXT-03",
+    "name": "Simple CLI adapters",
+    "requirement": "Wrap an installed CLI with structured inputs/results, help/discovery, exit handling and capability metadata without needing a new full plugin framework.",
+    "module": "21. Extensions, skills and MCP",
+    "stage": "C"
+  },
+  {
+    "id": "EXT-04",
+    "name": "Capability manifest",
+    "requirement": "Declare tools, dependencies, executable hashes, data destinations, secrets, permissions, update source, licences and smoke tests.",
+    "module": "21. Extensions, skills and MCP",
+    "stage": "E"
+  },
+  {
+    "id": "EXT-05",
+    "name": "Dynamic tool discovery",
+    "requirement": "Search/load only tools relevant to the current step; keep hundreds of integrations from overwhelming a smaller model's context.",
+    "module": "21. Extensions, skills and MCP",
+    "stage": "C"
+  },
+  {
+    "id": "EXT-06",
+    "name": "Capability packs",
+    "requirement": "Bundle software, skills, schemas and tests for coding, browser work, documents, operations, communications or data analysis.",
+    "module": "21. Extensions, skills and MCP",
+    "stage": "E"
+  },
+  {
+    "id": "EXT-07",
+    "name": "In-process trust distinction",
+    "requirement": "Treat Pi extensions as executable trusted code; run less-trusted connectors in separate processes/containers with mediated resources.",
+    "module": "21. Extensions, skills and MCP",
+    "stage": "C"
+  },
+  {
+    "id": "EXT-08",
+    "name": "Permissions on upgrade",
+    "requirement": "Compare changed capabilities/scopes, require owner approval for escalation, and pin the version used by existing jobs until a compatible transition.",
+    "module": "21. Extensions, skills and MCP",
+    "stage": "E"
+  },
+  {
+    "id": "EXT-09",
+    "name": "Local interoperability adapters",
+    "requirement": "Optional ACP engines and agent adapters run on Ubuntu and are exposed to Pi; task import/export or authorized protocol exchange does not outsource execution or expand authority.",
+    "module": "21. Extensions, skills and MCP",
+    "stage": "A"
+  },
+  {
+    "id": "EXT-10",
+    "name": "Owner's private registry",
+    "requirement": "Save verified packs/recipes, stage new versions, inspect provenance and roll back; avoid automatic execution of arbitrary marketplace content.",
+    "module": "21. Extensions, skills and MCP",
+    "stage": "E"
+  },
+  {
+    "id": "MODEL-01",
+    "name": "Ollama Cloud primary path",
+    "requirement": "Route Pi through the server-hosted gateway to approved Cloud models; keep the cloud credential out of clients/guest-wide config and make hosted inference visible.",
+    "module": "22. Ollama Cloud models and Auto reviewer",
+    "stage": "C"
+  },
+  {
+    "id": "MODEL-02",
+    "name": "Cloud capability probes",
+    "requirement": "Test tools/results, streaming, images, context and cancellation on the actual hosted route. Validate data locally; do not assume Cloud-enforced structured output.",
+    "module": "22. Ollama Cloud models and Auto reviewer",
+    "stage": "C"
+  },
+  {
+    "id": "MODEL-03",
+    "name": "Operator, reviewer and vision roles",
+    "requirement": "Qualify Cloud operator/coding, a separate smaller safety reviewer for Auto, and vision roles; self-host embedding/indexing helpers. Reviewer failure or uncertain classification asks the owner.",
+    "module": "22. Ollama Cloud models and Auto reviewer",
+    "stage": "C"
+  },
+  {
+    "id": "MODEL-04",
+    "name": "Explicit model inventory",
+    "requirement": "Record hosted API ID, licence/source, observed version/digest if available, effective capabilities/context, qualification date and fallback list; do not invent provider-hidden runtime details.",
+    "module": "22. Ollama Cloud models and Auto reviewer",
+    "stage": "C"
+  },
+  {
+    "id": "MODEL-05",
+    "name": "Cloud health and usage",
+    "requirement": "Show availability, latency, throughput, task usage, quota/rate limits where exposed, request failures, retries and budget state; unknown usage remains unknown.",
+    "module": "22. Ollama Cloud models and Auto reviewer",
+    "stage": "C"
+  },
+  {
+    "id": "MODEL-06",
+    "name": "Context management",
+    "requirement": "Retrieve relevant files, truncate verbose output, summarize with provenance, preserve durable task state and reserve space for tool results.",
+    "module": "22. Ollama Cloud models and Auto reviewer",
+    "stage": "C"
+  },
+  {
+    "id": "MODEL-07",
+    "name": "Task-based evaluations",
+    "requirement": "Measure coding, browser, document and operations success with deterministic validators; report failure modes and human intervention rate.",
+    "module": "22. Ollama Cloud models and Auto reviewer",
+    "stage": "C"
+  },
+  {
+    "id": "MODEL-08",
+    "name": "Approved Cloud fallback",
+    "requirement": "Retry transient failures or select another qualified open model on Ollama Cloud within the task's data/budget scope. Otherwise pause; no silent provider or local-runtime switch.",
+    "module": "22. Ollama Cloud models and Auto reviewer",
+    "stage": "E"
+  },
+  {
+    "id": "MODEL-09",
+    "name": "Hosted model changes",
+    "requirement": "Requalify changed IDs/behavior and retirements, keep alternative qualified models, and avoid promising rollback to cloud revisions the provider no longer serves.",
+    "module": "22. Ollama Cloud models and Auto reviewer",
+    "stage": "E"
+  },
+  {
+    "id": "MODEL-10",
+    "name": "Efficient execution modes",
+    "requirement": "Small tool loadouts, locally validated structured data, deterministic recipes, context budgets and concurrency matched to Cloud quotas plus local tool capacity.",
+    "module": "22. Ollama Cloud models and Auto reviewer",
+    "stage": "E"
+  },
+  {
+    "id": "MEDIA-01",
+    "name": "Voice task input",
+    "requirement": "Record a voice note in the client, transcribe locally or on the owner's server, show the text, and treat ambiguous sensitive instructions as needing clarification.",
+    "module": "23. Speech, images and media",
+    "stage": "E"
+  },
+  {
+    "id": "MEDIA-02",
+    "name": "Spoken updates",
+    "requirement": "Optional local speech output for progress and answers; provide transcript, mute, interruption and privacy controls.",
+    "module": "23. Speech, images and media",
+    "stage": "A"
+  },
+  {
+    "id": "MEDIA-03",
+    "name": "Screenshot understanding",
+    "requirement": "Attach images or selected screen regions for analysis; explicitly confirm destination when local content leaves the Mac.",
+    "module": "23. Speech, images and media",
+    "stage": "E"
+  },
+  {
+    "id": "MEDIA-04",
+    "name": "OCR and scanned records",
+    "requirement": "Extract text/tables from images and scans with coordinates/confidence where available and an owner-visible correction path.",
+    "module": "23. Speech, images and media",
+    "stage": "E"
+  },
+  {
+    "id": "MEDIA-05",
+    "name": "Image transformations",
+    "requirement": "Resize, crop, annotate, compress, convert and organize assets using installed tools; preserve originals and check the visual result.",
+    "module": "23. Speech, images and media",
+    "stage": "E"
+  },
+  {
+    "id": "MEDIA-06",
+    "name": "Open image-generation tools",
+    "requirement": "Optional self-hosted generation/editing worker when hardware and model licence allow; separately label generated imagery and required GPU resources.",
+    "module": "23. Speech, images and media",
+    "stage": "A"
+  },
+  {
+    "id": "MEDIA-07",
+    "name": "Audio/video processing",
+    "requirement": "Use installable media tools for clipping, transcoding, subtitles, transcription, frame extraction and exports with input/output provenance.",
+    "module": "23. Speech, images and media",
+    "stage": "E"
+  },
+  {
+    "id": "MEDIA-08",
+    "name": "Meeting recordings",
+    "requirement": "Process owner-supplied/authorized recordings into notes and action items; meeting capture itself requires a separate consented integration.",
+    "module": "23. Speech, images and media",
+    "stage": "E"
+  },
+  {
+    "id": "MEDIA-09",
+    "name": "Multimodal deliverables",
+    "requirement": "Combine screenshots, charts, recordings and text into reports, tutorials or demos with reviewable intermediate artifacts.",
+    "module": "23. Speech, images and media",
+    "stage": "A"
+  },
+  {
+    "id": "MEDIA-10",
+    "name": "Media resource budgets",
+    "requirement": "Queue large jobs, estimate storage/runtime, set retention and cancellation rules, and avoid starving the main operator's inference.",
+    "module": "23. Speech, images and media",
+    "stage": "E"
+  },
+  {
+    "id": "MAC-01",
+    "name": "Native app shell",
+    "requirement": "SwiftUI/AppKit windows, menus, keyboard navigation, drag/drop and accessibility; retain the Ink hierarchy and restrained visual language.",
+    "module": "24. Swift macOS client",
+    "stage": "C"
+  },
+  {
+    "id": "MAC-02",
+    "name": "Projects and tasks sidebar",
+    "requirement": "Group projects, recent tasks, needs-you requests and running work; support search, pin/archive, unread/completion states and machine context.",
+    "module": "24. Swift macOS client",
+    "stage": "C"
+  },
+  {
+    "id": "MAC-03",
+    "name": "Conversation and plan",
+    "requirement": "Stream readable messages and public progress, show tool rows and task steps, and support steering, attachments, model/profile choices and cancellation.",
+    "module": "24. Swift macOS client",
+    "stage": "C"
+  },
+  {
+    "id": "MAC-04",
+    "name": "Contextual evidence surfaces",
+    "requirement": "Present task plans, changed files/diffs, live browser, read-only action evidence, screenshots and generated outputs. No user shell, arbitrary server filesystem console or Linux desktop viewer.",
+    "module": "24. Swift macOS client",
+    "stage": "C"
+  },
+  {
+    "id": "MAC-05",
+    "name": "Code review surface",
+    "requirement": "Turn/branch diffs, file tree, changed-file summary, checkpoint restore, checks and PR context in the style of t3code's workflow.",
+    "module": "24. Swift macOS client",
+    "stage": "C"
+  },
+  {
+    "id": "MAC-06",
+    "name": "Machine and capabilities",
+    "requirement": "Health, installed tools, service/process inventory, resource queue, storage and capability installation/update screens.",
+    "module": "24. Swift macOS client",
+    "stage": "C"
+  },
+  {
+    "id": "MAC-07",
+    "name": "Approvals and accounts",
+    "requirement": "Trusted decision centre with exact action previews, account scope, grants, revocation, and device authentication for high-impact actions.",
+    "module": "24. Swift macOS client",
+    "stage": "C"
+  },
+  {
+    "id": "MAC-08",
+    "name": "Local companion",
+    "requirement": "Optional selected-tab/file/screen bridge, share extension or share-sheet intake where supported, and clear revocable consent for each local capability.",
+    "module": "24. Swift macOS client",
+    "stage": "E"
+  },
+  {
+    "id": "MAC-09",
+    "name": "Automation and memory tools",
+    "requirement": "Native lists/editors for schedules, monitors, stored procedures, memory inspection, evidence history and configuration changes.",
+    "module": "24. Swift macOS client",
+    "stage": "E"
+  },
+  {
+    "id": "MAC-10",
+    "name": "Native quality",
+    "requirement": "Dark/light parity, Dynamic Type where applicable, VoiceOver, visible focus, reduced motion, keyboard shortcuts and usable large transcripts.",
+    "module": "24. Swift macOS client",
+    "stage": "C"
+  },
+  {
+    "id": "PHONE-01",
+    "name": "Native sessions and inbox",
+    "requirement": "Needs you, running and recent work with mode/profile icon, task title, machine/account summary and accessible touch targets.",
+    "module": "25. iPhone, shared sync and Apple notifications",
+    "stage": "C"
+  },
+  {
+    "id": "PHONE-02",
+    "name": "Equal client continuity",
+    "requirement": "Read and create the same server-owned conversations/tasks, steer/cancel, change control mode, review evidence and approve workflows from either device; reconnect without missing or duplicated committed content.",
+    "module": "25. iPhone, shared sync and Apple notifications",
+    "stage": "C"
+  },
+  {
+    "id": "PHONE-03",
+    "name": "Equal native approvals",
+    "requirement": "Review exact actions, scope and whole payment workflow details on either client; authenticate sensitive decisions and resolve once on the server. No Mac-only payment approval dependency.",
+    "module": "25. iPhone, shared sync and Apple notifications",
+    "stage": "C"
+  },
+  {
+    "id": "PHONE-04",
+    "name": "Server inbox and Apple push",
+    "requirement": "Persist notices on Ubuntu, stream to active clients and send APNs notifications directly from the Ubuntu notifier; deep-link and replay server state when the app opens. Push is not authoritative or guaranteed immediate.",
+    "module": "25. iPhone, shared sync and Apple notifications",
+    "stage": "C"
+  },
+  {
+    "id": "PHONE-05",
+    "name": "Browser takeover",
+    "requirement": "Inspect and interact with the live remote browser using zoom/touch/keyboard; display the account and return-control action clearly.",
+    "module": "25. iPhone, shared sync and Apple notifications",
+    "stage": "E"
+  },
+  {
+    "id": "PHONE-06",
+    "name": "File and voice intake",
+    "requirement": "Upload from Files/share sheet/camera/voice, with destination and local/server processing visibility, then preview and share returned artifacts.",
+    "module": "25. iPhone, shared sync and Apple notifications",
+    "stage": "E"
+  },
+  {
+    "id": "PHONE-07",
+    "name": "Pairing and revocation",
+    "requirement": "QR/fingerprint confirmation, Keychain-held device identity, last seen, lost-device revoke, and explicit re-pair after trust changes.",
+    "module": "25. iPhone, shared sync and Apple notifications",
+    "stage": "C"
+  },
+  {
+    "id": "PHONE-08",
+    "name": "Readable offline history",
+    "requirement": "Cache selected transcripts/artifacts with local protection, mark staleness, and avoid queuing offline financial approvals as if still current.",
+    "module": "25. iPhone, shared sync and Apple notifications",
+    "stage": "E"
+  },
+  {
+    "id": "PHONE-09",
+    "name": "Lock-screen notifications and status",
+    "requirement": "Use the owner-approved APNs exception for privacy-preserving alerts; optional Live Activities show status/freshness. Require the unlocked app for sensitive approval or payment authorization.",
+    "module": "25. iPhone, shared sync and Apple notifications",
+    "stage": "E"
+  },
+  {
+    "id": "PHONE-10",
+    "name": "Remote emergency controls",
+    "requirement": "Revoke a task's external grants, stop workers, pause automations, and ask the trusted supervisor to recover the guest, even if its agent process is stuck.",
+    "module": "25. iPhone, shared sync and Apple notifications",
+    "stage": "E"
+  },
+  {
+    "id": "TRUST-01",
+    "name": "Three modes and scoped authority",
+    "requirement": "Persist Full control, Auto and Ask permission on the server with scope, policy version, expiry and revocation. Auto uses a smaller independent reviewer; Ask permission gates every work action; protected trust changes stay owner-only.",
+    "module": "26. Control modes, approvals and trust",
+    "stage": "C"
+  },
+  {
+    "id": "TRUST-02",
+    "name": "External effect mediation",
+    "requirement": "Broker protected account, payment, production and trust changes; prevent alternate shell/HTTP/MCP paths from silently gaining those credentials.",
+    "module": "26. Control modes, approvals and trust",
+    "stage": "C"
+  },
+  {
+    "id": "TRUST-03",
+    "name": "Instruction provenance",
+    "requirement": "Distinguish owner instructions from pages, files, tool output and messages; untrusted content cannot create policy, schedules or new approving devices.",
+    "module": "26. Control modes, approvals and trust",
+    "stage": "C"
+  },
+  {
+    "id": "TRUST-04",
+    "name": "Sensitive-data minimization",
+    "requirement": "Redact secrets, OTPs and private payment details across text, structured tool results, screenshots, traces, exports and crash reports.",
+    "module": "26. Control modes, approvals and trust",
+    "stage": "C"
+  },
+  {
+    "id": "TRUST-05",
+    "name": "Protected audit trail",
+    "requirement": "Record intent, authority, approval, execution, provider IDs and verification outside the machine's root-accessible storage.",
+    "module": "26. Control modes, approvals and trust",
+    "stage": "C"
+  },
+  {
+    "id": "TRUST-06",
+    "name": "Reauthentication and exact binding",
+    "requirement": "Require current owner presence for high-impact grants; reject altered requests, stale carts, changed destinations and replayed decision signatures.",
+    "module": "26. Control modes, approvals and trust",
+    "stage": "C"
+  },
+  {
+    "id": "TRUST-07",
+    "name": "Data boundaries",
+    "requirement": "Per-project/account retrieval scope, controlled file uploads, SSRF protection for broker services, and explicit routes to approved private-network resources.",
+    "module": "26. Control modes, approvals and trust",
+    "stage": "C"
+  },
+  {
+    "id": "TRUST-08",
+    "name": "Revocation and emergency stop",
+    "requirement": "Revoke future capabilities and sessions promptly; distinguish revocation from refunding money or undoing an already completed action.",
+    "module": "26. Control modes, approvals and trust",
+    "stage": "C"
+  },
+  {
+    "id": "TRUST-09",
+    "name": "Plugin and dependency trust",
+    "requirement": "Pinned dependencies/images, staged updates, extension provenance, permission diffs and no automatic promotion of agent-written trusted code.",
+    "module": "26. Control modes, approvals and trust",
+    "stage": "C"
+  },
+  {
+    "id": "TRUST-10",
+    "name": "Owner visibility and export",
+    "requirement": "Inspect active permissions, external identities, task evidence, retained data and exports; provide deletion/retention controls with backup/audit limitations explained.",
+    "module": "26. Control modes, approvals and trust",
+    "stage": "E"
+  },
+  {
+    "id": "REL-01",
+    "name": "Health and diagnosis",
+    "requirement": "Surface control plane, Pi, machine, browser, model, broker and storage health separately; show actionable reasons and affected tasks.",
+    "module": "27. Reliability, backups and resources",
+    "stage": "C"
+  },
+  {
+    "id": "REL-02",
+    "name": "Transactional outbox",
+    "requirement": "Persist accepted intent before work, dispatch effects with deduplication, record actual completion and reconcile uncertain outcomes on recovery.",
+    "module": "27. Reliability, backups and resources",
+    "stage": "C"
+  },
+  {
+    "id": "REL-03",
+    "name": "End-to-end identity",
+    "requirement": "Carry task/run/tool/effect/approval IDs across workers and clients; show a unified timeline without exposing secrets or hidden model reasoning.",
+    "module": "27. Reliability, backups and resources",
+    "stage": "C"
+  },
+  {
+    "id": "REL-04",
+    "name": "Backup and restore",
+    "requirement": "Server-local ledger/account/workspace backups and host-owned guest snapshots, plus owner-exportable offline copies and tested restoration. No hosted backup backend is required.",
+    "module": "27. Reliability, backups and resources",
+    "stage": "C"
+  },
+  {
+    "id": "REL-05",
+    "name": "Safe upgrades",
+    "requirement": "Pin compatible versions, drain or interrupt work predictably, back up before migrations, and roll back worker/client incompatibilities.",
+    "module": "27. Reliability, backups and resources",
+    "stage": "C"
+  },
+  {
+    "id": "REL-06",
+    "name": "Resource economics",
+    "requirement": "Track server resources, Ollama Cloud usage/limits, browser/tool work and authorized external purchases separately; do not assume Cloud inference is unlimited or free.",
+    "module": "27. Reliability, backups and resources",
+    "stage": "E"
+  },
+  {
+    "id": "REL-07",
+    "name": "Deterministic fixtures",
+    "requirement": "Script Pi/model/tool outputs for reconnect, parallel approvals, malformed actions, crashes, timeouts and duplicate events without paid live dependencies.",
+    "module": "27. Reliability, backups and resources",
+    "stage": "C"
+  },
+  {
+    "id": "REL-08",
+    "name": "Real model/site evaluations",
+    "requirement": "Version a representative suite, measure completion and intervention, and rerun before changing the model, browser or privileged integrations.",
+    "module": "27. Reliability, backups and resources",
+    "stage": "C"
+  },
+  {
+    "id": "REL-09",
+    "name": "Graceful degradation",
+    "requirement": "Continue safe local work during a connector outage, queue model-limited tasks, stop protected actions when authority is unavailable and explain the limit.",
+    "module": "27. Reliability, backups and resources",
+    "stage": "C"
+  },
+  {
+    "id": "REL-10",
+    "name": "Long-term portability",
+    "requirement": "Export tasks, artifacts, environment manifests, memory and compatible Pi sessions; move machines without losing permission history or silently retaining revoked secrets.",
+    "module": "27. Reliability, backups and resources",
+    "stage": "E"
+  }
+]

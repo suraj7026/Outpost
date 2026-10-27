@@ -1,0 +1,37 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { generateKeyPairSync, sign } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Ledger } from '../core/ledger.js';
+import { id } from '../core/contracts.js';
+import { Coordinator } from './coordinator.js';
+import { httpServer } from './http.js';
+test('two signed clients converge through HTTP, queued tool approval and durable evidence',async () => {
+  const root = mkdtempSync(join(tmpdir(),'outpost-http-')), db = new Ledger(join(root,'db.sqlite')), coordinator = new Coordinator(db,root), token = 'fixture-token-'.repeat(4);
+  const server = httpServer(coordinator,token); await new Promise<void>(resolve => server.listen(0,'127.0.0.1',resolve));
+  const address = server.address(); assert.ok(address && typeof address !== 'string'); const base = `http://127.0.0.1:${address.port}`;
+  const mac = { id: id(),keys: generateKeyPairSync('ed25519') }, phone = { id: id(),keys: generateKeyPairSync('ed25519') };
+  const pub = (device: typeof mac) => device.keys.publicKey.export({ format: 'der',type: 'spki' }).subarray(-32).toString('base64');
+  const request = async (path: string, value: object, device = mac) => { const bytes = Buffer.from(JSON.stringify(value)); return fetch(base+path,{ method: 'POST',headers: { 'x-outpost-signature': sign(null,bytes,device.keys.privateKey).toString('base64') },body: bytes }); };
+  const query = (type: string, payload: object = {}, device = mac) => ({ deviceId: device.id,issuedAt: Date.now(),type,payload });
+  const command = (type: string, aggregateId: string, expectedRevision: number, payload: object) => ({ protocolVersion: 1,commandId: id(),idempotencyKey: id(),deviceId: mac.id,issuedAt: Date.now(),type,aggregateId,expectedRevision,payload });
+  try {
+    assert.equal((await request('/v1/pair',{ deviceId: mac.id,name: 'Mac',publicKey: pub(mac),token })).status,200);
+    assert.equal((await request('/v1/pair-device',query('pair',{ deviceId: phone.id,name: 'Phone',publicKey: pub(phone) }))).status,200);
+    const taskId = id(), create = command('task.create',taskId,0,{ goal: 'Read fixture',profile: 'code' });
+    assert.equal((await request('/v1/commands',create)).status,200); assert.equal((await request('/v1/commands',create)).status,200);
+    await coordinator.drain();
+    const proposal = command('action.propose',taskId,1,{ tool: 'system.inspect',arguments: {} });
+    assert.equal((await request('/v1/commands',proposal)).status,200); await coordinator.drain();
+    const action = db.list('action')[0]!;
+    assert.equal((await request('/v1/commands',command('approval.decide',action.id,1,{ nonce: action.data.nonce,actionDigest: action.data.actionDigest,decision: 'approve' }))).status,200);
+    assert.equal((await request('/v1/commands',command('action.dispatch',action.id,2,{}))).status,200); await coordinator.drain();
+    assert.equal(db.need('action',action.id).data.state,'succeeded');
+    const one = await (await request('/v1/query',query('snapshot'))).json();
+    const two = await (await request('/v1/query',query('snapshot',{},phone),phone)).json(); assert.deepEqual(one,two);
+    assert.equal(db.list('task').length,1);
+    coordinator.devices.revoke(phone.id,1); assert.notEqual((await request('/v1/query',query('snapshot',{},phone),phone)).status,200);
+  } finally { await new Promise<void>(resolve => server.close(() => resolve())); db.close(); rmSync(root,{ recursive: true,force: true }); }
+});
