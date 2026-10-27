@@ -1,0 +1,14 @@
+mock/.build/
+mock/build/
+.DS_Store
+node_modules/
+.outpost/
+.env
+.env.*
+!.env.example
+clients/.build/
+clients/build/
+*.xcuserstate
+xcuserdata/
+coverage/
+

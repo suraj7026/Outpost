@@ -1,0 +1,19 @@
+{
+  "name": "outpost",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24.0.0" },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "tsx --test server/**/*.test.ts",
+    "check": "npm run build && npm test",
+    "start": "tsx server/main.ts",
+    "contracts": "node scripts/generate-contracts.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "26.0.0",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
+  }
+}
