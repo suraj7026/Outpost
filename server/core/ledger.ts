@@ -42,7 +42,7 @@ export class Ledger {
     this.db.prepare('INSERT INTO events(id,aggregate_id,revision,type,payload,created_at) VALUES(?,?,?,?,?,?)').run(id(),key,revision,eventType,canonical({ kind, id: key, revision, data, updatedAt }),updatedAt);
     return { kind, id: key, revision, data, updatedAt };
   }
-  enqueue(topic: string, payload: Json, key = id()) {
+  enqueue(topic: string, payload: Json, key: string = id()) {
     this.db.prepare('INSERT OR IGNORE INTO outbox(id,topic,payload,created_at) VALUES(?,?,?,?)').run(key,topic,canonical(payload),now()); return key;
   }
   accept(command: Command, apply: () => Json): Json {
