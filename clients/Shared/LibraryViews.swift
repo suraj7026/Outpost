@@ -30,6 +30,16 @@ public struct ConnectionView: View {
                 LabeledContent("Device", value: connection.deviceID).font(.system(.callout, design: .monospaced)).textSelection(.enabled)
                 DisclosureGroup("Public Pairing Key") { Text(connection.publicKey).font(.system(.caption, design: .monospaced)).textSelection(.enabled) }
                 if connection.connected {
+                    if let recovery = connection.records("recovery").first, recovery.data["dispatchEnabled"] == .bool(false) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("Recovery Hold", systemImage: "pause.circle").font(.headline)
+                            Text(recovery.text("reason"))
+                            Button("Authenticate & Enable Dispatch") {
+                                Task { await connection.send("recovery.resume", id: recovery.id, revision: recovery.revision, payload: ["acknowledged": .bool(true)], authenticate: true) }
+                            }.buttonStyle(.borderedProminent).disabled(connection.busy)
+                            Text("Enabling dispatch can start accepted work. Revoke lost devices and inspect pending actions first.").font(.callout).foregroundStyle(.secondary)
+                        }.padding(24).studioPanel()
+                    }
                     DisclosureGroup("Enroll Another Device") {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Copy the Device ID and Public Pairing Key from the other device. Enrolling it grants owner access to this server workspace.").font(.callout).foregroundStyle(.secondary)

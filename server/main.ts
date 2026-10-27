@@ -16,7 +16,7 @@ const apns: APNsConfig | undefined = process.env.APNS_KEY_FILE && process.env.AP
 } : undefined;
 let draining = false;
 const timer = setInterval(() => {
-  if (draining) return; draining = true;
+  if (draining || !coordinator.dispatchEnabled) return; draining = true;
   coordinator.scheduler.tick();
   void coordinator.drain().then(async () => {
     if (apns) for (const notice of db.list('inbox').filter(row => row.data.state === 'pending').slice(0,20)) await notifier.deliver(notice.id,apns);

@@ -149,7 +149,7 @@ private struct CachedConnection: Codable {
         guard var command = pendingCommand else { return }
         guard pendingServerURL == serverURL else { error = "Reconnect to the original server before resolving its pending command."; return }
         await perform {
-            if ["approval.decide", "policy.change", "device.revoke"].contains(command["type"]?.text ?? "") {
+            if ["approval.decide", "policy.change", "device.revoke", "recovery.resume"].contains(command["type"]?.text ?? "") {
                 let context = LAContext()
                 guard try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Reconfirm this pending Outpost decision") else { throw ClientFailure.message("Authentication cancelled") }
             }

@@ -41,5 +41,10 @@ export function restoreBackup(source: string, key: Buffer, destination: string) 
   const verify = new DatabaseSync(join(destination,'ledger.sqlite'));
   try { requireThat(verify.prepare('PRAGMA integrity_check').get()?.integrity_check === 'ok','restore_integrity_failed'); }
   finally { verify.close(); }
+  const restored = new Ledger(join(destination,'ledger.sqlite'));
+  try {
+    const prior = restored.get('recovery','server');
+    restored.put('recovery','server',prior?.revision ?? 0,{ dispatchEnabled: false,reason: 'Restored from backup. Review device authority, pending work and external effects before enabling dispatch.',restoredAt: new Date().toISOString() });
+  } finally { restored.close(); }
   return { artifactCount: archive.artifacts.length,createdAt: archive.createdAt,dispatchEnabled: false };
 }

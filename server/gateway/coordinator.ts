@@ -18,7 +18,7 @@ import { MemoryStore } from '../memory/memory.js';
 import { Scheduler } from '../scheduler/scheduler.js';
 import { Notifications } from '../notifier/apns.js';
 
-export const publicKinds = ['task','policy','message','action','artifact','inbox','automation','memory','identity','capability','browser','workflow','source','citation','deployment_evidence','operation','device'];
+export const publicKinds = ['task','policy','message','action','artifact','inbox','automation','memory','identity','capability','browser','workflow','source','citation','deployment_evidence','operation','device','recovery'];
 const wire = (value: unknown): Json => z.json().parse(value);
 export class Coordinator {
   readonly devices: Devices; readonly tasks: Tasks; readonly artifacts: Artifacts; readonly memory: MemoryStore; readonly scheduler: Scheduler;
@@ -30,6 +30,7 @@ export class Coordinator {
     for (const operation of db.list('operation')) if (operation.data.state === 'running') db.put('operation',operation.id,operation.revision,{ ...operation.data,state: 'unknown',error: 'Coordinator restarted; reconcile before retry' });
     for (const action of db.list<Action>('action')) if (action.data.state === 'dispatching') db.put('action',action.id,action.revision,{ ...action.data,state: 'unknown',result: { error: 'Coordinator restarted; reconcile before retry' } });
   }
+  get dispatchEnabled() { return this.db.get('recovery','server')?.data.dispatchEnabled !== false; }
   gate(taskId: string) {
     this.db.need('task',taskId); z.uuid().parse(taskId);
     let gate = this.gates.get(taskId); if (gate) return gate;
@@ -86,6 +87,11 @@ export class Coordinator {
           return wire(new Notifications(this.db).register(command.deviceId,value.token,value.topic,value.environment));
         }
         case 'device.revoke': return wire(this.devices.revoke(key,expected));
+        case 'recovery.resume': {
+          requireThat(key === 'server' && payload.acknowledged === true,'recovery_acknowledgment_required');
+          const hold = this.db.need('recovery',key);
+          return wire(this.db.put('recovery',key,expected,{ ...hold.data,dispatchEnabled: true,resumedBy: command.deviceId }));
+        }
         default: throw new Fault('unknown_command','Unsupported command',400);
       }
     });
@@ -105,6 +111,7 @@ export class Coordinator {
     throw new Fault('unknown_query','Unsupported query',400);
   }
   async drain() {
+    if (!this.dispatchEnabled) return;
     const rows = this.db.db.prepare("SELECT id,topic,payload FROM outbox WHERE state='pending' AND topic!='notice' ORDER BY created_at LIMIT 20").all();
     for (const row of rows) {
       const key = String(row.id), topic = String(row.topic); if (this.jobs.has(key) || topic === 'notice') continue;
