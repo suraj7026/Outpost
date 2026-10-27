@@ -1,0 +1,130 @@
+{
+  "formatVersion": 1,
+  "generatedAt": "2026-10-27T19:46:29.418Z",
+  "sourceRevision": "d6fd43e0510639d8392be83053c2e223ad1c655b",
+  "implementationTreeClean": true,
+  "overall": "DEVELOPMENT_ONLY_NOT_QUALIFIED_FOR_RELEASE",
+  "runtime": {
+    "node": "v26.3.0",
+    "nodeSQLite": "3.53.1",
+    "platform": "darwin",
+    "arch": "arm64",
+    "kernel": "27.2.0",
+    "cpuCount": 10,
+    "totalMemoryBytes": 17179869184
+  },
+  "tools": {
+    "swift": {
+      "ok": true,
+      "output": "Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)\nTarget: arm64-apple-macosx27.2.0"
+    },
+    "xcode": {
+      "ok": true,
+      "output": "Xcode 27.1\nBuild version 27A9275"
+    },
+    "ffmpeg": {
+      "ok": true,
+      "output": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers\nbuilt with Apple clang version 21.0.0 (clang-2100.3.34.2)\nconfiguration: --prefix=/opt/homebrew/Cellar/ffmpeg/9.0.2_1 --enable-shared --enable-pthreads --enable-version3 --cc=clang --host-cflags= --host-ldflags= --enable-ffplay --enable-gpl --enable-libsvtav1 --enable-libopus --enable-libx264 --enable-libmp3lame --enable-libdav1d --enable-libvmaf --enable-libvpx --enable-libx265 --enable-openssl --enable-videotoolbox --enable-audiotoolbox --enable-neon\nlibavutil      61.  1.102 / 61.  1.102\nlibavcodec     63.  1.102 / 63.  1.102\nlibavformat    63.  1.102 / 63.  1.102\nlibavdevice    63.  1.102 / 63.  1.102\nlibavfilter    12.  1.102 / 12.  1.102\nlibswscale     10.  1.102 / 10.  1.102\nlibswresample   7.  1.102 /  7.  1.102\n\nExiting with exit code 0"
+    }
+  },
+  "dependencies": [
+    {
+      "name": "@earendil-works/pi-coding-agent",
+      "version": "1.4.0",
+      "license": "MIT",
+      "integrity": "sha512-Z41LpZ3yYHSC/UUps6Mr39UMFPwH8elhJBG9DY1P7kuzsE5qSK/6eMj2EHzO5evJRQWLbKSqUMw+4nCNtIyiQg==",
+      "redistributionReview": "not-completed"
+    },
+    {
+      "name": "playwright",
+      "version": "1.64.1",
+      "license": "Apache-2.0",
+      "integrity": "sha512-HCrVhHr5QQuwYoswEUGTb7gGp522yflbv/ST8nF4sFWGuLjQCt17Q/EubpGGSNKYn1tsTCPZxqHhHCfVURu7UA==",
+      "redistributionReview": "not-completed"
+    },
+    {
+      "name": "typebox",
+      "version": "1.3.27",
+      "license": "MIT",
+      "integrity": "sha512-zu+jc1pcy4UiNThxikUr36f0Rybk9PEeCg/NE6adeWr/SKsdNO4EzZHYRDlv2YCVAfj3Odq3dESSo/jNyoBXzA==",
+      "redistributionReview": "not-completed"
+    },
+    {
+      "name": "zod",
+      "version": "4.6.7",
+      "license": "MIT",
+      "integrity": "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==",
+      "redistributionReview": "not-completed"
+    },
+    {
+      "name": "@types/node",
+      "version": "26.0.0",
+      "license": "MIT",
+      "integrity": "sha512-vf2YFi1iY9lHGwNJMs01biZFbKJkrZR1T6/MlzjhJLPdntOHLhTrDSnSVcdtvjihi4VQNlrFRIxLsDBlQpAipA==",
+      "redistributionReview": "not-completed"
+    },
+    {
+      "name": "tsx",
+      "version": "4.23.15",
+      "license": "MIT",
+      "integrity": "sha512-Yiex1Ovn8z2xPpOWckIiysV1SSyRMY9BkLF++q0yKiDxCqRhosKfMg3janKkiLBwZ5c/YryloKwGZcrEmtwxKw==",
+      "redistributionReview": "not-completed"
+    },
+    {
+      "name": "typescript",
+      "version": "5.9.3",
+      "license": "Apache-2.0",
+      "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+      "redistributionReview": "not-completed"
+    }
+  ],
+  "overrides": {
+    "undici": "8.12.3"
+  },
+  "browser": {
+    "available": true,
+    "version": "156.0.8078.4",
+    "boundary": "local headless smoke probe; not an Ubuntu/host isolation qualification"
+  },
+  "sources": [
+    {
+      "path": "package-lock.json",
+      "sha256": "a579bb84a634c855d6e218f9a0911e2dca49120d5fcec3914e6f789a8a3001e4"
+    },
+    {
+      "path": "server/pi-adapter/runtime.ts",
+      "sha256": "06f5d24092c58fee7701802ddebfdc95c50f71ab49147a7e99529576e8c22224"
+    },
+    {
+      "path": "server/models/cloud.ts",
+      "sha256": "5af34f6c7e86a0108847261786a74b28271e5b121012b71696f9b09a33d013ad"
+    },
+    {
+      "path": "server/gateway/coordinator.ts",
+      "sha256": "051653e9fb546101d8408c543ce93e3a74ae4cb1e7959a6dfee84a3d6e978ad6"
+    },
+    {
+      "path": "clients/Shared/Protocol.swift",
+      "sha256": "67681052b2e880d0d7243a2507ad2fa9339b24d045d37c91373e9a21209359eb"
+    }
+  ],
+  "boundaries": {
+    "bind": "127.0.0.1",
+    "enforcement": "cooperative-development",
+    "virtualization": "not-probed",
+    "hostRootIsolation": "not-qualified",
+    "productionDefault": "owner-decision-pending; development uses ask_permission"
+  },
+  "externalQualification": {
+    "ollamaRoles": "not-run",
+    "smallerReviewerSafety": "not-run",
+    "vision": "not-run",
+    "ubuntuDeployment": "not-run",
+    "physicalDevices": "not-run",
+    "apnsDelivery": "not-run",
+    "providerAccounts": "not-run",
+    "paymentRoute": "not-run",
+    "replacementServerRestore": "not-run",
+    "redistribution": "not-reviewed"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "operator": "REPLACE_WITH_ACCOUNT_QUALIFIED_OPERATOR",
+  "reviewer": "REPLACE_WITH_DISTINCT_SMALLER_QUALIFIED_REVIEWER",
+  "vision": "REPLACE_WITH_ACCOUNT_QUALIFIED_VISION_MODEL",
+  "contextWindow": 32768,
+  "maxTokens": 4096,
+  "qualified": false,
+  "qualificationRef": "NOT_QUALIFIED: attach account-specific conformance and held-out reviewer evidence"
+}

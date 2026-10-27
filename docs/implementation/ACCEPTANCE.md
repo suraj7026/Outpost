@@ -6,7 +6,7 @@ The request covers all 31 specifications and 270 requirements. This implementati
 
 ## Reproduction and observed results
 
-Code revision tested: `a33563dea6d393371d3b3be62d75e9059c0e497f` (integration-hardening commit). Evidence captured 28 October 2026 on the development Mac, not an Ubuntu deployment.
+Code revision tested: `d6fd43e0510639d8392be83053c2e223ad1c655b` (includes integration hardening, trusted-device UI, and durable restored-dispatch hold). Evidence captured 28 October 2026 on the development Mac, not an Ubuntu deployment.
 
 | Command / rehearsal | Expected | Observed |
 |---|---|---|
@@ -24,9 +24,9 @@ The native test required no human interaction after launch. It stops **before** 
 
 Local, non-portable diagnostic artifacts:
 
-- `clients/build/OutpostPhone-20261028-010708.xcresult`: passing iPhone UI run.
+- `clients/build/OutpostPhone-20261028-011635.xcresult`: passing iPhone UI run.
 - `clients/build/MacUI.xcresult`: blocked macOS automation attempt.
-- `/tmp/outpost-native-fixture.PO82PB`: isolated iPhone fixture ledger and server log.
+- `/tmp/outpost-native-fixture.lr7ag0`: isolated iPhone fixture ledger and server log.
 - `/tmp/outpost-check.log`, `/tmp/outpost-swift.log`, `/tmp/outpost-mac-build.log`.
 
 The committed results and screenshot are the portable evidence; the paths above may disappear.
@@ -35,7 +35,7 @@ The committed results and screenshot are the portable evidence; the paths above 
 
 [Soft Studio iPhone pending-action screen](evidence/iphone-pending-action.png)
 
-SHA-256: `d2c55c222bea9d010cd3fc85a700f7ee726ab6d532c52f6e03674d8710e06e54`
+SHA-256: `1181bddf941db0e53ab738af4d477b21c4dfa0be5a280a47184f91d1a21b2794`
 
 This is an actual SwiftUI screen connected to the fixture coordinator, not an HTML mockup. The task and pending `system.inspect` action were created through signed HTTP commands. It shows an honest capacity wait because no qualified Cloud roles were configured. Inspection has **not** executed in this screenshot.
 
@@ -76,7 +76,7 @@ Every requirement's stable ID and owner remain in [`spec/feature-map.md`](../../
 | 24 | Real Mac workspace, signed commands, encrypted projection/pending retry cache | Swift tests; Mac release build | Full module navigation, streaming, visual/accessibility verification, distribution |
 | 25 | Shared iPhone workspace, HTTP replay, APNs sender/token fixtures | `server/gateway/http.test.ts`, `notifier/apns.test.ts`; native smoke test | Physical two-client rehearsal, signed APNs entitlements/delivery, Live Activities, notification preferences UI |
 | 26 | Three modes, exact-action approvals, signed devices, dispatch rechecks | `server/policy/trust.test.ts` | Qualified isolation, server-verifiable step-up, complete policy inheritance, redaction/security audit |
-| 27 | Encrypted ledger/artifact backup and checked offline restoration | `server/reliability/backup.test.ts` | External backup rotation, large archive streaming, key escrow/rotation, replacement Ubuntu rehearsal, comprehensive resource limits |
+| 27 | Encrypted ledger/artifact backup, checked offline restoration and durable dispatch hold | `server/reliability/backup.test.ts` | External backup rotation, large archive streaming, key escrow/rotation, replacement Ubuntu rehearsal, comprehensive resource limits |
 | 28 | Durable records/events/outbox/idempotency, shared wire semantics | `server/core/ledger.test.ts`, HTTP/Swift tests | Generated typed bindings, full schema migration/protocol negotiation/conformance suite |
 | 29 | Reproducible regression and native fixture scripts; this report | JUnit, XCUITest screenshot | Balanced real pilot and per-feature acceptance evidence |
 | 30 | Explicit local pins, source/decision register, unqualified-input record | `DECISIONS.md`, `QUALIFICATION.json` | Owner infrastructure/account/distribution decisions and actual qualification |
@@ -87,7 +87,7 @@ Every requirement's stable ID and owner remain in [`spec/feature-map.md`](../../
 - Auto uses a deterministic reviewer fixture in tests. No measured dangerous-false-allow threshold or actual smaller-model evaluation exists.
 - Native LocalAuthentication gates sensitive UI interactions. The server currently verifies a device signature, **not hardware-attested proof of that local authentication**.
 - Upload primitives are resumable/idempotent on the server; the current native file importer does not retain a complete multi-chunk upload continuation across termination.
-- The backup includes the ledger and published artifacts, **not** all Pi sessions, working repositories, browser profiles, partial uploads or external vault/master keys. Copy/restore these separately before calling it full-system recovery.
+- The backup includes the ledger and published artifacts, **not** all Pi sessions, working repositories, browser profiles, partial uploads or external vault/master keys. Copy/restore these separately before calling it full-system recovery. Restored automatic dispatch is held until a signed owner acknowledgment; this does not itself reconcile external effects.
 - Browser, credentials, payment, worker and many other domain libraries are not all exposed through the running coordinator or native UI. A passed isolated fixture does not make them usable product flows.
 
 ## Balanced release gates

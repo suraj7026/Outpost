@@ -1,38 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <testsuites>
-	<testcase name="workspace rejects escapes, symlinks and stale edits; artifacts reject corrupt partial transfers" time="0.013169" classname="test" file="server/artifacts/files.test.ts"/>
-	<testcase name="encrypted account scope never falls back and revocation blocks future broker use" time="0.007283" classname="test" file="server/brokers/identities.test.ts"/>
-	<testcase name="whole-workflow terms, concurrent budget and unknown settlement remain bounded" time="0.012062" classname="test" file="server/brokers/payments.test.ts"/>
-	<testcase name="assistance is deduplicated, rejects denial evasion and requires fresh verification" time="0.005402" classname="test" file="server/browser/assistance.test.ts"/>
-	<testcase name="real headless fixture, exclusive takeover and fresh observation after return" time="0.860566" classname="test" file="server/browser/browser.test.ts"/>
-	<testcase name="capability readiness requires exact executable probe and permission-change approval" time="0.419251" classname="test" file="server/capabilities/catalogue.test.ts"/>
-	<testcase name="discovered connector tools cannot bypass per-action permission" time="0.004056" classname="test" file="server/capabilities/tools.test.ts"/>
-	<testcase name="precise patch refuses ambiguous and stale changes and preserves literal replacement" time="0.003639" classname="test" file="server/code/repository.test.ts"/>
-	<testcase name="drafts bind recipient and attachment while calendar distinguishes private reminders" time="0.021716" classname="test" file="server/communication/drafts.test.ts"/>
-	<testcase name="canonical contracts reject non-JSON and hash order independently" time="0.000601" classname="test" file="server/core/ledger.test.ts"/>
-	<testcase name="acceptance, record, event and outbox commit atomically with replay-safe keys" time="0.004173" classname="test" file="server/core/ledger.test.ts"/>
-	<testcase name="CSV preserves quoted lines and profiles malformed rows; money uses exact units" time="0.004838" classname="test" file="server/data/analysis.test.ts"/>
-	<testcase name="post-create provider timeout reconciles one PR and never blindly resubmits" time="0.003789" classname="test" file="server/delivery/operations.test.ts"/>
-	<testcase name="reports escape active content and render actual PDFs plus review evidence" time="0.695300" classname="test" file="server/documents/documents.test.ts"/>
-	<testcase name="two signed clients converge through HTTP, queued tool approval and durable evidence" time="0.053883" classname="test" file="server/gateway/http.test.ts"/>
-	<testcase name="unavailable push transport cannot starve work; failed queued operations are observable" time="0.007424" classname="test" file="server/gateway/recovery.test.ts"/>
-	<testcase name="restart preserves accepted instructions and marks uncertain dispatch without replay" time="0.007724" classname="test" file="server/gateway/recovery.test.ts"/>
-	<testcase name="media jobs reject out-of-scope paths and invalid duration before launching a converter" time="0.001779" classname="test" file="server/media/media.test.ts"/>
-	<testcase name="local FTS scopes before ranking, treats inferred authority as text and propagates forgetting" time="0.004936" classname="test" file="server/memory/memory.test.ts"/>
-	<testcase name="models require distinct qualified roles and Cloud errors fail Auto to ask" time="0.026999" classname="test" file="server/models/cloud.test.ts"/>
-	<testcase name="invalid APNs tokens retire without losing the authoritative inbox" time="0.008080" classname="test" file="server/notifier/apns.test.ts"/>
-	<testcase name="rollbacks require independent health proof rather than successful command exit" time="0.002408" classname="test" file="server/operations/health.test.ts"/>
-	<testcase name="admin previews restrict service scope and declare cooperative boundary" time="0.001982" classname="test" file="server/operations/machine.test.ts"/>
-	<testcase name="all three modes, fail-to-ask, stale policy and single dispatch" time="0.014542" classname="test" file="server/policy/trust.test.ts"/>
-	<testcase name="protected effects and ambiguous failures never grant or retry authority" time="0.002281" classname="test" file="server/policy/trust.test.ts"/>
-	<testcase name="device signatures bind bytes and revocation is effective" time="0.005542" classname="test" file="server/policy/trust.test.ts"/>
-	<testcase name="runner records exit, excludes inherited secrets, bounds output and kills timeout" time="0.235636" classname="test" file="server/processes/runner.test.ts"/>
-	<testcase name="encrypted offline backup restores ledger, artifacts and revoked authority with separate key" time="0.019136" classname="test" file="server/reliability/backup.test.ts"/>
-	<testcase name="citations require captured passages and cannot cross task boundaries" time="0.003546" classname="test" file="server/research/sources.test.ts"/>
-	<testcase name="server scheduling coalesces missed runs without duplicate tasks and quiet monitors stay quiet" time="0.018360" classname="test" file="server/scheduler/scheduler.test.ts"/>
-	<testcase name="ordered instructions, exclusive execution and honest recovery across three pillars" time="0.008054" classname="test" file="server/tasks/tasks.test.ts"/>
-	<testcase name="children inherit smaller scopes, charged budgets and exclusive resource leases" time="0.003373" classname="test" file="server/workers/coordination.test.ts"/>
-	<testcase name="personal errands retain one task, explicit effects and evidence-backed dependencies" time="0.004099" classname="test" file="server/workflows/recipes.test.ts"/>
+	<testcase name="workspace rejects escapes, symlinks and stale edits; artifacts reject corrupt partial transfers" time="0.021124" classname="test" file="server/artifacts/files.test.ts"/>
+	<testcase name="encrypted account scope never falls back and revocation blocks future broker use" time="0.003223" classname="test" file="server/brokers/identities.test.ts"/>
+	<testcase name="whole-workflow terms, concurrent budget and unknown settlement remain bounded" time="0.007599" classname="test" file="server/brokers/payments.test.ts"/>
+	<testcase name="assistance is deduplicated, rejects denial evasion and requires fresh verification" time="0.012924" classname="test" file="server/browser/assistance.test.ts"/>
+	<testcase name="real headless fixture, exclusive takeover and fresh observation after return" time="0.966086" classname="test" file="server/browser/browser.test.ts"/>
+	<testcase name="capability readiness requires exact executable probe and permission-change approval" time="0.469944" classname="test" file="server/capabilities/catalogue.test.ts"/>
+	<testcase name="discovered connector tools cannot bypass per-action permission" time="0.005998" classname="test" file="server/capabilities/tools.test.ts"/>
+	<testcase name="precise patch refuses ambiguous and stale changes and preserves literal replacement" time="0.006256" classname="test" file="server/code/repository.test.ts"/>
+	<testcase name="drafts bind recipient and attachment while calendar distinguishes private reminders" time="0.033701" classname="test" file="server/communication/drafts.test.ts"/>
+	<testcase name="canonical contracts reject non-JSON and hash order independently" time="0.001537" classname="test" file="server/core/ledger.test.ts"/>
+	<testcase name="acceptance, record, event and outbox commit atomically with replay-safe keys" time="0.004789" classname="test" file="server/core/ledger.test.ts"/>
+	<testcase name="CSV preserves quoted lines and profiles malformed rows; money uses exact units" time="0.001076" classname="test" file="server/data/analysis.test.ts"/>
+	<testcase name="post-create provider timeout reconciles one PR and never blindly resubmits" time="0.004310" classname="test" file="server/delivery/operations.test.ts"/>
+	<testcase name="reports escape active content and render actual PDFs plus review evidence" time="0.836408" classname="test" file="server/documents/documents.test.ts"/>
+	<testcase name="two signed clients converge through HTTP, queued tool approval and durable evidence" time="0.054665" classname="test" file="server/gateway/http.test.ts"/>
+	<testcase name="unavailable push transport cannot starve work; failed queued operations are observable" time="0.007199" classname="test" file="server/gateway/recovery.test.ts"/>
+	<testcase name="restart preserves accepted instructions and marks uncertain dispatch without replay" time="0.010819" classname="test" file="server/gateway/recovery.test.ts"/>
+	<testcase name="media jobs reject out-of-scope paths and invalid duration before launching a converter" time="0.002762" classname="test" file="server/media/media.test.ts"/>
+	<testcase name="local FTS scopes before ranking, treats inferred authority as text and propagates forgetting" time="0.004718" classname="test" file="server/memory/memory.test.ts"/>
+	<testcase name="models require distinct qualified roles and Cloud errors fail Auto to ask" time="0.021837" classname="test" file="server/models/cloud.test.ts"/>
+	<testcase name="invalid APNs tokens retire without losing the authoritative inbox" time="0.004678" classname="test" file="server/notifier/apns.test.ts"/>
+	<testcase name="rollbacks require independent health proof rather than successful command exit" time="0.002128" classname="test" file="server/operations/health.test.ts"/>
+	<testcase name="admin previews restrict service scope and declare cooperative boundary" time="0.002044" classname="test" file="server/operations/machine.test.ts"/>
+	<testcase name="all three modes, fail-to-ask, stale policy and single dispatch" time="0.011132" classname="test" file="server/policy/trust.test.ts"/>
+	<testcase name="protected effects and ambiguous failures never grant or retry authority" time="0.000718" classname="test" file="server/policy/trust.test.ts"/>
+	<testcase name="device signatures bind bytes and revocation is effective" time="0.002298" classname="test" file="server/policy/trust.test.ts"/>
+	<testcase name="runner records exit, excludes inherited secrets, bounds output and kills timeout" time="0.252376" classname="test" file="server/processes/runner.test.ts"/>
+	<testcase name="encrypted offline backup restores ledger, artifacts and revoked authority with separate key" time="0.020667" classname="test" file="server/reliability/backup.test.ts"/>
+	<testcase name="citations require captured passages and cannot cross task boundaries" time="0.004074" classname="test" file="server/research/sources.test.ts"/>
+	<testcase name="server scheduling coalesces missed runs without duplicate tasks and quiet monitors stay quiet" time="0.018575" classname="test" file="server/scheduler/scheduler.test.ts"/>
+	<testcase name="ordered instructions, exclusive execution and honest recovery across three pillars" time="0.008287" classname="test" file="server/tasks/tasks.test.ts"/>
+	<testcase name="children inherit smaller scopes, charged budgets and exclusive resource leases" time="0.004002" classname="test" file="server/workers/coordination.test.ts"/>
+	<testcase name="personal errands retain one task, explicit effects and evidence-backed dependencies" time="0.003988" classname="test" file="server/workflows/recipes.test.ts"/>
 	<!-- tests 33 -->
 	<!-- suites 0 -->
 	<!-- pass 33 -->
@@ -40,5 +40,5 @@
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
 	<!-- todo 0 -->
-	<!-- duration_ms 2002.142834 -->
+	<!-- duration_ms 2022.291959 -->
 </testsuites>
