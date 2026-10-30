@@ -5,8 +5,6 @@ import {
   ArrowUp,
   Check,
   ChevronRight,
-  Download,
-  File,
   Globe,
   Paperclip,
   Pause,
@@ -15,81 +13,18 @@ import {
   Terminal,
   Shield,
   AlertCircle,
+  UserRound,
+  X,
 } from "lucide-react";
 import { call, recordedPreview, upload } from "./api";
 import type { Connection } from "./useConnection";
 import type { ServerRecord } from "./types";
 import { Thinking, LiveTool } from "./LiveContent";
-import { labelState, object, text, title } from "./types";
+import OutpostMark from "./OutpostMark";
+import EvidencePanel, { type EvidenceTab } from "./EvidencePanel";
+import { actionNeedsReview, labelState, object, text, title } from "./types";
 
-export function Artifact({
-  record,
-  connection,
-}: {
-  record: ServerRecord;
-  connection: Connection;
-}) {
-  const [image, setImage] = useState(""),
-    [saved, setSaved] = useState("");
-  const png = text(record, "mime") === "image/png";
-  useEffect(() => {
-    let active = true;
-    if (png && !recordedPreview())
-      void call<string>("artifact", {
-        id: record.id,
-        hash: text(record, "hash"),
-      })
-        .then((data) => {
-          if (active) setImage(`data:image/png;base64,${data}`);
-        })
-        .catch((error) => connection.setError(String(error)));
-    return () => {
-      active = false;
-    };
-  }, [record.id, png]);
-  return (
-    <div className="artifact">
-      {image && (
-        <a
-          href={image}
-          onClick={(event) => {
-            event.preventDefault();
-            void call<string>("save_artifact", {
-              id: record.id,
-              hash: text(record, "hash"),
-              name: text(record, "name"),
-            })
-              .then(setSaved)
-              .catch((error) => connection.setError(String(error)));
-          }}
-        >
-          <img src={image} alt={`Browser evidence: ${text(record, "name")}`} />
-        </a>
-      )}
-      <div className="artifact-row">
-        <File size={15} />
-        <span>{text(record, "name")}</span>
-        <button
-          className="icon-button"
-          aria-label={`Download ${text(record, "name")}`}
-          disabled={recordedPreview()}
-          onClick={() =>
-            void call<string>("save_artifact", {
-              id: record.id,
-              hash: text(record, "hash"),
-              name: text(record, "name"),
-            })
-              .then(setSaved)
-              .catch((error) => connection.setError(String(error)))
-          }
-        >
-          <Download size={15} />
-        </button>
-      </div>
-      {saved && <p className="small">Saved to {saved}</p>}
-    </div>
-  );
-}
+import Artifact from "./image-viewer/Artifact";
 
 export function Action({
   record,
@@ -98,14 +33,11 @@ export function Action({
   record: ServerRecord;
   connection: Connection;
 }) {
+  const mutationBlocked = connection.busy || !connection.connected || Boolean(connection.info?.pending) || recordedPreview();
   const result = object(record.data.result),
     args = object(record.data.arguments),
     state = text(record, "state");
-  const failed =
-    state === "unknown" ||
-    state === "failed" ||
-    (typeof result.exitCode === "number" && result.exitCode !== 0) ||
-    result.agent_reported_success === false;
+  const failed = actionNeedsReview(record);
   const warnings = Array.isArray(result.errors) ? result.errors.length : 0;
   const name = text(record, "tool");
   const label =
@@ -119,6 +51,7 @@ export function Action({
   return (
     <details
       className={`action ${failed ? "action-failed" : ""}`}
+      data-state={state}
       open={state === "pending" || state === "authorized"}
     >
       <summary>
@@ -161,7 +94,8 @@ export function Action({
                   },
                 )
               }
-              disabled={connection.busy}
+              className="primary"
+              disabled={mutationBlocked}
             >
               Approve
             </button>
@@ -178,7 +112,7 @@ export function Action({
                   },
                 )
               }
-              disabled={connection.busy}
+              disabled={mutationBlocked}
             >
               Deny
             </button>
@@ -193,7 +127,8 @@ export function Action({
                 record.revision,
               )
             }
-            disabled={connection.busy}
+            className="primary"
+            disabled={mutationBlocked}
           >
             Run approved action
           </button>
@@ -229,6 +164,9 @@ export function Action({
   );
 }
 
+import ModelPicker from './agent/ModelPicker';
+import { chosenModel, type ModelRef } from './agent/types';
+
 export default function TaskView({
   task,
   connection,
@@ -237,9 +175,17 @@ export default function TaskView({
   connection: Connection;
 }) {
   const [reply, setReply] = useState(""),
-    [tab, setTab] = useState<"conversation" | "evidence">("conversation");
+    [tab, setTab] = useState<"conversation" | "evidence">("conversation"),
+    [evidenceTab, setEvidenceTab] = useState<EvidenceTab>("overview"),
+    [reviewedAction, setReviewedAction] = useState<{ id: string; revision: number } | null>(null);
+  const [modelRef, setModelRef] = useState<ModelRef | null>(null);
+  const managed = !!connection.runtime?.piManagement;
+  const initialModel = text(task, 'model') ? { providerId: text(task, 'provider') || 'outpost-ollama', modelId: text(task, 'model') } : null;
+  const selectedRef = chosenModel(connection.agentCatalogue, modelRef, initialModel);
+  const reviewDialog = useRef<HTMLDialogElement>(null);
+  const mutationBlocked = connection.busy || !connection.connected || Boolean(connection.info?.pending) || recordedPreview();
   const followTail = useRef(true);
-  const end = useRef<HTMLDivElement>(null),
+  const conversation = useRef<HTMLDivElement>(null),
     input = useRef<HTMLInputElement>(null);
   const related = connection.records
     .filter((record) => text(record, "taskId") === task.id)
@@ -251,6 +197,13 @@ export default function TaskView({
   const messages = related.filter((record) => record.kind === "message"),
     actions = related.filter((record) => record.kind === "action"),
     artifacts = related.filter((record) => record.kind === "artifact");
+  const pendingActions = actions.filter((action) => text(action, "state") === "pending");
+  const reviewAction = (action: ServerRecord) => setReviewedAction({ id: action.id, revision: action.revision });
+  const reviewing = actions.find((action) => action.id === reviewedAction?.id);
+  useEffect(() => {
+    if (reviewedAction && !reviewDialog.current?.open) reviewDialog.current?.showModal();
+    if (!reviewedAction && reviewDialog.current?.open) reviewDialog.current.close();
+  }, [reviewedAction]);
   const liveTools = related.filter(
     (record) =>
       record.kind === "tool_stream" &&
@@ -274,61 +227,33 @@ export default function TaskView({
       "waiting_for_capacity",
     ].includes(state);
   useLayoutEffect(() => {
-    if (followTail.current)
-      end.current?.scrollIntoView({ behavior: "instant", block: "end" });
-  }, [contentVersion, task.id]);
+    const pane = conversation.current;
+    if (pane && followTail.current) pane.scrollTop = pane.scrollHeight;
+  }, [contentVersion, task.id, pendingActions.length]);
   const submit = async () => {
-    if (!reply.trim()) return;
+    if (!reply.trim() || stopped || mutationBlocked || (managed && !selectedRef)) return;
     const result = await connection.command(
       "task.steer",
       task.id,
       task.revision,
-      { text: reply.trim() },
+      { text: reply.trim(), ...(managed && selectedRef ? { modelRef: { providerId: selectedRef.providerId, modelId: selectedRef.modelId } } : {}) },
     );
     if (result) setReply("");
   };
   return (
     <section className="task-view">
-      <header className="task-heading">
-        <div>
-          <h1>{title(task)}</h1>
-          <p>
-            {labelState(state)}
-            {state === "running"
-              ? connection.streaming
-                ? " · Live stream"
-                : " · Reconnecting stream"
-              : ""}
-            {text(task, "model") ? ` · ${text(task, "model")}` : ""}
-          </p>
-        </div>
+      <header className="task-heading" data-tauri-drag-region>
+        <div className="task-title" data-tauri-drag-region><span className="breadcrumb" data-tauri-drag-region>{text(task, "profile") || "Workspace"}</span><ChevronRight size={12} /><h1 data-tauri-drag-region>{title(task)}</h1></div>
         <div className="button-row">
-          {policy && (
-            <select
-              aria-label="Task control mode"
-              value={text(policy, "mode")}
-              disabled={connection.busy || !connection.connected}
-              onChange={(event) =>
-                void connection.command(
-                  "policy.change",
-                  task.id,
-                  policy.revision,
-                  { mode: event.target.value },
-                )
-              }
-            >
-              <option value="full_control">Full control</option>
-              <option value="auto">Auto review</option>
-              <option value="ask_permission">Ask permission</option>
-            </select>
-          )}
+          <span className={`task-status ${pendingActions.length ? "needs-review" : ""}`}><span className="status-dot" />{pendingActions.length ? "Needs your review" : labelState(state)}{state === "running" ? connection.streaming ? " · Live stream" : " · Reconnecting stream" : ""}</span>
+          {pendingActions[0] && <button className="review-shortcut" onClick={() => reviewAction(pendingActions[0])}>Review</button>}
           {!stopped && (
             <>
               <button
                 className="icon-button"
                 title={resumable ? "Resume task" : "Pause task"}
                 aria-label={resumable ? "Resume task" : "Pause task"}
-                disabled={connection.busy}
+                disabled={mutationBlocked}
                 onClick={() =>
                   void connection.command(
                     resumable ? "task.resume" : "task.pause",
@@ -343,7 +268,7 @@ export default function TaskView({
                 className="icon-button"
                 title="Cancel task"
                 aria-label="Cancel task"
-                disabled={connection.busy}
+                disabled={mutationBlocked}
                 onClick={() => {
                   if (
                     confirm(
@@ -381,6 +306,7 @@ export default function TaskView({
         <div className="conversation-column">
           <div
             className="conversation"
+            ref={conversation}
             onScroll={(event) => {
               const node = event.currentTarget;
               followTail.current =
@@ -393,9 +319,11 @@ export default function TaskView({
                 key={message.id}
               >
                 <div className="message-byline">
+                  {text(message, "author") === "owner" ? <span className="message-avatar"><UserRound size={14} /></span> : <OutpostMark />}
                   <span>
                     {text(message, "author") === "owner" ? "You" : "Outpost"}
                   </span>
+                  {text(message, 'author') !== 'owner' && text(message, 'provider') && text(message, 'model') && <span className="message-model" title={`Response from ${text(message, 'provider')} · ${text(message, 'model')}`}>{text(message, 'provider')} · {text(message, 'model')}</span>}
                   {message.data.streaming === true && connection.streaming && (
                     <span className="stream-label">Streaming</span>
                   )}
@@ -410,6 +338,7 @@ export default function TaskView({
                 <Markdown
                   remarkPlugins={[remarkGfm]}
                   components={{
+                    img: () => null,
                     a: ({ href, children }) => (
                       <a
                         href={href}
@@ -439,12 +368,19 @@ export default function TaskView({
             {text(task, "blocker") && state !== "verifying" && (
               <p className="inline-notice">{text(task, "blocker")}</p>
             )}
-            <div ref={end} />
+            {pendingActions[0] && (
+              <div className="review-handoff">
+                <div className="decision-heading"><Shield size={15} /><span>{pendingActions.length === 1 ? "One change. Your call." : `${pendingActions.length} actions need your review.`}</span><small>Ask permission</small></div>
+                <h3>{text(pendingActions[0], "tool").replaceAll(".", " ")}</h3>
+                <p>{text(pendingActions[0], "target") || "Review the exact arguments before approving."}</p>
+                <div className="decision-bottom"><span>Nothing changes until you approve.</span><button className="primary" onClick={() => reviewAction(pendingActions[0])}>Review change <ChevronRight size={14} /></button></div>
+              </div>
+            )}
           </div>
           <div className="reply-composer">
             <textarea
               aria-label="Message Outpost"
-              placeholder="Give Outpost the next step…"
+              placeholder={stopped ? "This task is closed. Start a new task to continue." : "Ask a follow-up, or give Outpost the next step…"}
               value={reply}
               onChange={(event) => setReply(event.target.value)}
               onKeyDown={(event) => {
@@ -470,22 +406,19 @@ export default function TaskView({
               <button
                 className="icon-button"
                 aria-label="Attach file"
-                disabled={connection.busy || !connection.connected}
+                disabled={mutationBlocked || stopped}
                 onClick={() => input.current?.click()}
               >
-                <Paperclip size={16} />
+                <Paperclip size={15} /><span>Attach</span>
               </button>
-              <span className="small">Persistent workspace</span>
+              {managed ? <ModelPicker catalogue={connection.agentCatalogue} value={selectedRef} onChange={setModelRef} disabled={mutationBlocked || stopped} /> : <span className="composer-model" title={text(task, "model") || connection.runtime?.model || "Server default"}>{text(task, "model") || connection.runtime?.model || "Server default"}</span>}
+              {policy && <select aria-label="Task control mode" value={text(policy, "mode")} disabled={mutationBlocked} onChange={(event) => void connection.command("policy.change", task.id, policy.revision, { mode: event.target.value })}><option value="full_control">Full control</option><option value="auto">Auto review</option><option value="ask_permission">Ask permission</option></select>}
               <button
                 className="send-button"
                 aria-label="Send message"
                 onClick={() => void submit()}
                 disabled={
-                  !reply.trim() ||
-                  connection.busy ||
-                  !connection.connected ||
-                  stopped ||
-                  connection.info?.pending
+                  !reply.trim() || mutationBlocked || stopped || (managed && !selectedRef)
                 }
               >
                 <ArrowUp size={17} />
@@ -493,41 +426,32 @@ export default function TaskView({
             </div>
           </div>
         </div>
-        <aside className="evidence-column">
-          <div className="section-heading">
-            <h2>Execution evidence</h2>
-            <span>{actions.length} actions</span>
-          </div>
-          <p className="small evidence-intro">
-            Actual commands, results and browser captures.
-          </p>
-          {liveTools.map((record) => (
-            <LiveTool key={record.id} record={record} />
-          ))}
-          {actions.length === 0 && (
-            <p className="empty-line">No actions executed yet.</p>
-          )}
-          {actions.map((action) => (
-            <Action key={action.id} record={action} connection={connection} />
-          ))}
-          <div className="section-heading outputs-heading">
-            <h2>Outputs</h2>
-            <span>{artifacts.length}</span>
-          </div>
-          {artifacts.length === 0 && (
-            <p className="empty-line">
-              Files and screenshots will appear here.
-            </p>
-          )}
-          {artifacts.map((artifact) => (
-            <Artifact
-              key={artifact.id}
-              record={artifact}
-              connection={connection}
-            />
-          ))}
+        <aside className="evidence-column" id="task-evidence" aria-label="Execution evidence">
+          <EvidencePanel
+            actions={actions}
+            artifactCount={artifacts.length}
+            tab={evidenceTab}
+            onTabChange={setEvidenceTab}
+            onReview={reviewAction}
+            liveContent={<>{liveTools.map((record) => <LiveTool key={record.id} record={record} />)}</>}
+            actionContent={<>
+              {actions.length === 0 && liveTools.length === 0 && <p className="empty-line">No actions recorded yet.</p>}
+              {actions.map((action) => <Action key={action.id} record={action} connection={connection} />)}
+            </>}
+            outputContent={<>
+              {artifacts.length === 0 && <p className="empty-line">Files and screenshots will appear here.</p>}
+              {artifacts.map((artifact) => <Artifact key={artifact.id} record={artifact} />)}
+            </>}
+          />
         </aside>
       </div>
+      <dialog ref={reviewDialog} className="action-review-dialog" aria-labelledby="action-review-title" onClose={() => setReviewedAction(null)} onCancel={() => setReviewedAction(null)}>
+        <div className="modal-top"><h2 id="action-review-title">Review the exact action</h2><button className="icon-button" aria-label="Close review" onClick={() => setReviewedAction(null)}><X size={18} /></button></div>
+        <p>Approve only the displayed arguments. Completed changes cannot be undone here.</p>
+        {reviewing && reviewing.revision === reviewedAction?.revision ? <Action record={reviewing} connection={connection} /> : <p role="status">The action has updated{reviewing ? `: ${labelState(text(reviewing, "state"))}` : ""}. Close this review to see its current state.</p>}
+        {connection.error && <p className="error-text" role="alert">{connection.error}</p>}
+        <div className="modal-actions"><button onClick={() => setReviewedAction(null)}>Close</button></div>
+      </dialog>
     </section>
   );
 }

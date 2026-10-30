@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
 import {
   ArrowUp,
   ArrowUpRight,
@@ -7,8 +6,8 @@ import {
   ChevronRight,
   Code2,
   Globe,
-  LayoutGrid,
-  Menu,
+  ClipboardList,
+  Inbox,
   MessageSquare,
   Plus,
   RefreshCw,
@@ -16,30 +15,41 @@ import {
   Settings,
   Shield,
   Sparkles,
-  X,
   FileText,
+  ChevronDown,
+  Search,
+  Clock3,
+  UserRound,
+  Pin,
+  PanelLeftClose,
 } from "lucide-react";
 import { call, nativeApp, recordedPreview } from "./api";
 import { useConnection, type Connection } from "./useConnection";
 import { labelState, object, text, title, type ServerRecord } from "./types";
 import ConnectionSettings from "./ConnectionSettings";
-import TaskView, { Action, Artifact } from "./TaskView";
+import TaskView, { Action } from "./TaskView";
+import Artifact from "./image-viewer/Artifact";
+import { ImageViewerProvider } from "./image-viewer/ImageViewer";
+import OutpostMark from "./OutpostMark";
+import { preferredCloudModel } from "./models";
+import { useAppearance, useMediaQuery } from "./appearance";
+import { useSidebar } from "./useSidebar";
 
 const navigation = [
   {
     id: "home",
-    title: "Workspace",
+    title: "Tasks",
     icon: "square.grid.2x2",
-    glyph: LayoutGrid,
+    glyph: ClipboardList,
   },
   {
     id: "decisions",
-    title: "Decisions",
+    title: "Approvals",
     icon: "checkmark.shield",
-    glyph: Shield,
+    glyph: Inbox,
   },
-  { id: "outputs", title: "Outputs", icon: "doc.on.doc", glyph: FileText },
-  { id: "servers", title: "Servers", icon: "server.rack", glyph: Server },
+  { id: "servers", title: "Machines", icon: "server.rack", glyph: Server },
+  { id: "outputs", title: "Library", icon: "doc.on.doc", glyph: FileText },
   { id: "automations", title: "Automations", icon: "clock", glyph: RefreshCw },
   {
     id: "memory",
@@ -57,6 +67,9 @@ const profileIcons = {
   chat: MessageSquare,
 };
 
+import ModelPicker from './agent/ModelPicker';
+import { chosenModel, type ModelRef } from './agent/types';
+
 function Composer({
   connection,
   onCreated,
@@ -70,9 +83,15 @@ function Composer({
     [profile, setProfile] = useState(initialProfile),
     [model, setModel] = useState(""),
     [mode, setMode] = useState("full_control");
+  const [modelRef, setModelRef] = useState<ModelRef | null>(null);
+  const managed = !!connection.runtime?.piManagement;
+  const selectedRef = chosenModel(connection.agentCatalogue, modelRef);
+  const selectedModel = preferredCloudModel(connection.models, model, connection.runtime?.model ?? null);
+  const modelReady = managed ? !!selectedRef : !!selectedModel;
   const submit = async () => {
     if (
       !goal.trim() ||
+      !modelReady ||
       connection.busy ||
       !connection.connected ||
       connection.info?.pending
@@ -83,7 +102,7 @@ function Composer({
       goal: goal.trim(),
       profile,
       mode,
-      ...(model ? { model } : {}),
+      ...(managed && selectedRef ? { modelRef: { providerId: selectedRef.providerId, modelId: selectedRef.modelId } } : { model: selectedModel }),
     });
     if (result) {
       setGoal("");
@@ -139,20 +158,16 @@ function Composer({
           }}
         />
         <div className="composer-toolbar">
-          <select
+          {managed ? <ModelPicker catalogue={connection.agentCatalogue} value={selectedRef} onChange={setModelRef} disabled={!connection.connected || connection.busy || !!connection.info?.pending} /> : <select
             aria-label="Ollama model"
-            value={model}
+            title="Cloud models advertised by your connected Ollama server"
+            value={selectedModel}
+            disabled={!connection.models.length}
             onChange={(event) => setModel(event.target.value)}
           >
-            <option value="">
-              {connection.runtime?.model ?? "Server default model"}
-            </option>
-            {connection.models
-              .filter((name) => name !== connection.runtime?.model)
-              .map((name) => (
-                <option key={name}>{name}</option>
-              ))}
-          </select>
+            {!connection.models.length && <option value="">No cloud models available</option>}
+            {connection.models.map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>}
           <select
             aria-label="Control mode"
             value={mode}
@@ -168,6 +183,7 @@ function Composer({
             aria-label="Start task"
             disabled={
               !goal.trim() ||
+              !modelReady ||
               !connection.connected ||
               connection.busy ||
               connection.info?.pending
@@ -178,7 +194,7 @@ function Composer({
         </div>
       </form>
       <p className="composer-note">
-        {mode === "full_control"
+        {managed && !selectedRef ? "Choose an available model. Manage server providers in Settings." : !managed && !connection.models.length ? "No cloud models returned by the connected Ollama server. Local models are not listed." : mode === "full_control"
           ? "Runs autonomously. Root commands on both hosts are available when enabled."
           : mode === "auto"
             ? "An independent reviewer is required; otherwise actions wait for your approval."
@@ -364,8 +380,12 @@ function Servers({
 
 export default function App() {
   const connection = useConnection();
-  const [selection, setSelection] = useState("home"),
-    [mobileMenu, setMobileMenu] = useState(false);
+  const appearance = useAppearance();
+  const narrow = useMediaQuery("(max-width: 780px)");
+  const [selection, setSelection] = useState<string | null>(null),
+    [searchOpen, setSearchOpen] = useState(false),
+    [taskSearch, setTaskSearch] = useState("");
+  const sidebar = useSidebar(appearance, narrow);
   const tasks = useMemo(
     () =>
       connection.records
@@ -373,100 +393,71 @@ export default function App() {
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [connection.records],
   );
+  useEffect(() => {
+    if (selection === null && connection.connected) setSelection(tasks[0]?.id ?? "home");
+  }, [selection, connection.connected, tasks]);
   const selectedTask = tasks.find((task) => task.id === selection);
-  const nativeSidebar = connection.info?.nativeSidebar ?? nativeApp();
   const pending = connection.records.filter(
     (record) => record.kind === "action" && text(record, "state") === "pending",
   );
-  const sidebarItems = [
-    { id: "brand", title: "Outpost", icon: "", kind: "section" },
-    ...navigation.map((item) => ({
-      id: item.id,
-      title:
-        item.id === "decisions" && pending.length
-          ? `Decisions (${pending.length})`
-          : item.title,
-      icon: item.icon,
-      kind: "navigation",
-    })),
-    {
-      id: "recent-section",
-      title: "Recent sessions",
-      icon: "",
-      kind: "section",
-    },
-    ...tasks.slice(0, 16).map((task) => ({
-      id: task.id,
-      title: title(task),
-      icon:
-        text(task, "profile") === "code"
-          ? "chevron.left.forwardslash.chevron.right"
-          : "text.bubble",
-      kind: "task",
-    })),
-    {
-      id: "device-section",
-      title: "Your workspace",
-      icon: "",
-      kind: "section",
-    },
-    {
-      id: "connection",
-      title: "Connection",
-      icon: "network",
-      kind: "navigation",
-    },
-  ];
-  const sidebarJSON = JSON.stringify(sidebarItems);
   useEffect(() => {
-    if (nativeApp())
-      void call("update_sidebar", {
-        items: JSON.parse(sidebarJSON) as unknown,
-        selected: selection,
-      }).catch((error) => connection.setError(String(error)));
-  }, [sidebarJSON, selection]);
-  useEffect(() => {
-    if (!nativeApp()) return;
-    const listener = listen<string>("outpost:navigate", (event) =>
-      setSelection(event.payload),
-    );
-    return () => {
-      void listener.then((unlisten) => unlisten());
+    const shortcut = (event: KeyboardEvent) => {
+      if (document.querySelector("dialog[open]")) return;
+      if (event.key === "Escape") sidebar.dismiss();
+      if (!(event.metaKey || event.ctrlKey)) return;
+      if (event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        setSelection("home");
+        sidebar.dismiss();
+        requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('[aria-label="Task goal"]')?.focus());
+      }
+      if (event.key.toLowerCase() === "b" && !event.altKey && !event.shiftKey) {
+        event.preventDefault();
+        sidebar.toggle();
+      }
+      if (event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSearchOpen(true);
+        sidebar.reveal(true);
+        requestAnimationFrame(() => document.getElementById("task-search")?.focus());
+      }
     };
-  }, []);
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, [sidebar.visible, sidebar.pinned, narrow]);
   const select = (id: string) => {
     setSelection(id);
-    setMobileMenu(false);
+    sidebar.dismiss();
   };
   const heading = selectedTask
     ? "Session"
     : selection === "connection"
-      ? "Connection"
+      ? "Settings"
       : (navigation.find((item) => item.id === selection)?.title ??
         "Workspace");
   return (
+    <ImageViewerProvider key={`${connection.info?.endpoint}:${connection.info?.deviceId}`} records={connection.records}>
     <div
-      className={`app-shell ${nativeSidebar ? "native-shell" : "web-shell"} ${mobileMenu ? "menu-open" : ""}`}
+      className={`app-shell web-shell ${nativeApp() && navigator.userAgent.includes("Macintosh") ? "desktop-window" : ""} ${narrow ? "sidebar-overlay" : "sidebar-push"} ${sidebar.present ? "sidebar-present" : ""} ${sidebar.visible ? "sidebar-visible" : "sidebar-hidden"}`}
     >
-      {!nativeSidebar && (
-        <aside className="web-sidebar">
-          <div className="brand">
-            <span className="brand-mark" aria-hidden="true">
-              <i />
-              <i />
-              <i />
-            </span>
-            <strong>Outpost</strong>
+        {!sidebar.docked && <button className="sidebar-edge" aria-label="Show sidebar" aria-controls="app-sidebar" aria-expanded={sidebar.visible} onPointerEnter={() => { sidebar.enter(); sidebar.reveal(); }} onPointerLeave={sidebar.leave} onClick={() => sidebar.reveal(true)} onFocus={() => sidebar.reveal(true)} />}
+        <aside className="web-sidebar" id="app-sidebar" ref={sidebar.panel} inert={!sidebar.visible} aria-hidden={!sidebar.visible} data-motion={sidebar.settled && sidebar.visible ? "open" : sidebar.visible ? "opening" : sidebar.present ? "closing" : "closed"} onPointerEnter={sidebar.enter} onPointerLeave={sidebar.leave} onPointerDownCapture={sidebar.pointerInteraction} onFocusCapture={sidebar.focus} onBlurCapture={() => requestAnimationFrame(sidebar.blur)}>
+          <div className="sidebar-chrome" data-tauri-drag-region>
+            <button className="icon-button" aria-label={sidebar.pinned ? "Collapse sidebar" : "Pin sidebar"} aria-controls="app-sidebar" title={sidebar.pinned ? "Collapse sidebar (⌘B)" : "Pin sidebar · keep open"} onClick={sidebar.pinned ? sidebar.close : sidebar.pin}>{sidebar.pinned ? <PanelLeftClose size={16} /> : <Pin size={15} />}</button>
+          </div>
+          <div className="brand" data-tauri-drag-region>
+            <OutpostMark />
+            <strong data-tauri-drag-region>Outpost</strong>
           </div>
           <button className="new-task-button" onClick={() => select("home")}>
             <Plus size={16} />
-            New task
+            New task <span className="shortcut">⌘ N</span>
           </button>
           <nav aria-label="Main navigation">
-            {navigation.map((item) => (
+            {navigation.slice(0, 4).map((item) => (
               <button
                 key={item.id}
-                aria-current={selection === item.id ? "page" : undefined}
+                aria-current={selection === item.id || (item.id === "home" && selectedTask) ? "page" : undefined}
                 onClick={() => select(item.id)}
               >
                 <item.glyph size={16} />
@@ -477,39 +468,37 @@ export default function App() {
               </button>
             ))}
           </nav>
-          <p className="nav-section-label">Recent sessions</p>
+          <div className="sidebar-section"><span>Recent tasks</span><button className="icon-button" aria-label="Find a task" onClick={() => setSearchOpen(!searchOpen)}><Search size={14} /></button></div>
+          {searchOpen && <input id="task-search" className="task-search" aria-label="Find a task" placeholder="Find a task…" value={taskSearch} onChange={(event) => setTaskSearch(event.target.value)} autoFocus />}
           <div className="sidebar-sessions">
-            {tasks.slice(0, 16).map((task) => (
+            {tasks.filter((task) => title(task).toLowerCase().includes(taskSearch.toLowerCase())).slice(0, 16).map((task) => (
               <button
                 key={task.id}
+                title={`${title(task)} · ${labelState(text(task, "state"))}`}
+                aria-label={`${title(task)} · ${labelState(text(task, "state"))}`}
                 aria-current={selection === task.id ? "page" : undefined}
                 onClick={() => select(task.id)}
               >
-                <MessageSquare size={14} />
-                <span>{title(task)}</span>
+                <span className="sidebar-task-top">{text(task, "state") === "completed" ? <Check size={13} /> : <Clock3 size={13} />}<span>{title(task)}</span></span>
+                <span className="sidebar-task-meta"><span>{text(task, "profile") || "Task"}</span><time dateTime={task.updatedAt}>{new Date(task.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}</time></span>
               </button>
             ))}
           </div>
+          <details className="workspace-tools"><summary>Workspace tools <ChevronDown size={13} /></summary>{navigation.slice(4).map((item) => <button key={item.id} onClick={() => select(item.id)}><item.glyph size={15} />{item.title}</button>)}</details>
+          <div className="sidebar-bottom">{sidebar.nativeError && <p role="status">{sidebar.nativeError}</p>}{recordedPreview() && <p>Recorded server preview</p>}
           <button
             className="connection-nav"
+            aria-label="Connection settings"
             aria-current={selection === "connection" ? "page" : undefined}
             onClick={() => select("connection")}
           >
-            <Settings size={16} />
-            Connection
-          </button>
+            <span className="profile-avatar"><UserRound size={14} /></span>
+            <span>This Mac<small>Connection settings</small></span><ChevronDown size={13} />
+          </button></div>
         </aside>
-      )}
-      <div className="main-shell">
-        <header className="topbar">
+      <div className={`main-shell ${selectedTask ? "task-active" : ""}`} tabIndex={-1} onPointerDown={() => { if (!sidebar.docked) sidebar.dismiss(); }}>
+        <header className="topbar" data-tauri-drag-region>
           <div className="topbar-leading">
-            <button
-              className="mobile-menu icon-button"
-              aria-label="Toggle navigation"
-              onClick={() => setMobileMenu(!mobileMenu)}
-            >
-              {mobileMenu ? <X size={17} /> : <Menu size={17} />}
-            </button>
             <span>{heading}</span>
           </div>
           <div className="topbar-status">
@@ -518,7 +507,7 @@ export default function App() {
             />
             <span>
               {recordedPreview()
-                ? "Recorded server preview"
+                ? "Read-only snapshot"
                 : connection.connected
                   ? "Private server connected"
                   : "Disconnected"}
@@ -533,7 +522,7 @@ export default function App() {
             </button>
             <button
               className="icon-button"
-              aria-label="Connection settings"
+              aria-label="Open connection settings"
               onClick={() => select("connection")}
             >
               <Settings size={14} />
@@ -568,7 +557,7 @@ export default function App() {
             task={selectedTask}
             connection={connection}
           />
-        ) : selection === "home" ? (
+        ) : selection === "home" || selection === null ? (
           <main className="home">
             <div className="home-content">
               <Composer connection={connection} onCreated={select} />
@@ -587,14 +576,14 @@ export default function App() {
             </div>
           </main>
         ) : selection === "connection" ? (
-          <ConnectionSettings connection={connection} />
+          <ConnectionSettings connection={connection} appearance={appearance} />
         ) : selection === "servers" ? (
           <Servers connection={connection} select={select} />
         ) : selection === "decisions" ? (
           <main className="page">
             <div className="page-heading">
               <div>
-                <h1>Decisions</h1>
+                <h1>Approvals</h1>
                 <p>
                   {pending.length
                     ? `${pending.length} actions waiting for you.`
@@ -639,7 +628,6 @@ export default function App() {
                   <Artifact
                     key={record.id}
                     record={record}
-                    connection={connection}
                   />
                 ))}
             </div>
@@ -704,5 +692,6 @@ export default function App() {
         </footer>
       </div>
     </div>
+    </ImageViewerProvider>
   );
 }

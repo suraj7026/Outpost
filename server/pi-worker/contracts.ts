@@ -1,0 +1,32 @@
+import { z } from 'zod';
+import { ManagementRequest, ModelRef } from '../pi-management/contracts.js';
+
+export const RunStart = z.strictObject({
+  type: z.literal('run.start'), runId: z.uuid(), taskId: z.uuid(), model: ModelRef,
+  prompt: z.string().min(1).max(20000), systemPrompt: z.string().min(1).max(65536),
+  sessionFile: z.string().regex(/^[a-zA-Z0-9_.-]+\.jsonl$/).optional(),
+});
+export type RunStart = z.infer<typeof RunStart>;
+export const WorkerRequest = z.discriminatedUnion('type',[
+  z.strictObject({ type: z.literal('management'), owner: z.uuid(), request: ManagementRequest }),
+  RunStart,
+  z.strictObject({ type: z.literal('run.poll'), runId: z.uuid(), after: z.number().int().nonnegative() }),
+  z.strictObject({ type: z.literal('run.abort'), runId: z.uuid() }),
+  z.strictObject({ type: z.literal('run.steer'), runId: z.uuid(), text: z.string().min(1).max(20000) }),
+  z.strictObject({ type: z.literal('run.action-result'), runId: z.uuid(), callId: z.uuid(), result: z.json(), failed: z.boolean() }),
+]);
+export type WorkerRequest = z.infer<typeof WorkerRequest>;
+export const Projection = z.strictObject({
+  sequence: z.number().int().positive(), final: z.boolean(), kind: z.enum(['message','tool_stream']),
+  id: z.string().regex(/^[a-f0-9]{64}$/), data: z.record(z.string(), z.json()),
+});
+export type Projection = z.infer<typeof Projection>;
+export const ActionRequest = z.strictObject({ callId: z.uuid(), tool: z.string().min(1).max(128), arguments: z.record(z.string(), z.json()) });
+export type ActionRequest = z.infer<typeof ActionRequest>;
+export const RunPoll = z.strictObject({
+  runId: z.uuid(), taskId: z.uuid(), state: z.enum(['starting','running','finished','failed','cancelled']),
+  session: z.strictObject({ id: z.string(), file: z.string() }).nullable(),
+  model: ModelRef, cursor: z.number().int().nonnegative(),
+  hasMore: z.boolean(), projections: z.array(Projection).max(64), actions: z.array(ActionRequest).max(32), error: z.string().nullable(),
+});
+export type RunPoll = z.infer<typeof RunPoll>;

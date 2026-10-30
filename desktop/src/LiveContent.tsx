@@ -24,8 +24,14 @@ export function Thinking({ message }: { message: ServerRecord }) {
           onToggle={(event) => {
             if (event.currentTarget.open !== open) {
               setExpanded(event.currentTarget.open);
-              if (event.currentTarget.open)
-                panel.current?.scrollIntoView({ block: "nearest" });
+              const pane = event.currentTarget.closest<HTMLElement>(".conversation");
+              if (event.currentTarget.open && pane) {
+                const details = event.currentTarget.getBoundingClientRect();
+                const viewport = pane.getBoundingClientRect();
+                if (details.top < viewport.top) pane.scrollTop += details.top - viewport.top;
+                else if (details.bottom > viewport.bottom)
+                  pane.scrollTop += Math.min(details.bottom - viewport.bottom, details.top - viewport.top);
+              }
             }
           }}
         >

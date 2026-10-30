@@ -25,6 +25,7 @@ export interface ConnectionInfo {
   nativeSidebar: boolean;
 }
 export interface RuntimeInfo {
+  piManagement?: boolean;
   configured: boolean;
   model: string | null;
   hostAdministration: boolean;
@@ -50,5 +51,12 @@ export const object = (value: Json | undefined): Record<string, Json> =>
   value !== null && typeof value === "object" && !Array.isArray(value)
     ? value
     : {};
+export const actionNeedsReview = (record: ServerRecord) => {
+  const state = text(record, "state");
+  const result = object(record.data.result);
+  return state === "unknown" || state === "failed" ||
+    (typeof result.exitCode === "number" && result.exitCode !== 0) ||
+    result.agent_reported_success === false;
+};
 export const labelState = (value: string) =>
   value === "verifying" ? "Ready for your review" : value.replaceAll("_", " ");

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Outpost — Graphite studies</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2316171a'/%3E%3Cpath d='M9 22V10h14v12M13 22v-8h6v8' fill='none' stroke='%23ededef' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="study-bar" aria-label="Design preview controls">
+    <a href="index.html" class="study-brand">Outpost <span>Design studies</span></a>
+    <nav class="design-tabs" aria-label="Design direction">
+      <span class="tab-slider" aria-hidden="true"></span>
+      <button data-design="studio" aria-pressed="true">Graphite Studio</button>
+      <button data-design="precision" aria-pressed="false">Ink Precision</button>
+      <button data-design="quiet" aria-pressed="false">Quiet Workspace</button>
+    </nav>
+    <div class="study-tools">
+      <button data-action="compare" class="compare-button">Compare</button>
+      <button data-action="theme" class="icon-button" aria-label="Switch to light appearance" title="Change appearance"></button>
+      <button data-action="motion" class="icon-button" aria-label="Turn motion off" aria-pressed="true" title="Toggle motion"></button>
+    </div>
+  </header>
+  <div id="app"></div>
+  <footer class="study-footer"><span id="direction-caption"></span><span>Interactive mock <span aria-hidden="true">·</span> Sample data only</span></footer>
+  <dialog id="modal" aria-labelledby="modal-title"></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

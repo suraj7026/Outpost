@@ -1,13 +1,11 @@
 fn main() {
-    #[cfg(target_os = "macos")]
-    {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         cc::Build::new()
-            .file("native/sidebar.m")
+            .file("native/window_controls.m")
             .flag("-fobjc-arc")
-            .flag("-mmacosx-version-min=14.0")
-            .compile("outpost_sidebar");
-        println!("cargo:rustc-link-lib=framework=AppKit");
-        println!("cargo:rerun-if-changed=native/sidebar.m");
+            .compile("outpost_window_controls");
+        println!("cargo:rustc-link-lib=framework=Cocoa");
+        println!("cargo:rerun-if-changed=native/window_controls.m");
     }
     tauri_build::build()
 }

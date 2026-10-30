@@ -25,6 +25,8 @@ try {
       transformCallback(fn) { const id = ++sequence; callbacks.set(id,fn); return id; },
       unregisterCallback(id) { callbacks.delete(id); },
       async invoke(command,args) {
+        if (command === 'set_sidebar_window_controls') return;
+        if (command === 'sidebar_pointer_inside') return false;
         if (command === 'connection_info') return { endpoint: 'Fixture transport',deviceId: 'fixture',publicKey: '',pending: false,nativeSidebar: false };
         if (command === 'query') {
           if (args.kind === 'snapshot') return preview.snapshot;

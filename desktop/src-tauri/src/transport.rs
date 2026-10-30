@@ -211,6 +211,17 @@ impl State {
             .await
             .map_err(|e| format!("Cannot reach your server. Check the private SSH tunnel. {e}"))
     }
+    // Credential operations must never touch pending.enc or replayable commands.
+    async fn agent_request(&self, payload: Value) -> Result<Value, String> {
+        let response = self.request("v1/agent", json!({ "type": "agent", "payload": payload }), true)
+            .await.map_err(|_| "Provider request interrupted. Check status before trying again.")?;
+        let status = response.status();
+        if !status.is_success() {
+            // Never reflect provider/HTTP error bodies into desktop diagnostics.
+            return Err(format!("Provider request failed (HTTP {}). Refresh status before retrying.", status.as_u16()));
+        }
+        response.json().await.map_err(|_| "Invalid provider response".into())
+    }
     async fn enroll_device(
         &self,
         device_id: String,
@@ -290,7 +301,7 @@ pub fn connection_info(state: tauri::State<'_, State>) -> Result<Value, String> 
         .as_ref()
         .ok_or("Device identity unavailable")?;
     Ok(
-        json!({ "endpoint": client.endpoint, "deviceId": identity.id, "publicKey": STANDARD.encode(identity.key.verifying_key().to_bytes()), "pending": client.pending.is_some(), "nativeSidebar": cfg!(target_os = "macos") }),
+        json!({ "endpoint": client.endpoint, "deviceId": identity.id, "publicKey": STANDARD.encode(identity.key.verifying_key().to_bytes()), "pending": client.pending.is_some(), "nativeSidebar": false }),
     )
 }
 
@@ -329,6 +340,15 @@ pub async fn stream_events(
         }
     }
     Ok(())
+}
+
+// Ephemeral credential path: never use persist_pending or command retry storage here.
+#[tauri::command]
+pub async fn agent_request(
+    state: tauri::State<'_, State>,
+    payload: Value,
+) -> Result<Value, String> {
+    state.agent_request(payload).await
 }
 
 #[tauri::command]
@@ -658,6 +678,31 @@ mod tests {
                 } else {
                     assert!(state.client.lock().unwrap().pending.is_none());
                 }
+                fs::remove_dir_all(state.directory).unwrap();
+            }
+        });
+    }
+
+    #[test]
+    fn provider_requests_are_signed_ephemeral_and_errors_do_not_echo_credentials() {
+        tauri::async_runtime::block_on(async {
+            for status in ["200 OK", "400 Bad Request", "500 Internal Server Error"] {
+                let (state, request) = fixture(status, if status.starts_with("200") {
+                    json!({ "state": "running" })
+                } else { json!({ "message": "synthetic-secret-never-persist" }) });
+                let pending = json!({ "idempotencyKey": "unrelated-task" });
+                state.client.lock().unwrap().pending = Some(pending.clone());
+                let payload = json!({ "type": "login.answer", "flowId": "synthetic", "promptId": "step", "value": "synthetic-secret-never-persist" });
+                let result = state.agent_request(payload.clone()).await;
+                if status.starts_with("200") { assert_eq!(result.unwrap()["state"], "running"); }
+                else { assert!(!result.unwrap_err().contains("synthetic-secret-never-persist")); }
+                let (headers, body) = request.join().unwrap();
+                assert!(headers.starts_with("POST /v1/agent HTTP/1.1"));
+                assert_eq!(body["type"], "agent");
+                assert_eq!(body["payload"], payload);
+                assert!(body["issuedAt"].as_u64().is_some());
+                assert_eq!(state.client.lock().unwrap().pending, Some(pending));
+                assert_eq!(fs::read_dir(&state.directory).unwrap().count(), 0);
                 fs::remove_dir_all(state.directory).unwrap();
             }
         });

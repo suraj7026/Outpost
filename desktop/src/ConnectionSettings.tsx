@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { call, nativeApp, recordedPreview } from "./api";
 import type { Connection } from "./useConnection";
 import ConnectionAdministration from "./ConnectionAdministration";
+import ProviderSettings from './agent/ProviderSettings';
+import { AppearanceSettings, type Appearance } from "./appearance";
 
-export default function ConnectionSettings({ connection }: { connection: Connection }) {
+export default function ConnectionSettings({ connection, appearance }: { connection: Connection; appearance: Appearance }) {
   const [endpoint, setEndpoint] = useState(""),
     [token, setToken] = useState("");
   useEffect(() => {
@@ -14,10 +16,12 @@ export default function ConnectionSettings({ connection }: { connection: Connect
     <div className="page settings-page">
       <div className="page-heading">
         <div>
-          <h1>Connection</h1>
+          <h1>Settings</h1>
           <p>Your device signs requests. The agent stays on your servers.</p>
         </div>
       </div>
+      <ProviderSettings connection={connection} />
+      <AppearanceSettings appearance={appearance} />
       <section className="settings-section">
         <div>
           <h2>Private server</h2>
@@ -106,12 +110,13 @@ export default function ConnectionSettings({ connection }: { connection: Connect
         <div>
           <h2>Model provider</h2>
           <p>
-            Only Ollama: local models or your Ollama Cloud models through the
-            daemon. Cloud-selected models send task, tool and page context to
-            Ollama Cloud.
+            Only cloud models advertised by your connected Ollama server are
+            listed. Local-only models are hidden. Task, tool and page context is
+            sent to Ollama Cloud when a cloud model runs.
           </p>
         </div>
         <div className="model-list">
+          {!connection.models.length && <p className="empty-line">No cloud models available from this Ollama server.</p>}
           {connection.models.map((model) => (
             <div key={model}>
               <span>{model}</span>

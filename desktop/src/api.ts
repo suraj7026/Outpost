@@ -57,6 +57,11 @@ export async function call<T>(
     "Open the installed Outpost Desktop app to connect securely to your servers.",
   );
 }
+// Credentials travel only through this non-persisted, non-retrying IPC path.
+export const agentRequest = <T>(payload: Record<string, unknown>) => {
+  if (recordedPreview() || !nativeApp()) return Promise.reject(new Error("Provider management requires the connected desktop app."));
+  return call<T>("agent_request", { payload });
+};
 export const query = <T>(kind: string, payload: Record<string, Json> = {}) =>
   call<T>("query", { kind, payload });
 export const send = (

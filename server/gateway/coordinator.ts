@@ -11,6 +11,9 @@ import { Workspace, Artifacts } from '../artifacts/files.js';
 import { registerCommands } from '../processes/runner.js';
 import { registerInventory } from '../operations/machine.js';
 import { PiRuntime } from '../pi-adapter/runtime.js';
+import { RemotePiRuntime } from '../pi-adapter/remote-runtime.js';
+import { WorkerClient } from '../pi-worker/client.js';
+import { ManagementRequest, ModelRef } from '../pi-management/contracts.js';
 import { cloudReviewer } from '../models/cloud.js';
 import { profileCSV } from '../data/analysis.js';
 import { renderHTML } from '../documents/documents.js';
@@ -28,8 +31,10 @@ const wire = (value: unknown): Json => z.json().parse(value);
 export class Coordinator {
   readonly live: LiveFeed;
   readonly devices: Devices; readonly tasks: Tasks; readonly artifacts: Artifacts; readonly memory: MemoryStore; readonly scheduler: Scheduler;
-  private gates = new Map<string,Gate>(); private runtimes = new Map<string,PiRuntime>(); private jobs = new Set<string>();
-  constructor(readonly db: Ledger, readonly root: string, private options: { apiKey?: string; roles?: unknown; executables?: string[]; inference?: InferenceConfiguration; unrestrictedCommands?: boolean; hosts?: HostAdministration; browserPython?: string } = {}) {
+  private managementWrites = new Map<string, number>();
+  private gates = new Map<string,Gate>(); private runtimes = new Map<string,PiRuntime | RemotePiRuntime>(); private jobs = new Set<string>();
+  constructor(readonly db: Ledger, readonly root: string, private options: { apiKey?: string; roles?: unknown; executables?: string[]; inference?: InferenceConfiguration; unrestrictedCommands?: boolean; hosts?: HostAdministration; browserPython?: string; worker?: WorkerClient } = {}) {
+    db.db.exec('CREATE TABLE IF NOT EXISTS credential_leases(id TEXT PRIMARY KEY, device_id TEXT NOT NULL, expires_at INTEGER NOT NULL)');
     this.live = new LiveFeed(db);
     for (const kind of ['message','tool_stream']) for (const record of db.list(kind)) if (record.data.streaming) db.put(kind,record.id,record.revision,{ ...record.data,streaming: false,interrupted: true });
     this.devices = new Devices(db); this.tasks = new Tasks(db); this.artifacts = new Artifacts(db,join(root,'artifacts')); this.memory = new MemoryStore(db); this.scheduler = new Scheduler(db,this.tasks);
@@ -40,13 +45,13 @@ export class Coordinator {
   }
   get dispatchEnabled() { return this.db.get('recovery','server')?.data.dispatchEnabled !== false; }
   gate(taskId: string) {
-    this.db.need('task',taskId); z.uuid().parse(taskId);
+    const task = this.db.need<Task>('task',taskId); z.uuid().parse(taskId);
     let gate = this.gates.get(taskId); if (gate) return gate;
     const reviewer = this.options.apiKey && this.options.roles ? cloudReviewer(this.options.apiKey,this.options.roles) : undefined;
     gate = new Gate(this.db,reviewer,!!this.options.hosts); const workspace = new Workspace(join(this.root,'workspaces',taskId));
     workspace.register(gate); registerInventory(gate); registerCommands(gate,workspace,new Set(this.options.executables ?? []),this.options.unrestrictedCommands);
     if (this.options.hosts) registerHosts(gate,this.options.hosts,taskId);
-    if (this.options.browserPython && this.options.inference) registerBrowserUse(gate,this.options.browserPython,{ ...this.options.inference,model: this.db.need<Task>('task',taskId).data.model ?? this.options.inference.model },workspace,this.artifacts,taskId);
+    if (this.options.browserPython && this.options.inference) registerBrowserUse(gate,this.options.browserPython,{ ...this.options.inference,model: !task.data.provider && task.data.model ? task.data.model : this.options.inference.model },workspace,this.artifacts,taskId);
     gate.register('artifact.read_text',{ version: 1,effects: ['workspace.read'],parse: input => z.strictObject({ artifactId: z.uuid() }).parse(input),target: args => String(args.artifactId),execute: async args => {
       const artifact = this.db.need('artifact',String(args.artifactId)); requireThat(artifact.data.taskId === taskId,'artifact_scope_denied');
       const bytes = this.artifacts.read(artifact.id); requireThat(bytes.length <= 1024*1024 && !bytes.includes(0),'text_artifact_required');
@@ -67,8 +72,11 @@ export class Coordinator {
     const accepted = this.db.accept(command,() => {
       const { type,aggregateId: key,expectedRevision: expected,payload } = command;
       switch (type) {
-        case 'task.create': z.uuid().parse(key); requireThat(expected === 0,'stale_revision'); return wire(this.tasks.create(key,payload));
-        case 'task.steer': return wire(this.tasks.steer(key,expected,z.string().parse(payload.text)));
+        case 'task.create': z.uuid().parse(key); requireThat(expected === 0,'stale_revision'); requireThat(!payload.modelRef || !!this.options.worker,'pi_worker_required'); return wire(this.tasks.create(key,payload));
+        case 'task.steer': {
+          requireThat(!payload.modelRef || !!this.options.worker,'pi_worker_required');
+          return wire(this.tasks.steer(key,expected,z.string().parse(payload.text),payload.modelRef ? ModelRef.parse(payload.modelRef) : undefined));
+        }
         case 'task.pause': case 'task.cancel': case 'task.resume': return wire(this.tasks.control(key,expected,type.split('.')[1] as 'pause' | 'cancel' | 'resume'));
         case 'policy.change': return wire(this.gate(key).changePolicy(key,expected,payload.mode));
         case 'approval.decide': {
@@ -96,7 +104,9 @@ export class Coordinator {
           const value = z.strictObject({ token: z.string(),topic: z.string().min(1),environment: z.enum(['sandbox','production']) }).parse(payload);
           return wire(new Notifications(this.db).register(command.deviceId,value.token,value.topic,value.environment));
         }
-        case 'device.revoke': return wire(this.devices.revoke(key,expected));
+        case 'device.revoke':
+          requireThat(!this.managementWrites.get(key) && !this.db.db.prepare('SELECT 1 FROM credential_leases WHERE device_id=? AND expires_at>? LIMIT 1').get(key,Date.now()), 'credential_commit_in_progress', 'A credential operation is settling. Retry revocation after it completes.');
+          return wire(this.devices.revoke(key,expected));
         case 'recovery.resume': {
           requireThat(key === 'server' && payload.acknowledged === true,'recovery_acknowledgment_required');
           const hold = this.db.need('recovery',key);
@@ -111,8 +121,33 @@ export class Coordinator {
     }
     return accepted;
   }
+  async agentRequest(deviceId: string, input: unknown) {
+    requireThat(this.options.worker, 'pi_worker_unavailable', 'Server Pi management is not enabled.');
+    const request = ManagementRequest.parse(input);
+    requireThat(!this.db.need('device', deviceId).data.revoked, 'revoked_device');
+    const writes = !['catalogue', 'refresh', 'login.status', 'login.start', 'login.cancel'].includes(request.type);
+    const leaseId = id();
+    if (writes) {
+      this.managementWrites.set(deviceId, (this.managementWrites.get(deviceId) ?? 0) + 1);
+      this.db.db.prepare('DELETE FROM credential_leases WHERE expires_at<=?').run(Date.now());
+      this.db.db.prepare('INSERT INTO credential_leases VALUES(?,?,?)').run(leaseId, deviceId, Date.now() + 30000);
+    }
+    let settled = false;
+    try {
+      const result = await this.options.worker.request({ type: 'management', owner: deviceId, request });
+      settled = true;
+      return result;
+    }
+    finally {
+      if (writes) {
+        if (settled) this.db.db.prepare('DELETE FROM credential_leases WHERE id=?').run(leaseId);
+        const remaining = (this.managementWrites.get(deviceId) ?? 1) - 1;
+        if (remaining) this.managementWrites.set(deviceId, remaining); else this.managementWrites.delete(deviceId);
+      }
+    }
+  }
   runtimeStatus() {
-    return { configured: !!this.options.inference || !!(this.options.apiKey && this.options.roles),model: this.options.inference?.model ?? null,hostAdministration: !!this.options.hosts,browserUse: !!this.options.browserPython,unrestrictedCommands: !!this.options.unrestrictedCommands };
+    return { piManagement: !!this.options.worker, configured: !!this.options.worker || !!this.options.inference || !!(this.options.apiKey && this.options.roles),model: this.options.inference?.model ?? null,hostAdministration: !!this.options.hosts,browserUse: !!this.options.browserPython,unrestrictedCommands: !!this.options.unrestrictedCommands };
   }
   query(type: string, payload: Record<string,Json>) {
     if (type === 'runtime') return wire(this.runtimeStatus());
@@ -132,12 +167,22 @@ export class Coordinator {
     if (type === 'tools') return wire(this.gate(z.string().parse(payload.taskId)).catalogue());
     throw new Fault('unknown_query','Unsupported query',400);
   }
-  private runPi(taskId: string, prompt: string) {
+  private runPi(taskId: string, prompt: string, selection?: ModelRef) {
     const task = this.db.need<Task>('task',taskId);
-    const inference = this.options.inference ? { ...this.options.inference,...(task.data.model ? { model: task.data.model } : {}) } : undefined;
-    const runtime = this.runtimes.get(taskId) ?? new PiRuntime(this.db,this.gate(taskId),join(this.root,'pi',taskId),this.live);
-    this.runtimes.set(taskId,runtime);
-    void runtime.run(taskId,join(this.root,'workspaces',taskId),prompt,this.options.apiKey ?? 'ollama',this.options.roles,inference).catch(error => {
+    let pending: Promise<void>;
+    if (this.options.worker) {
+      const saved = this.runtimes.get(taskId);
+      const runtime = saved instanceof RemotePiRuntime ? saved : new RemotePiRuntime(this.db,this.gate(taskId),this.options.worker,this.live);
+      this.runtimes.set(taskId,runtime);
+      pending = runtime.run(taskId,prompt,selection ?? { providerId: task.data.provider ?? 'outpost-ollama', modelId: task.data.model ?? this.options.inference?.model ?? '' });
+    } else {
+      const inference = this.options.inference ? { ...this.options.inference,...(task.data.model ? { model: task.data.model } : {}) } : undefined;
+      const saved = this.runtimes.get(taskId);
+      const runtime = saved instanceof PiRuntime ? saved : new PiRuntime(this.db,this.gate(taskId),join(this.root,'pi',taskId),this.live);
+      this.runtimes.set(taskId,runtime);
+      pending = runtime.run(taskId,join(this.root,'workspaces',taskId),prompt,this.options.apiKey ?? 'ollama',this.options.roles,inference);
+    }
+    void pending.catch(error => {
       const current = this.db.need<Task>('task',taskId);
       if (!['paused','cancelled'].includes(current.data.state)) this.db.put('task',taskId,current.revision,{ ...current.data,state: 'interrupted',blocker: `Pi run failed: ${String(error).slice(0,800)}` });
     });
@@ -145,9 +190,17 @@ export class Coordinator {
   async drain() {
     if (!this.dispatchEnabled) return;
     const rows = this.db.db.prepare("SELECT id,topic,payload FROM outbox WHERE state='pending' AND topic!='notice' ORDER BY created_at LIMIT 20").all();
+    const blockedTasks = new Set<string>();
     for (const row of rows) {
       const key = String(row.id), topic = String(row.topic); if (this.jobs.has(key) || topic === 'notice') continue;
       const data = z.record(z.string(),z.json()).parse(JSON.parse(String(row.payload)));
+      if (topic === 'task.steer') {
+        const taskId = String(data.taskId), runtime = this.runtimes.get(taskId);
+        if (blockedTasks.has(taskId)) continue;
+        if (runtime instanceof RemotePiRuntime && runtime.isActive(taskId) && data.modelRef && !runtime.canSteer(ModelRef.parse(data.modelRef))) {
+          blockedTasks.add(taskId); continue;
+        }
+      }
       this.db.db.prepare("UPDATE outbox SET state='claimed' WHERE id=? AND state='pending'").run(key); this.jobs.add(key);
       const operation = this.db.get('operation',key);
       if (operation) this.db.put('operation',key,operation.revision,{ ...operation.data,state: 'running' });
@@ -159,21 +212,21 @@ export class Coordinator {
           const taskId = String(data.taskId);
           const runtime = this.runtimes.get(taskId);
           if (runtime?.isActive(taskId)) await runtime.steer(taskId,String(data.text));
-          else if (this.options.inference || (this.options.apiKey && this.options.roles)) {
+          else if (this.options.worker || this.options.inference || (this.options.apiKey && this.options.roles)) {
             const task = this.db.need<Task>('task',taskId);
             if (!['paused','cancelled','completed'].includes(task.data.state)) {
               this.db.put('task',taskId,task.revision,{ ...task.data,state: 'running',blocker: null });
-              this.runPi(taskId,String(data.text));
+              this.runPi(taskId,String(data.text),data.modelRef ? ModelRef.parse(data.modelRef) : undefined);
             }
           }
         }
         else if (topic === 'task.run' || topic === 'task.resume') {
           const taskId = String(data.taskId), task = this.db.need<Task>('task',taskId);
           if (task.data.state === 'queued') {
-            if (!this.options.inference && (!this.options.apiKey || !this.options.roles)) this.db.put('task',taskId,task.revision,{ ...task.data,state: 'waiting_for_capacity',blocker: 'Configure an Ollama endpoint and model, or qualified Cloud roles. Local tools can be proposed explicitly.' });
+            if (!this.options.worker && !this.options.inference && (!this.options.apiKey || !this.options.roles)) this.db.put('task',taskId,task.revision,{ ...task.data,state: 'waiting_for_capacity',blocker: 'Configure an Ollama endpoint and model, or qualified Cloud roles. Local tools can be proposed explicitly.' });
             else {
-              this.tasks.claim(taskId,'pi-local');
-              this.runPi(taskId,task.data.goal);
+              this.tasks.claim(taskId,this.options.worker ? 'pi-server-worker' : 'pi-local');
+              this.runPi(taskId,task.data.goal,data.modelRef ? ModelRef.parse(data.modelRef) : undefined);
             }
           }
         }

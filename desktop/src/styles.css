@@ -1,4 +1,4 @@
-/* Ink: flat, quiet surfaces. AppKit owns the macOS sidebar and window chrome. */
+/* Ink foundation. Studio owns the app UI; macOS retains native window chrome. */
 :root {
   font-family:
     Geist,
@@ -8,18 +8,21 @@
   color-scheme: dark light;
   font-synthesis: none;
   font-weight: 400;
-  --bg: #101011;
-  --surface: #171718;
-  --raised: #202022;
-  --sidebar: #161617;
-  --line: #2a2a2d;
-  --text: #eeeef0;
-  --muted: #a0a0a6;
-  --subtle: #85858c;
-  --active: #29292c;
-  --positive: #91bb98;
+  --bg: #0f1011;
+  --surface: #16171a;
+  --raised: #1c1d21;
+  --sidebar: #0f1011;
+  --line: #26282c;
+  --control: #44464b;
+  --text: #ededef;
+  --muted: #a1a3a8;
+  --subtle: #999ca2;
+  --active: #26282c;
+  --positive: #a3bda9;
+  --warning: #d6b78b;
   --danger: #f3a49e;
-  --focus: #c8c8d0;
+  --focus: #d0d2dc;
+  --ease: cubic-bezier(.2, .8, .2, 1);
   color: var(--text);
   background: var(--bg);
   font-size: 14px;
@@ -27,8 +30,20 @@
 * {
   box-sizing: border-box;
 }
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: clip;
+  overscroll-behavior: none;
+}
 body {
   margin: 0;
+}
+#root {
+  position: fixed;
+  inset: 0;
 }
 button,
 input,
@@ -177,15 +192,35 @@ time {
   gap: 8px;
 }
 .app-shell {
-  height: 100dvh;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   display: grid;
-  overflow: hidden;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: clip;
 }
 .web-shell {
   grid-template-columns: 232px minmax(0, 1fr);
 }
 .native-shell {
   grid-template-columns: minmax(0, 1fr);
+}
+.main-shell,
+.task-view,
+.task-columns,
+.conversation-column,
+.web-sidebar {
+  overflow: clip;
+  overscroll-behavior: none;
+}
+.conversation,
+.evidence-column,
+.sidebar-sessions,
+.home,
+.page,
+.action-body pre,
+.thinking-block pre {
+  overscroll-behavior: contain;
 }
 .main-shell {
   display: flex;
@@ -709,6 +744,7 @@ time {
   min-width: 0;
 }
 .conversation {
+  min-height: 0;
   overflow-y: auto;
   flex: 1;
   padding: 25px 30px;
@@ -934,18 +970,20 @@ time {
 }
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #fafafa;
-    --surface: #f2f2f3;
-    --raised: #eaeaec;
-    --sidebar: #f0f0f1;
-    --line: #dcdce0;
-    --text: #222226;
-    --muted: #64646b;
-    --subtle: #73737a;
-    --active: #e0e0e5;
-    --positive: #47744f;
+    --bg: #f0f1f2;
+    --surface: #fafafa;
+    --raised: #e9eaec;
+    --sidebar: #f0f1f2;
+    --line: #dcdee1;
+    --control: #b3b5bc;
+    --text: #202125;
+    --muted: #62646a;
+    --subtle: #686a70;
+    --active: #dedfe2;
+    --positive: #40674c;
+    --warning: #77551f;
     --danger: #ab3932;
-    --focus: #555560;
+    --focus: #4c515b;
   }
   .composer {
     border-color: #c8c8cd;

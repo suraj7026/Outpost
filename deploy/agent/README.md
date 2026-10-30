@@ -4,9 +4,12 @@ This supersedes the original sandbox-only workspace description for the Outpost 
 
 ## Current layout
 
+The initial provider-worker release `providers-20261030T200757Z` is now deployed. See [deployment verification, backups and limitations](../../docs/implementation/SERVER-PI-PROVIDERS-STATUS.md). Provider packages and OAuth callback relay remain disabled.
+
 - `surajhomeserver`: K3s control plane, existing Ollama daemon, existing Docker applications/runners, authenticated `host-main` root executor.
-- `surajhomeserver2`: K3s worker, persistent `pi-workspace` pod with **two containers** (`workspace` and `coordinator`), local Browser-Use/Chromium, authenticated `host-worker` executor.
-- Home volume: `/srv/remotejobs/pi-workspace` on worker → `/home/node` in both containers. Projects: `/workspace`. Outpost data: `/home/node/.outpost`. Runtime source: `/home/node/outpost-runtime`.
+- `surajhomeserver2`: K3s worker, persistent `pi-workspace` pod with **three containers** (`workspace`, `coordinator`, and restricted `pi-worker`), local Browser-Use/Chromium, authenticated `host-worker` executor.
+- Home volume: `/srv/remotejobs/pi-workspace` on worker → `/home/node` in workspace/coordinator. The Pi worker mounts only profile, sessions, task workspaces and read-only runtime subsets, not the full home or ledger. Projects: `/workspace`. Outpost data: `/home/node/.outpost`.
+- Selected runtime: `/home/node/.outpost/releases/providers-20261030T200757Z`, mounted read-only at `/opt/outpost`. Both worker and managed CLI use this release and `/home/node/.pi/agent`. Run `pi --outpost-runtime` for identity. `/home/node/outpost-runtime` is retained as the previous runtime, not the active source.
 - Browser-Use 0.13.14: `/home/node/server/browser-use/.venv`, managed with `uv` and the committed lockfile. Only `ChatOllama`; `use_cloud=False` browser configuration.
 - Pi 1.4.0 routes through the registered `outpost_action` tool. `tools: ['outpost_action']` is intentional: an empty array also disables custom tools in this SDK version. Startup verifies activation.
 - Ollama: `http://192.168.1.37:11434/v1`, default `glm-5.3-flash:cloud`. Exact per-task model names are preserved. No substitute models downloaded.
@@ -34,7 +37,7 @@ curl -fsS http://127.0.0.1:4318/health
 
 **`workspace stop` and deployment/pod restarts also stop Outpost.** The launcher explicitly selects `-c workspace` for interactive commands and logs. Use `-c coordinator` for agent logs. Avoid running the old `provision-main.sh` or applying the original workspace manifest without reapplying this integration patch: they describe the base workspace, not the complete runtime.
 
-A coordinator-only restart, when no task is executing, avoids killing the interactive workspace container:
+Before a planned restart, use the checkpoint-aware `Tasks.prepareMaintenance()` / `finishMaintenance()` workflow documented in the provider status record; merely seeing no running model is insufficient to preserve review-stage task state. A coordinator-only restart avoids killing the interactive workspace container:
 
 ```sh
 ~/.local/bin/kubectl -n pi-workspace exec deploy/pi-workspace -c coordinator -- /bin/kill -TERM 1
@@ -47,7 +50,7 @@ Interrupted/uncertain effects are not blindly replayed. Inspect evidence before 
 
 `install.sh` expects staging under `~/outpost-agent` on server 1, `hosts.json` rendered by `render-hosts.mjs`, an existing workspace, its runtime source/dependencies already uploaded, and the original pairing token file. Do not print or commit token files. It creates authenticated executors and patches the workspace deployment, which **replaces the pod**.
 
-The coordinator currently runs TypeScript and dependencies from the persistent volume, not an immutable application image. To update source, transfer the changed files to `/home/node/outpost-runtime`, run dependency installation if needed, and restart only the coordinator while idle. Python worker source is part of that runtime at `/home/node/outpost-runtime/server/browser-use`. Its `uv` project/virtualenv lives separately at `/home/node/server/browser-use`; keep the project manifest and lockfile synchronized when changing dependencies. Use:
+The coordinator currently runs TypeScript and dependencies from a versioned persistent release, not an immutable application image. Do not edit the active release in place or upload updates to the old `/home/node/outpost-runtime`. Stage a new release, validate the CLI/worker installation identity and worker-only source subset, prepare the maintenance checkpoint, then activate matching read-only mounts. `provider-worker-patch.mjs RELEASE_ID` renders the patch; review and server-side dry-run it before applying. Python worker source is part of that runtime at `/home/node/outpost-runtime/server/browser-use`. Its `uv` project/virtualenv lives separately at `/home/node/server/browser-use`; keep the project manifest and lockfile synchronized when changing dependencies. Use:
 
 ```sh
 /home/node/.local/bin/uv sync --frozen --project /home/node/server/browser-use --index-url https://pypi.org/simple

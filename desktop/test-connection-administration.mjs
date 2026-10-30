@@ -41,6 +41,8 @@ async function open(scenario = 'normal') {
     window.__TAURI_INTERNALS__ = {
       transformCallback() { return ++sequence; }, unregisterCallback() {},
       async invoke(command, args) {
+        if (command === 'set_sidebar_window_controls') return;
+        if (command === 'sidebar_pointer_inside') return false;
         if (command === 'connection_info') return { endpoint: 'Fixture transport', deviceId: self, publicKey: '', pending, nativeSidebar: false };
         if (command === 'query') {
           if (scenario === 'offline' || (scenario === 'disconnect' && failed)) throw new Error('Offline fixture: cannot reach server');

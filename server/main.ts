@@ -6,13 +6,17 @@ import { httpServer } from './gateway/http.js';
 import { Notifications } from './notifier/apns.js';
 import type { APNsConfig } from './notifier/apns.js';
 import { InferenceConfiguration } from './models/inference.js';
+import { WorkerClient } from './pi-worker/client.js';
 const root = resolve(process.env.OUTPOST_DATA ?? '.outpost');
 const db = new Ledger(join(root,'ledger.sqlite'));
 const roles = process.env.OUTPOST_ROLES_FILE ? JSON.parse(readFileSync(process.env.OUTPOST_ROLES_FILE,'utf8')) as unknown : undefined;
 const inference = process.env.OUTPOST_OLLAMA_MODEL ? InferenceConfiguration.parse({ baseUrl: process.env.OUTPOST_OLLAMA_BASE_URL ?? 'http://127.0.0.1:11434/v1',model: process.env.OUTPOST_OLLAMA_MODEL }) : undefined;
 const hostToken = process.env.OUTPOST_HOST_TOKEN?.trim();
 const hosts = hostToken && process.env.OUTPOST_HOST_MAIN && process.env.OUTPOST_HOST_WORKER ? { token: hostToken,endpoints: { surajhomeserver: process.env.OUTPOST_HOST_MAIN,surajhomeserver2: process.env.OUTPOST_HOST_WORKER } } : undefined;
+const worker = process.env.OUTPOST_PI_WORKER_URL ? new WorkerClient(process.env.OUTPOST_PI_WORKER_URL,
+  readFileSync(process.env.OUTPOST_PI_WORKER_TOKEN_FILE ?? '', 'utf8').trim()) : undefined;
 const coordinator = new Coordinator(db,root,{
+  ...(worker ? { worker } : {}),
   ...(process.env.OLLAMA_API_KEY ? { apiKey: process.env.OLLAMA_API_KEY } : {}),...(roles ? { roles } : {}),
   ...(inference ? { inference } : {}),...(hosts ? { hosts } : {}),
   ...(process.env.OUTPOST_BROWSER_PYTHON ? { browserPython: process.env.OUTPOST_BROWSER_PYTHON } : {}),

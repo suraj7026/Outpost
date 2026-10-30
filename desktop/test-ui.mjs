@@ -27,7 +27,9 @@ try {
     const page = await browser.newPage({ viewport: { width, height }, colorScheme: 'dark' });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.addInitScript(value => { window.__OUTPOST_RECORDED_PREVIEW__ = value; }, preview);
-    await page.goto(address); await page.getByText('Recorded server preview', { exact: true }).waitFor();
+    await page.goto(address); await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
+    if (width <= 900) await page.getByRole('button', { name: 'Show sidebar' }).click();
+    await page.getByRole('button', { name: /New task/ }).click();
     await page.getByRole('heading', { name: 'What should run next?' }).waitFor(); checks++;
     assert.equal(await page.locator('.session-row').count(), Math.min(8, preview.snapshot.records.filter(record => record.kind === 'task').length)); checks++;
     assert.equal(await page.getByRole('combobox', { name: 'Control mode', exact: true }).inputValue(), 'full_control'); checks++;
@@ -40,21 +42,23 @@ try {
       await page.getByRole('heading', { name: 'Execution evidence' }).waitFor(); checks++;
       await page.screenshot({ path: `${out}/task-${width}.png`, fullPage: true });
     }
-    if (width <= 590) await page.getByRole('button', { name: 'Toggle navigation' }).click();
-    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: 'Servers', exact: true }).click();
+    if (width <= 900) await page.getByRole('button', { name: 'Show sidebar' }).click();
+    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: 'Machines', exact: true }).click();
     await page.getByRole('heading', { name: 'Your servers' }).waitFor(); checks++;
     assert.equal(await page.locator('.server-row').count(), 2); checks++;
-    await page.getByRole('button', { name: 'Connection settings' }).click();
+    await page.getByRole('button', { name: 'Open connection settings', exact: true }).click();
     await page.getByRole('textbox', { name: 'Server URL' }).waitFor(); checks++;
     assert.equal(errors.length, 0, errors.join('\n')); checks++;
     await page.close();
   }
   const page = await browser.newPage({ viewport: { width: 1200, height: 800 }, colorScheme: 'light' });
   await page.addInitScript(value => { window.__OUTPOST_RECORDED_PREVIEW__ = value; }, preview);
-  await page.goto(address); await page.getByRole('heading', { name: 'What should run next?' }).waitFor();
+  await page.goto(address); await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
+  await page.getByRole('button', { name: /New task/ }).click();
+  await page.getByRole('heading', { name: 'What should run next?' }).waitFor();
   await page.screenshot({ path: `${out}/home-light.png` });
   const background = await page.locator('html').evaluate(element => getComputedStyle(element).backgroundColor);
-  assert.equal(background, 'rgb(250, 250, 250)'); checks++;
+  assert.equal(background, 'rgb(240, 241, 242)'); checks++;
   await page.getByRole('textbox', { name: 'Task goal' }).fill('Read-only preview must never dispatch a real command.');
   await page.getByRole('button', { name: 'Start task', exact: true }).click();
   await page.getByRole('alert').filter({ hasText: 'Read-only recorded preview' }).waitFor(); checks++;

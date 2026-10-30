@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { call, query, send, nativeApp, recordedPreview } from "./api";
+import { agentRequest, call, query, send, nativeApp, recordedPreview } from "./api";
+import type { Catalogue } from "./agent/types";
 import { Channel } from "@tauri-apps/api/core";
+import { ollamaCloudModels } from "./models";
 import { mergeRecords, overlayLive, type LiveFrame } from "./live";
 import type {
   ConnectionInfo,
@@ -20,6 +22,20 @@ export function useConnection() {
   const [info, setInfo] = useState<ConnectionInfo | null>(null);
   const [runtime, setRuntime] = useState<RuntimeInfo | null>(null);
   const [models, setModels] = useState<string[]>([]);
+  const [agentCatalogue, setAgentCatalogue] = useState<Catalogue | null>(null);
+  const catalogueRevision = useRef(0);
+  const refreshAgent = useCallback(async (network = false) => {
+    const revision = ++catalogueRevision.current;
+    try {
+      const value = await agentRequest<Catalogue>({ type: network ? 'refresh' : 'catalogue' });
+      if (value.protocolVersion !== 1) throw new Error('Server provider protocol requires a desktop update.');
+      if (revision === catalogueRevision.current) setAgentCatalogue(value);
+      return value;
+    } catch {
+      if (revision === catalogueRevision.current) setAgentCatalogue(null);
+      throw new Error('Provider catalogue unavailable. Refresh before selecting a model.');
+    }
+  }, []);
   const [connected, setConnected] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -45,14 +61,22 @@ export function useConnection() {
   const connect = useCallback(async () => {
     if (syncing.current) return;
     syncing.current = true;
+    setModels([]);
+    setRuntime(null);
+    setAgentCatalogue(null);
+    ++catalogueRevision.current;
     try {
       setInfo(await call<ConnectionInfo>("connection_info"));
       await refresh();
       setError("");
-      setRuntime(await query<RuntimeInfo>("runtime"));
+      const runtimeInfo = await query<RuntimeInfo>("runtime");
+      setRuntime(runtimeInfo);
       try {
-        const catalogue = await query<ModelCatalogue>("models");
-        setModels(catalogue.models);
+        if (runtimeInfo.piManagement && !recordedPreview()) await refreshAgent();
+        else {
+          const catalogue = await query<ModelCatalogue>("models");
+          setModels(ollamaCloudModels(catalogue.models));
+        }
       } catch (error) {
         setError(
           `Server connected, but the model catalogue is unavailable: ${String(error)}`,
@@ -64,7 +88,7 @@ export function useConnection() {
     } finally {
       syncing.current = false;
     }
-  }, [refresh]);
+  }, [refresh, refreshAgent]);
   useEffect(() => {
     void connect();
   }, [connect]);
@@ -240,6 +264,8 @@ export function useConnection() {
     info,
     runtime,
     models,
+    agentCatalogue,
+    refreshAgent,
     connected,
     busy,
     error,

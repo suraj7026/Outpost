@@ -1,0 +1,1262 @@
+{
+ "url": "http://127.0.0.1:4391/?design=studio",
+ "at": "2026-10-30T10:41:11.941Z",
+ "allow": [],
+ "viewports": [
+  {
+   "width": 1440,
+   "height": 900,
+   "load": "load",
+   "screens": 1,
+   "filled": [
+    0.58
+   ],
+   "motion": {
+    "elements": 0,
+    "css": 0,
+    "transitions": 0,
+    "scripted": 0,
+    "videos": 0,
+    "playingVideos": 0
+   },
+   "metrics": {
+    "viewport": {
+     "w": 1440,
+     "h": 900
+    },
+    "page": {
+     "height": 900,
+     "screens": 1,
+     "words": 237,
+     "img": 0,
+     "video": 0,
+     "canvas": 0,
+     "svg": 40,
+     "sections": 0,
+     "horizontalOverflow": 0,
+     "overflowCulprits": [],
+     "uiFragments": 0,
+     "uiAbuse": false,
+     "realPictures": 0,
+     "videoCount": 0,
+     "uiPictures": 0,
+     "pictureSamples": [],
+     "blendText": 0,
+     "sideScrollers": 0,
+     "brokenImages": [],
+     "emoji": [],
+     "videosNoPoster": 0
+    },
+    "hero": {
+     "text": "Nightly backup",
+     "words": 2,
+     "chars": 14,
+     "lines": 1,
+     "size": 13,
+     "vw": 0.9,
+     "font": "Geist",
+     "weight": 500,
+     "tracking": 0,
+     "leading": 1.2,
+     "top": 108,
+     "tag": "h1",
+     "kind": "heading",
+     "align": "left",
+     "position": "left"
+    },
+    "h1": {
+     "text": "Nightly backup",
+     "words": 2,
+     "lines": 1,
+     "size": 13,
+     "font": "Geist"
+    },
+    "headings": [],
+    "headingSummary": {
+     "count": 0,
+     "maxLines": 0,
+     "over2Lines": 0,
+     "statements": 0,
+     "centered": 0,
+     "medianWords": null,
+     "mixedFontHeadings": 0
+    },
+    "type": {
+     "families": [
+      {
+       "family": "Geist",
+       "share": 0.95,
+       "mono": false
+      },
+      {
+       "family": "ui-monospace",
+       "share": 0.05,
+       "mono": false
+      }
+     ],
+     "familyCount": 2,
+     "sizes": [
+      11,
+      12,
+      13,
+      14,
+      15,
+      19,
+      26
+     ],
+     "sizeCount": 7,
+     "notLoaded": [],
+     "body": {
+      "font": "Geist",
+      "size": 14,
+      "leading": 1.7,
+      "weight": 400,
+      "tracking": 0,
+      "contrast": 15.3
+     },
+     "measureChars": 82,
+     "max": {
+      "size": 26,
+      "vw": 1.8,
+      "font": "Geist",
+      "text": "The backup is healthy.The schedule isn’t"
+     },
+     "monoShare": 0.05,
+     "monoProseShare": 0,
+     "monoFamilies": [
+      "ui-monospace"
+     ],
+     "monoSamples": [],
+     "microLabels": 0,
+     "microLabelShare": 0,
+     "microSamples": [],
+     "upperShare": 0,
+     "centerShare": 0.1,
+     "smallText": 35
+    },
+    "eyebrows": [],
+    "numbered": [],
+    "color": {
+     "bodyBg": "#0f1011",
+     "bodyBgHsl": {
+      "h": 210,
+      "s": 0.06,
+      "l": 0.06
+     },
+     "dark": true,
+     "sectionBgs": [
+      {
+       "color": "#16171a",
+       "top": 84,
+       "hsl": {
+        "h": 225,
+        "s": 0.08,
+        "l": 0.09
+       }
+      }
+     ],
+     "textColors": [
+      {
+       "color": "#a1a3a8",
+       "share": 0.64
+      },
+      {
+       "color": "#ededef",
+       "share": 0.29
+      },
+      {
+       "color": "#d6b78b",
+       "share": 0.02
+      },
+      {
+       "color": "#d5aaa8",
+       "share": 0.02
+      },
+      {
+       "color": "#a3bda9",
+       "share": 0.02
+      }
+     ],
+     "button": {
+      "bg": "#1c1d21",
+      "hsl": {
+       "h": 228,
+       "s": 0.08,
+       "l": 0.12
+      },
+      "fg": "#ededef"
+     },
+     "lowContrast": []
+    },
+    "buttons": {
+     "count": 5,
+     "inHero": 5,
+     "radius": 8,
+     "height": 38,
+     "withShadow": 0,
+     "withGradient": 0,
+     "mono": 0,
+     "upper": 0,
+     "heroLabels": [
+      "New task ⌘ N",
+      "Nightly backup Infrastructure 09:41",
+      "Replay",
+      "Review change",
+      "Attach"
+     ]
+    },
+    "surfaces": {
+     "shadowStatic": 0,
+     "shadowOverlay": 0,
+     "shadowSamples": [],
+     "gradients": 0,
+     "scrims": 0,
+     "gradientSamples": [],
+     "gradientText": 0,
+     "hairlines": 4,
+     "hairlineSamples": [
+      "header.study-bar 1440px",
+      "header.task-header 1206px",
+      "div.evidence-tabs 256px",
+      "div.diff-note 256px"
+     ],
+     "outlinedBoxes": 1,
+     "dashed": 0,
+     "blurred": 0,
+     "roundedBoxes": 5,
+     "boxRadius": 14,
+     "squareMedia": 0,
+     "roundedMedia": 0,
+     "mediaRadius": 0,
+     "textShadow": 0,
+     "cardRows": []
+    },
+    "heroMedia": [],
+    "nav": {
+     "links": 1,
+     "fixed": false,
+     "height": 72,
+     "floatingPill": false,
+     "blur": false
+    },
+    "fontsLoaded": [
+     "geist"
+    ]
+   },
+   "layout": {
+    "viewport": {
+     "w": 1440,
+     "h": 900
+    },
+    "pageH": 900,
+    "margins": {
+     "left": 16,
+     "right": 36
+    },
+    "sections": [],
+    "gaps": [],
+    "h1s": [
+     {
+      "text": "Nightly backup",
+      "size": 13,
+      "top": 108,
+      "firstScreen": true
+     }
+    ],
+    "edgeText": [],
+    "edges": [
+     {
+      "x": 343,
+      "n": 3
+     },
+     {
+      "x": 361,
+      "n": 1
+     },
+     {
+      "x": 384,
+      "n": 1
+     },
+     {
+      "x": 1142,
+      "n": 1
+     }
+    ],
+    "leftBlocks": 6,
+    "bodySize": 14,
+    "stage": false,
+    "explains": false,
+    "slivers": [],
+    "voidShare": 0.07,
+    "voidBox": {
+     "x": 1020,
+     "y": 120,
+     "w": 120,
+     "h": 780
+    }
+   },
+   "app": {
+    "viewport": {
+     "w": 1440,
+     "h": 900
+    },
+    "dark": true,
+    "ground": "#0f1011",
+    "sidebar": null,
+    "topbar": {
+     "h": 72
+    },
+    "canvas": {
+     "left": 16,
+     "right": 36
+    },
+    "hero": {
+     "text": "Nightly backup",
+     "words": 2,
+     "chars": 14,
+     "lines": 1,
+     "size": 13,
+     "vw": 0.9,
+     "font": "Geist",
+     "weight": 500,
+     "tracking": 0,
+     "leading": 1.2,
+     "top": 108,
+     "tag": "h1",
+     "kind": "heading",
+     "align": "left",
+     "position": "left"
+    },
+    "charts": 0,
+    "layout": {
+     "panels": 1,
+     "firstScreen": 1,
+     "ragged": [],
+     "voids": []
+    },
+    "tiles": 0,
+    "panels": {
+     "count": 5,
+     "radii": [
+      [
+       14,
+       2
+      ],
+      [
+       20,
+       1
+      ],
+      [
+       16,
+       1
+      ],
+      [
+       8,
+       1
+      ]
+     ],
+     "heavyBorders": 0,
+     "borderSamples": [],
+     "heavyShadows": 0,
+     "softShadows": 0,
+     "shadowSamples": [],
+     "glass": 0
+    },
+    "chips": {
+     "count": 0,
+     "hues": 0,
+     "samples": []
+    },
+    "numbers": {
+     "cells": 0,
+     "leftAligned": 0,
+     "figures": 2,
+     "tabularShare": 0,
+     "kpiMax": 12
+    },
+    "rows": null,
+    "chartHues": 0,
+    "placeholders": [],
+    "type": {
+     "under13": 0.63,
+     "tiny": 0,
+     "tinySamples": [],
+     "sizes": [
+      11,
+      12,
+      13,
+      14,
+      15,
+      19,
+      26
+     ]
+    },
+    "title": {
+     "text": "Nightly backup",
+     "size": 13,
+     "top": 108
+    },
+    "colourShare": 0
+   },
+   "consoleErrors": []
+  },
+  {
+   "width": 768,
+   "height": 1024,
+   "load": "load",
+   "screens": 1,
+   "filled": [
+    0.58
+   ],
+   "motion": {
+    "elements": 0,
+    "css": 0,
+    "transitions": 0,
+    "scripted": 0,
+    "videos": 0,
+    "playingVideos": 0
+   },
+   "metrics": {
+    "viewport": {
+     "w": 768,
+     "h": 1024
+    },
+    "page": {
+     "height": 1024,
+     "screens": 1,
+     "words": 197,
+     "img": 0,
+     "video": 0,
+     "canvas": 0,
+     "svg": 40,
+     "sections": 0,
+     "horizontalOverflow": 0,
+     "overflowCulprits": [],
+     "uiFragments": 0,
+     "uiAbuse": false,
+     "realPictures": 0,
+     "videoCount": 0,
+     "uiPictures": 0,
+     "pictureSamples": [],
+     "blendText": 0,
+     "sideScrollers": 0,
+     "brokenImages": [],
+     "emoji": [],
+     "videosNoPoster": 0
+    },
+    "hero": {
+     "text": "Nightly backup",
+     "words": 2,
+     "chars": 14,
+     "lines": 1,
+     "size": 13,
+     "vw": 1.7,
+     "font": "Geist",
+     "weight": 500,
+     "tracking": 0,
+     "leading": 1.2,
+     "top": 136,
+     "tag": "h1",
+     "kind": "heading",
+     "align": "left",
+     "position": "left"
+    },
+    "h1": {
+     "text": "Nightly backup",
+     "words": 2,
+     "lines": 1,
+     "size": 13,
+     "font": "Geist"
+    },
+    "headings": [],
+    "headingSummary": {
+     "count": 0,
+     "maxLines": 0,
+     "over2Lines": 0,
+     "statements": 0,
+     "centered": 0,
+     "medianWords": null,
+     "mixedFontHeadings": 0
+    },
+    "type": {
+     "families": [
+      {
+       "family": "Geist",
+       "share": 0.94,
+       "mono": false
+      },
+      {
+       "family": "ui-monospace",
+       "share": 0.06,
+       "mono": false
+      }
+     ],
+     "familyCount": 2,
+     "sizes": [
+      11,
+      12,
+      13,
+      14,
+      15,
+      24
+     ],
+     "sizeCount": 6,
+     "notLoaded": [],
+     "body": {
+      "font": "Geist",
+      "size": 14,
+      "leading": 1.7,
+      "weight": 400,
+      "tracking": 0,
+      "contrast": 15.3
+     },
+     "measureChars": 61,
+     "max": {
+      "size": 24,
+      "vw": 3.1,
+      "font": "Geist",
+      "text": "The backup is healthy.The schedule isn’t"
+     },
+     "monoShare": 0.06,
+     "monoProseShare": 0,
+     "monoFamilies": [
+      "ui-monospace"
+     ],
+     "monoSamples": [],
+     "microLabels": 0,
+     "microLabelShare": 0,
+     "microSamples": [],
+     "upperShare": 0,
+     "centerShare": 0.09,
+     "smallText": 23
+    },
+    "eyebrows": [],
+    "numbered": [],
+    "color": {
+     "bodyBg": "#0f1011",
+     "bodyBgHsl": {
+      "h": 210,
+      "s": 0.06,
+      "l": 0.06
+     },
+     "dark": true,
+     "sectionBgs": [
+      {
+       "color": "#16171a",
+       "top": 112,
+       "hsl": {
+        "h": 225,
+        "s": 0.08,
+        "l": 0.09
+       }
+      }
+     ],
+     "textColors": [
+      {
+       "color": "#a1a3a8",
+       "share": 0.64
+      },
+      {
+       "color": "#ededef",
+       "share": 0.28
+      },
+      {
+       "color": "#d6b78b",
+       "share": 0.02
+      },
+      {
+       "color": "#d5aaa8",
+       "share": 0.02
+      },
+      {
+       "color": "#a3bda9",
+       "share": 0.02
+      }
+     ],
+     "button": {
+      "bg": "#ededef",
+      "hsl": {
+       "h": 240,
+       "s": 0.06,
+       "l": 0.93
+      },
+      "fg": "#0f1011"
+     },
+     "lowContrast": []
+    },
+    "buttons": {
+     "count": 3,
+     "inHero": 3,
+     "radius": 8,
+     "height": 30,
+     "withShadow": 0,
+     "withGradient": 0,
+     "mono": 0,
+     "upper": 0,
+     "heroLabels": [
+      "Replay",
+      "Review change",
+      "Attach"
+     ]
+    },
+    "surfaces": {
+     "shadowStatic": 0,
+     "shadowOverlay": 0,
+     "shadowSamples": [],
+     "gradients": 0,
+     "scrims": 0,
+     "gradientSamples": [],
+     "gradientText": 0,
+     "hairlines": 6,
+     "hairlineSamples": [
+      "header.study-bar 768px",
+      "header.task-header 752px",
+      "div 424px",
+      "div 424px",
+      "div.evidence-tabs 240px"
+     ],
+     "outlinedBoxes": 1,
+     "dashed": 0,
+     "blurred": 0,
+     "roundedBoxes": 5,
+     "boxRadius": 14,
+     "squareMedia": 0,
+     "roundedMedia": 0,
+     "mediaRadius": 0,
+     "textShadow": 0,
+     "cardRows": []
+    },
+    "heroMedia": [],
+    "nav": {
+     "links": 1,
+     "fixed": false,
+     "height": 104,
+     "floatingPill": false,
+     "blur": false
+    },
+    "fontsLoaded": [
+     "geist"
+    ]
+   },
+   "layout": {
+    "viewport": {
+     "w": 768,
+     "h": 1024
+    },
+    "pageH": 1024,
+    "margins": {
+     "left": 20,
+     "right": 20
+    },
+    "sections": [],
+    "gaps": [],
+    "h1s": [
+     {
+      "text": "Nightly backup",
+      "size": 13,
+      "top": 136,
+      "firstScreen": true
+     }
+    ],
+    "edgeText": [],
+    "edges": [
+     {
+      "x": 32,
+      "n": 3
+     },
+     {
+      "x": 48,
+      "n": 1
+     },
+     {
+      "x": 73,
+      "n": 1
+     },
+     {
+      "x": 494,
+      "n": 1
+     }
+    ],
+    "leftBlocks": 6,
+    "bodySize": 14,
+    "stage": false,
+    "explains": false,
+    "slivers": [],
+    "voidShare": 0,
+    "voidBox": null
+   },
+   "app": {
+    "viewport": {
+     "w": 768,
+     "h": 1024
+    },
+    "dark": true,
+    "ground": "#0f1011",
+    "sidebar": null,
+    "topbar": null,
+    "canvas": {
+     "left": 20,
+     "right": 20
+    },
+    "hero": {
+     "text": "Nightly backup",
+     "words": 2,
+     "chars": 14,
+     "lines": 1,
+     "size": 13,
+     "vw": 1.7,
+     "font": "Geist",
+     "weight": 500,
+     "tracking": 0,
+     "leading": 1.2,
+     "top": 136,
+     "tag": "h1",
+     "kind": "heading",
+     "align": "left",
+     "position": "left"
+    },
+    "charts": 0,
+    "layout": {
+     "panels": 1,
+     "firstScreen": 1,
+     "ragged": [],
+     "voids": []
+    },
+    "tiles": 0,
+    "panels": {
+     "count": 5,
+     "radii": [
+      [
+       14,
+       2
+      ],
+      [
+       20,
+       1
+      ],
+      [
+       16,
+       1
+      ],
+      [
+       8,
+       1
+      ]
+     ],
+     "heavyBorders": 0,
+     "borderSamples": [],
+     "heavyShadows": 0,
+     "softShadows": 0,
+     "shadowSamples": [],
+     "glass": 0
+    },
+    "chips": {
+     "count": 0,
+     "hues": 0,
+     "samples": []
+    },
+    "numbers": {
+     "cells": 0,
+     "leftAligned": 0,
+     "figures": 2,
+     "tabularShare": 0,
+     "kpiMax": 12
+    },
+    "rows": null,
+    "chartHues": 0,
+    "placeholders": [],
+    "type": {
+     "under13": 0.63,
+     "tiny": 0,
+     "tinySamples": [],
+     "sizes": [
+      11,
+      12,
+      13,
+      14,
+      15,
+      19,
+      24
+     ]
+    },
+    "title": {
+     "text": "Nightly backup",
+     "size": 13,
+     "top": 136
+    },
+    "colourShare": 0
+   },
+   "consoleErrors": []
+  },
+  {
+   "width": 390,
+   "height": 844,
+   "load": "load",
+   "screens": 2,
+   "filled": [
+    0.79,
+    0.63
+   ],
+   "motion": {
+    "elements": 0,
+    "css": 0,
+    "transitions": 0,
+    "scripted": 0,
+    "videos": 0,
+    "playingVideos": 0
+   },
+   "metrics": {
+    "viewport": {
+     "w": 390,
+     "h": 844
+    },
+    "page": {
+     "height": 860,
+     "screens": 1,
+     "words": 135,
+     "img": 0,
+     "video": 0,
+     "canvas": 0,
+     "svg": 40,
+     "sections": 0,
+     "horizontalOverflow": 0,
+     "overflowCulprits": [],
+     "uiFragments": 0,
+     "uiAbuse": false,
+     "realPictures": 0,
+     "videoCount": 0,
+     "uiPictures": 0,
+     "pictureSamples": [],
+     "blendText": 0,
+     "sideScrollers": 0,
+     "brokenImages": [],
+     "emoji": [],
+     "videosNoPoster": 0
+    },
+    "hero": {
+     "text": "Nightly backup",
+     "words": 2,
+     "chars": 14,
+     "lines": 1,
+     "size": 12,
+     "vw": 3.1,
+     "font": "Geist",
+     "weight": 500,
+     "tracking": 0,
+     "leading": 1.2,
+     "top": 125,
+     "tag": "h1",
+     "kind": "heading",
+     "align": "left",
+     "position": "left"
+    },
+    "h1": {
+     "text": "Nightly backup",
+     "words": 2,
+     "lines": 1,
+     "size": 12,
+     "font": "Geist"
+    },
+    "headings": [
+     {
+      "text": "The backup is healthy. The schedule isn’t.",
+      "words": 7,
+      "chars": 42,
+      "lines": 2,
+      "size": 25,
+      "vw": 6.4,
+      "font": "Geist",
+      "weight": 500,
+      "tracking": -0.032,
+      "leading": 1.25,
+      "upper": false,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "center",
+      "widthRatio": 0.9,
+      "top": 348,
+      "tag": "h2",
+      "kind": "heading"
+     }
+    ],
+    "headingSummary": {
+     "count": 1,
+     "maxLines": 2,
+     "over2Lines": 0,
+     "statements": 0,
+     "centered": 0,
+     "medianWords": null,
+     "mixedFontHeadings": 0
+    },
+    "type": {
+     "families": [
+      {
+       "family": "Geist",
+       "share": 1,
+       "mono": false
+      }
+     ],
+     "familyCount": 1,
+     "sizes": [
+      11,
+      12,
+      13,
+      14,
+      15,
+      25
+     ],
+     "sizeCount": 6,
+     "notLoaded": [],
+     "body": {
+      "font": "Geist",
+      "size": 13,
+      "leading": 1.7,
+      "weight": 400,
+      "tracking": 0,
+      "contrast": 15.3
+     },
+     "measureChars": 50,
+     "max": {
+      "size": 25,
+      "vw": 6.4,
+      "font": "Geist",
+      "text": "The backup is healthy.The schedule isn’t"
+     },
+     "monoShare": 0,
+     "monoProseShare": 0,
+     "monoFamilies": [],
+     "monoSamples": [],
+     "microLabels": 0,
+     "microLabelShare": 0,
+     "microSamples": [],
+     "upperShare": 0,
+     "centerShare": 0.1,
+     "smallText": 14
+    },
+    "eyebrows": [
+     {
+      "text": "Outpost",
+      "above": "The backup is healthy. The schedule isn’",
+      "upper": false,
+      "tracked": false,
+      "mono": false,
+      "pill": false,
+      "size": 12,
+      "top": 305
+     }
+    ],
+    "numbered": [],
+    "color": {
+     "bodyBg": "#0f1011",
+     "bodyBgHsl": {
+      "h": 210,
+      "s": 0.06,
+      "l": 0.06
+     },
+     "dark": true,
+     "sectionBgs": [
+      {
+       "color": "#16171a",
+       "top": 104,
+       "hsl": {
+        "h": 225,
+        "s": 0.08,
+        "l": 0.09
+       }
+      }
+     ],
+     "textColors": [
+      {
+       "color": "#a1a3a8",
+       "share": 0.65
+      },
+      {
+       "color": "#ededef",
+       "share": 0.33
+      },
+      {
+       "color": "#0f1011",
+       "share": 0.02
+      },
+      {
+       "color": "#999ca2",
+       "share": 0
+      }
+     ],
+     "button": {
+      "bg": "#ededef",
+      "hsl": {
+       "h": 240,
+       "s": 0.06,
+       "l": 0.93
+      },
+      "fg": "#0f1011"
+     },
+     "lowContrast": []
+    },
+    "buttons": {
+     "count": 2,
+     "inHero": 2,
+     "radius": 8,
+     "height": 30,
+     "withShadow": 0,
+     "withGradient": 0,
+     "mono": 0,
+     "upper": 0,
+     "heroLabels": [
+      "Replay",
+      "Review change"
+     ]
+    },
+    "surfaces": {
+     "shadowStatic": 0,
+     "shadowOverlay": 0,
+     "shadowSamples": [],
+     "gradients": 0,
+     "scrims": 0,
+     "gradientSamples": [],
+     "gradientText": 0,
+     "hairlines": 4,
+     "hairlineSamples": [
+      "header.study-bar 390px",
+      "header.task-header 390px",
+      "div 350px",
+      "div 350px"
+     ],
+     "outlinedBoxes": 1,
+     "dashed": 0,
+     "blurred": 0,
+     "roundedBoxes": 2,
+     "boxRadius": 12,
+     "squareMedia": 0,
+     "roundedMedia": 0,
+     "mediaRadius": 0,
+     "textShadow": 0,
+     "cardRows": []
+    },
+    "heroMedia": [],
+    "nav": {
+     "links": 1,
+     "fixed": false,
+     "height": 104,
+     "floatingPill": false,
+     "blur": false
+    },
+    "fontsLoaded": [
+     "geist"
+    ]
+   },
+   "layout": {
+    "viewport": {
+     "w": 390,
+     "h": 844
+    },
+    "pageH": 860,
+    "margins": {
+     "left": 16,
+     "right": 16
+    },
+    "sections": [
+     {
+      "sel": "div.findings",
+      "tag": "div",
+      "top": 518,
+      "height": 120,
+      "words": 13,
+      "media": 0,
+      "middle": 144,
+      "heading": null,
+      "left": 47,
+      "right": 20,
+      "textLeft": 47,
+      "textRight": 20,
+      "fullBleed": false,
+      "footer": false,
+      "hero": false,
+      "continues": false,
+      "pinned": false
+     },
+     {
+      "sel": "div.decision",
+      "tag": "div",
+      "top": 729,
+      "height": 162,
+      "words": 0,
+      "media": 0,
+      "middle": 0,
+      "heading": null,
+      "left": 232,
+      "right": 36,
+      "textLeft": null,
+      "textRight": null,
+      "fullBleed": false,
+      "footer": true,
+      "hero": false,
+      "continues": false,
+      "pinned": false
+     }
+    ],
+    "gaps": [],
+    "h1s": [
+     {
+      "text": "Nightly backup",
+      "size": 12,
+      "top": 125,
+      "firstScreen": true
+     }
+    ],
+    "edgeText": [],
+    "edges": [
+     {
+      "x": 20,
+      "n": 3
+     }
+    ],
+    "leftBlocks": 3,
+    "bodySize": 13,
+    "stage": false,
+    "explains": false,
+    "slivers": [],
+    "voidShare": 0,
+    "voidBox": null
+   },
+   "app": {
+    "viewport": {
+     "w": 390,
+     "h": 844
+    },
+    "dark": true,
+    "ground": "#0f1011",
+    "sidebar": null,
+    "topbar": null,
+    "canvas": {
+     "left": 16,
+     "right": 16
+    },
+    "hero": {
+     "text": "Nightly backup",
+     "words": 2,
+     "chars": 14,
+     "lines": 1,
+     "size": 12,
+     "vw": 3.1,
+     "font": "Geist",
+     "weight": 500,
+     "tracking": 0,
+     "leading": 1.2,
+     "top": 125,
+     "tag": "h1",
+     "kind": "heading",
+     "align": "left",
+     "position": "left"
+    },
+    "charts": 0,
+    "layout": {
+     "panels": 2,
+     "firstScreen": 2,
+     "ragged": [],
+     "voids": []
+    },
+    "tiles": 0,
+    "panels": {
+     "count": 2,
+     "radii": [
+      [
+       12,
+       1
+      ],
+      [
+       16,
+       1
+      ]
+     ],
+     "heavyBorders": 0,
+     "borderSamples": [],
+     "heavyShadows": 0,
+     "softShadows": 0,
+     "shadowSamples": [],
+     "glass": 0
+    },
+    "chips": {
+     "count": 0,
+     "hues": 0,
+     "samples": []
+    },
+    "numbers": {
+     "cells": 0,
+     "leftAligned": 0,
+     "figures": 1,
+     "tabularShare": 0,
+     "kpiMax": 12
+    },
+    "rows": null,
+    "chartHues": 0,
+    "placeholders": [],
+    "type": {
+     "under13": 0.62,
+     "tiny": 0,
+     "tinySamples": [],
+     "sizes": [
+      11,
+      12,
+      13,
+      14,
+      15,
+      17,
+      25
+     ]
+    },
+    "title": {
+     "text": "Nightly backup",
+     "size": 12,
+     "top": 125
+    },
+    "colourShare": 0
+   },
+   "consoleErrors": []
+  }
+ ],
+ "findings": [
+  {
+   "level": "WARN",
+   "id": "tiny-text",
+   "width": 1440,
+   "message": "63% of the text is under 13px.",
+   "fix": "Data and labels read at 13–14px; keep 11–12px for sublines and axis ticks.",
+   "alsoAt": [
+    768,
+    390
+   ]
+  }
+ ],
+ "images": [
+  {
+   "viewport": "desktop",
+   "width": 1440,
+   "fold": "/Users/sudarshanrajagopalan/Developer/Outpost/mock/graphite-studies/review/studio/desktop-fold.jpg",
+   "pages": [
+    "/Users/sudarshanrajagopalan/Developer/Outpost/mock/graphite-studies/review/studio/desktop-page-01.jpg"
+   ],
+   "film": []
+  },
+  {
+   "viewport": "tablet",
+   "width": 768,
+   "fold": "/Users/sudarshanrajagopalan/Developer/Outpost/mock/graphite-studies/review/studio/tablet-fold.jpg",
+   "pages": [
+    "/Users/sudarshanrajagopalan/Developer/Outpost/mock/graphite-studies/review/studio/tablet-page-01.jpg"
+   ],
+   "film": []
+  },
+  {
+   "viewport": "mobile",
+   "width": 390,
+   "fold": "/Users/sudarshanrajagopalan/Developer/Outpost/mock/graphite-studies/review/studio/mobile-fold.jpg",
+   "pages": [
+    "/Users/sudarshanrajagopalan/Developer/Outpost/mock/graphite-studies/review/studio/mobile-page-01.jpg"
+   ],
+   "film": []
+  }
+ ]
+}

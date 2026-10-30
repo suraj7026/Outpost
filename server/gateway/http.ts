@@ -26,6 +26,7 @@ export function httpServer(coordinator: Coordinator, pairingToken: string) {
       if (req.url === '/v1/stream') { coordinator.live.serve(res,parsed.deviceId,publicKinds); return; }
       if (req.url === '/v1/commands') res.end(JSON.stringify(coordinator.command(parsed)));
       else if (req.url === '/v1/query') res.end(JSON.stringify(await coordinator.query(parsed.type,parsed.payload)));
+      else if (req.url === '/v1/agent') res.end(JSON.stringify(await coordinator.agentRequest(parsed.deviceId,parsed.payload)));
       else if (req.url === '/v1/artifact') {
         const key = z.string().parse(parsed.payload.artifactId), artifact = coordinator.db.need('artifact',key), data = coordinator.artifacts.read(key);
         res.setHeader('content-type','application/octet-stream'); res.setHeader('content-disposition',`attachment; filename*=UTF-8''${encodeURIComponent(String(artifact.data.name))}`); res.end(data);
