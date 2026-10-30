@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Local Outpost window; signed server requests and native navigation only","local":true,"windows":["main"],"permissions":["core:default"]}}

@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: outpost-private-services
+  namespace: pi-workspace
+spec:
+  podSelector:
+    matchLabels:
+      app: pi-workspace
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 192.168.1.37/32
+      ports:
+        - {protocol: TCP, port: 11434}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: outpost-hosts
+      ports:
+        - {protocol: TCP, port: 4319}

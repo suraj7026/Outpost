@@ -1,0 +1,43 @@
+{
+  "spec": {
+    "template": {
+      "spec": {
+        "containers": [
+          {
+            "name": "workspace",
+            "resources": {
+              "requests": { "cpu": "250m", "memory": "1Gi", "ephemeral-storage": "1Gi" },
+              "limits": { "cpu": "2", "memory": "4Gi", "ephemeral-storage": "8Gi" }
+            }
+          },
+          {
+            "name": "coordinator",
+            "image": "docker.io/library/homelab-pi-workspace:1.4.0-1",
+            "imagePullPolicy": "Never",
+            "command": ["/usr/bin/tini", "--", "node", "--import", "/home/node/outpost-runtime/node_modules/tsx/dist/loader.mjs", "/home/node/outpost-runtime/server/main.ts"],
+            "workingDir": "/home/node/outpost-runtime",
+            "env": [
+              { "name": "OUTPOST_DATA", "value": "/home/node/.outpost" },
+              { "name": "OUTPOST_OLLAMA_BASE_URL", "value": "http://192.168.1.37:11434/v1" },
+              { "name": "OUTPOST_OLLAMA_MODEL", "value": "glm-5.3-flash:cloud" },
+              { "name": "OUTPOST_FULL_CONTROL", "value": "true" },
+              { "name": "OUTPOST_BROWSER_PYTHON", "value": "/home/node/server/browser-use/.venv/bin/python" },
+              { "name": "OUTPOST_HOST_MAIN", "value": "http://host-main.outpost-hosts.svc.cluster.local:4319" },
+              { "name": "OUTPOST_HOST_WORKER", "value": "http://host-worker.outpost-hosts.svc.cluster.local:4319" },
+              { "name": "OUTPOST_HOST_TOKEN", "valueFrom": { "secretKeyRef": { "name": "outpost-runtime", "key": "host-token" } } },
+              { "name": "OUTPOST_PAIRING_TOKEN", "valueFrom": { "secretKeyRef": { "name": "outpost-runtime", "key": "pairing-token" } } },
+              { "name": "ANONYMIZED_TELEMETRY", "value": "false" }
+            ],
+            "securityContext": { "allowPrivilegeEscalation": false, "readOnlyRootFilesystem": true, "capabilities": { "drop": ["ALL"] } },
+            "resources": {
+              "requests": { "cpu": "2", "memory": "4Gi", "ephemeral-storage": "1Gi" },
+              "limits": { "cpu": "4", "memory": "8Gi", "ephemeral-storage": "8Gi" }
+            },
+            "readinessProbe": { "exec": { "command": ["node", "-e", "fetch('http://127.0.0.1:4318/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"] }, "periodSeconds": 5, "timeoutSeconds": 4 },
+            "volumeMounts": [ { "name": "home", "mountPath": "/home/node" }, { "name": "tmp", "mountPath": "/tmp" }, { "name": "shm", "mountPath": "/dev/shm" } ]
+          }
+        ]
+      }
+    }
+  }
+}

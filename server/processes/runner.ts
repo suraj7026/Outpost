@@ -28,10 +28,10 @@ export async function execute(argv: string[], cwd: string, signal: AbortSignal, 
     child.on('close',(exitCode,exitSignal) => { kill('SIGKILL'); cleanup(); resolve({ exitCode,signal: exitSignal,stdout,stderr,timedOut,cancelled,outputLimitReached }); });
   });
 }
-export function registerCommands(gate: Gate, workspace: Workspace, executables: Set<string>) {
+export function registerCommands(gate: Gate, workspace: Workspace, executables: Set<string>, unrestricted = false) {
   gate.register('command.run',{ version: 1,effects: ['unknown'],parse: value => CommandInput.parse(value),target: args => `workspace:${String(args.cwd)}`,
     execute: async (args,signal) => {
-      const input = CommandInput.parse(args); requireThat(executables.has(input.argv[0]!), 'executable_not_enrolled');
+      const input = CommandInput.parse(args); requireThat(unrestricted || executables.has(input.argv[0]!), 'executable_not_enrolled');
       const cwd = input.cwd === '.' ? workspace.root : workspace.path(input.cwd);
       return { ...await execute(input.argv,cwd,signal,input.timeoutMs) };
     } });

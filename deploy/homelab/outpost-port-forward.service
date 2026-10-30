@@ -1,0 +1,20 @@
+[Unit]
+Description=Private loopback access to Outpost's Kubernetes coordinator
+After=k3s.service network-online.target
+Wants=network-online.target
+Requires=k3s.service
+
+[Service]
+User=surajadmin
+Group=surajadmin
+Environment=KUBECONFIG=/home/surajadmin/.kube/config
+ExecStart=/usr/local/bin/kubectl --namespace outpost port-forward --address 127.0.0.1 deployment/outpost-coordinator 4318:4318
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target

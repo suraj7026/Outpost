@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="stylesheet" href="outpost.css"><script src="outpost.js"></script></helmet>
+<sc-if value="{{ pending }}" hint-placeholder-val="{{ true }}">
+  <div style="border:1px solid var(--border-strong);border-radius:10px;background:var(--surface);overflow:hidden;animation:o-fade 180ms ease-out">
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
+      <o-status kind="needs"></o-status>
+      <span style="font-size:13px;color:var(--text);font-weight:500">Approval required to run a command</span>
+      <div style="flex:1"></div>
+      <sc-if value="{{ hasSentTo }}" hint-placeholder-val="{{ true }}"><span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3)"><o-icon name="smartphone" size="14"></o-icon>{{ sentTo }}</span></sc-if>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;padding:14px">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-family:'Geist Mono',monospace;font-size:13px;color:var(--text)"><span style="color:var(--text-3)">$</span><span style="flex:1">{{ command }}</span><o-icon name="copy" size="14" style="color:var(--text-3)"></o-icon></div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--text-2)">
+        <span style="display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border:1px solid {{ riskBorder }};border-radius:999px;color:{{ riskColor }};font-weight:500;white-space:nowrap"><o-icon name="shield-alert" size="14"></o-icon>{{ risk }}</span>
+        <span>{{ reason }}</span>
+        <span style="color:var(--text-3)">·</span>
+        <span style="font-family:'Geist Mono',monospace;color:var(--text-3)">{{ cwd }}</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;padding:0 14px 14px">
+      <button onClick="{{ approve }}" style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;border:0;border-radius:6px;background:var(--ink);color:var(--on-ink);font-size:13px;font-weight:500;cursor:pointer;transition:opacity 120ms ease-out" style-hover="opacity:.86">Approve<kbd style="font-family:'Geist Mono',monospace;font-size:12px;opacity:.6">↵</kbd></button>
+      <button onClick="{{ deny }}" style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;border:1px solid var(--border-strong);border-radius:6px;background:transparent;color:var(--text);font-size:13px;font-weight:500;cursor:pointer;transition:background 120ms ease-out" style-hover="background:var(--ink-subtle)">Deny<kbd style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3)">Esc</kbd></button>
+      <button onClick="{{ always }}" style="display:flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:var(--text-2);font-size:13px;cursor:pointer;transition:background 120ms ease-out" style-hover="background:var(--ink-subtle);color:var(--text)">Always allow in this workspace</button>
+    </div>
+  </div>
+</sc-if>
+<sc-if value="{{ decided }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;align-items:center;gap:8px;min-height:30px;font-size:13px;color:var(--text-2);animation:o-fade 160ms ease-out">
+    <o-icon name="{{ dIcon }}" style="color:{{ dColor }}"></o-icon>
+    <span style="color:var(--text);font-weight:500">{{ dLabel }}</span>
+    <span style="font-family:'Geist Mono',monospace;font-size:12px">{{ command }}</span>
+    <span style="color:var(--text-3);font-size:12px">{{ dNote }}</span>
+  </div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:600,&quot;height&quot;:200},&quot;command&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;git push origin fix/filter-sync&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;cwd&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;~/storefront-web/.worktrees/fix-filter-sync&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;risk&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Medium risk&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;reason&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Pushes 4 commits to a remote branch&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;level&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;medium&quot;,&quot;high&quot;],&quot;default&quot;:&quot;medium&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;sentTo&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Also sent to iPhone&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;keys&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;onDecide&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(d:string)=&gt;void&quot;}}">
+class Component extends DCLogic {
+  state = { d: null };
+  componentDidMount() {
+    if (!this.props.keys) return;
+    this.k = e => {
+      if (this.state.d || /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+      if (e.key === 'Enter') this.decide('approved');
+      if (e.key === 'Escape') this.decide('denied');
+    };
+    addEventListener('keydown', this.k);
+  }
+  componentWillUnmount() { this.k && removeEventListener('keydown', this.k); }
+  decide(d) { this.setState({ d }); this.props.onDecide && this.props.onDecide(d); }
+  renderVals() {
+    const p = this.props, d = this.state.d, high = p.level === 'high';
+    const map = {
+      approved: ['check', 'var(--text-2)', 'Approved', 'from MacBook Pro · just now'],
+      always: ['check-check', 'var(--text-2)', 'Always allowed', 'in storefront-web · just now'],
+      denied: ['x', 'var(--danger)', 'Denied', 'just now']
+    }[d] || [];
+    return {
+      pending: !d, decided: !!d,
+      command: p.command || 'git push origin fix/filter-sync',
+      cwd: p.cwd || '~/storefront-web/.worktrees/fix-filter-sync',
+      risk: p.risk || 'Medium risk', reason: p.reason || 'Pushes 4 commits to a remote branch',
+      riskColor: high ? 'var(--danger)' : 'var(--text)', riskBorder: high ? 'var(--danger)' : 'var(--border-strong)',
+      sentTo: p.sentTo ?? 'Also sent to iPhone', hasSentTo: (p.sentTo ?? 'x') !== '',
+      dIcon: map[0], dColor: map[1], dLabel: map[2], dNote: map[3],
+      approve: () => this.decide('approved'), deny: () => this.decide('denied'), always: () => this.decide('always')
+    };
+  }
+}
+</script>
+</body>
+</html>

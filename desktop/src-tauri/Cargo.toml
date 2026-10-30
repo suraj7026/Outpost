@@ -1,0 +1,22 @@
+[package]
+name = "outpost-desktop"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+cc = "1"
+
+[dependencies]
+tauri = { version = "2.12", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+uuid = { version = "1", features = ["v4"] }
+base64 = "0.22"
+ed25519-dalek = "2"
+sha2 = "0.10"
+aes-gcm = "0.10"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3.7"

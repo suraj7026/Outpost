@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="stylesheet" href="outpost.css"><script src="outpost.js"></script><title>D4 · Cowork session</title></helmet>
+<div data-fit="1488" style="width:max-content;margin:0 auto;padding:8px 24px 32px;display:flex;flex-direction:column;gap:8px">
+  <dc-import name="ViewerBar" code="D4" label="Cowork session" prev="D3 Code Approval.dc.html" next="D5 Chat Session.dc.html" hint-size="1440px,44px"></dc-import>
+  <div style="width:1440px;height:900px;display:flex;background:var(--bg);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+    <dc-import name="Sidebar" active="q3" hint-size="264px,100%"></dc-import>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <header style="display:flex;align-items:center;gap:12px;height:52px;flex:none;padding:0 12px 0 20px;border-bottom:1px solid var(--border)">
+        <o-icon name="file-text" style="color:var(--text-3)"></o-icon>
+        <span style="font-size:14px;font-weight:600;white-space:nowrap">Draft Q3 board report</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-2);white-space:nowrap"><o-icon name="folder" size="14"></o-icon>finance-ops</span>
+        <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3)">openai / gpt-5</span>
+        <div style="flex:1"></div>
+        <o-status kind="running" label=""></o-status>
+        <span style="width:1px;height:20px;background:var(--border);margin:0 4px"></span>
+        <button style="display:flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:transparent;color:var(--text);font-size:13px;white-space:nowrap;cursor:pointer" style-hover="background:var(--ink-subtle)"><o-icon name="square"></o-icon>Stop<kbd style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3)">⌘.</kbd></button>
+      </header>
+      <div style="flex:1;min-height:0;display:flex">
+        <main style="flex:1;min-width:0;display:flex;flex-direction:column">
+          <div style="flex:1;overflow-y:auto;overflow-x:hidden;padding:24px 28px 16px;display:flex;flex-direction:column;gap:16px">
+            <div style="align-self:flex-end;max-width:88%;padding:10px 14px;background:var(--raised);border:1px solid var(--border);border-radius:10px;line-height:22px;text-wrap:pretty">Draft the Q3 board report from the finance-ops folder. Use the CRM export for bookings and the September close notes for revenue. Keep it to 12–15 pages, and give me a one-page summary in markdown.</div>
+            <p style="margin:0;line-height:22px">I'll reuse the Q2 report structure and pull numbers from the close workbook and CRM export.</p>
+            <div style="display:flex;flex-direction:column">
+              <dc-import name="ToolRow" icon="file-search" verb="Read" target="board/Q2_Board_Report.docx" result="16 pages" hint-size="100%,30px"></dc-import>
+              <dc-import name="ToolRow" icon="file-search" verb="Read" target="close/Sept_close_notes.md" hint-size="100%,30px"></dc-import>
+              <dc-import name="ToolRow" icon="sheet" verb="Analyzed" target="inputs/crm_export_2026-09-30.csv" result="1,284 rows" detail="{{ crmDetail }}" hint-size="100%,30px"></dc-import>
+            </div>
+            <p style="margin:0;line-height:22px;text-wrap:pretty">Bookings came in at $4.82M, 6% over plan. Net revenue retention is 118%, down from 121% in Q2, mostly from two mid-market downgrades. I built a reconciled pipeline workbook and drafted every section except the hiring plan, which needs the headcount sheet.</p>
+            <div style="display:flex;flex-direction:column">
+              <dc-import name="ToolRow" icon="sheet" verb="Wrote" target="outputs/pipeline.xlsx" result="3 sheets" hint-size="100%,30px"></dc-import>
+              <dc-import name="ToolRow" icon="file-text" verb="Wrote" target="outputs/Q3_Report.docx" result="14 pages" detail="{{ docDetail }}" hint-size="100%,30px"></dc-import>
+              <dc-import name="ToolRow" icon="file-code" verb="Writing" target="outputs/summary.md" status="running" hint-size="100%,30px"></dc-import>
+            </div>
+            <p style="margin:0;line-height:22px;text-wrap:pretty;animation:o-fade 160ms ease-out">The summary leads with bookings against plan, then retention, burn and runway at 31 months<span style="display:inline-block;width:7px;height:15px;margin-left:2px;vertical-align:-2px;background:var(--ink);animation:o-caret 1s steps(1) infinite"></span></p>
+          </div>
+          <div style="padding:0 28px 20px">
+            <dc-import name="Composer" workspace="finance-ops" model="openai / gpt-5" permission="Auto-edit" rows="{{ 1 }}" placeholder="Reply, or drop files to add context" hint-size="100%,96px"></dc-import>
+          </div>
+        </main>
+        <aside style="width:400px;flex:none;display:flex;flex-direction:column;border-left:1px solid var(--border);background:var(--surface);overflow:auto">
+          <div style="display:flex;flex-direction:column;gap:8px;padding:16px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px"><span style="font-weight:600">Outputs</span><span style="color:var(--text-3)">3</span><div style="flex:1"></div><button style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:var(--text-2);font-size:12px;cursor:pointer" style-hover="background:var(--ink-subtle);color:var(--text)"><o-icon name="download" size="14"></o-icon>Download all</button></div>
+            <sc-for list="{{ outputs }}" as="f" hint-placeholder-count="3">
+              <button onClick="{{ f.pick }}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid {{ f.border }};border-radius:10px;background:var(--bg);text-align:left;cursor:pointer;transition:border-color 120ms ease-out" style-hover="border-color:var(--border-strong)">
+                <span style="width:36px;height:36px;flex:none;border-radius:6px;border:1px solid var(--border);background:var(--raised);display:flex;align-items:center;justify-content:center;color:var(--text-2)"><o-icon name="{{ f.icon }}"></o-icon></span>
+                <div style="flex:1;display:flex;flex-direction:column;min-width:0"><span style="font-family:'Geist Mono',monospace;font-size:13px;color:var(--text)">{{ f.name }}</span><span style="font-size:12px;color:var(--text-3)">{{ f.meta }}</span></div>
+                <o-status kind="{{ f.status }}"></o-status>
+              </button>
+            </sc-for>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;padding:16px;border-top:1px solid var(--border)">
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:4px"><span style="font-weight:600">Workspace</span><span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3)">~/finance-ops</span></div>
+            <sc-for list="{{ tree }}" as="n" hint-placeholder-count="10">
+              <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 6px 0 {{ n.pad }};border-radius:6px;font-family:'Geist Mono',monospace;font-size:12px;color:{{ n.color }}" style-hover="background:var(--ink-subtle)">
+                <o-icon name="{{ n.icon }}" size="14" style="color:var(--text-3)"></o-icon><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ n.name }}</span><span style="color:var(--text-3)">{{ n.meta }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="padding:0 16px 16px">
+            <div onDragOver="{{ onDragOver }}" onDragLeave="{{ onDragLeave }}" onDrop="{{ onDrop }}" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:20px 16px;border:1px dashed {{ dropBorder }};border-radius:10px;background:{{ dropBg }};text-align:center;transition:background 120ms ease-out">
+              <o-icon name="upload" style="color:var(--text-2)"></o-icon>
+              <span style="font-size:13px">{{ dropLabel }}</span>
+              <span style="font-size:12px;color:var(--text-3)">or <span style="color:var(--text-2);text-decoration:underline">browse</span> · up to 200 MB per file</span>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { sel: 'Q3_Report.docx', over: false, dropped: [] };
+  renderVals() {
+    const s = this.state;
+    const outputs = [
+      ['file-text', 'Q3_Report.docx', 'Word document · 14 pages · 2 min ago', 'done'],
+      ['sheet', 'pipeline.xlsx', 'Spreadsheet · 3 sheets · 6 min ago', 'done'],
+      ['file-code', 'summary.md', 'Markdown · writing, 640 words so far', 'running']
+    ].map(([icon, name, meta, status]) => ({ icon, name, meta, status, border: s.sel === name ? 'var(--border-strong)' : 'var(--border)', pick: () => this.setState({ sel: name }) }));
+    const tree = [
+      [0, 'board/', 'folder', ''], [1, 'Q2_Board_Report.docx', 'file-text', '16 pp'],
+      [0, 'close/', 'folder', ''], [1, 'Sept_close_notes.md', 'file-code', '4 KB'], [1, 'close_workbook_sep.xlsx', 'sheet', '1.1 MB'],
+      [0, 'inputs/', 'folder', ''], [1, 'crm_export_2026-09-30.csv', 'file', '2.4 MB'],
+      ...s.dropped.map(n => [1, n, 'file', 'new']),
+      [0, 'outputs/', 'folder', ''], [1, 'Q3_Report.docx', 'file-text', 'new'], [1, 'pipeline.xlsx', 'sheet', 'new'], [1, 'summary.md', 'file-code', 'new'],
+      [0, 'templates/', 'folder', '']
+    ].map(([d, name, icon, meta]) => ({ name, icon, meta, pad: (6 + d * 16) + 'px', color: d === 0 ? 'var(--text)' : 'var(--text-2)' }));
+    return {
+      outputs, tree,
+      dropBorder: s.over ? 'var(--ink)' : 'var(--border-strong)', dropBg: s.over ? 'var(--ink-subtle)' : 'transparent',
+      dropLabel: s.over ? 'Release to upload to finance-ops/inputs' : 'Drop files to add them to finance-ops',
+      onDragOver: e => { e.preventDefault(); if (!s.over) this.setState({ over: true }); },
+      onDragLeave: () => this.setState({ over: false }),
+      onDrop: e => { e.preventDefault(); const names = [...(e.dataTransfer.files || [])].map(f => f.name); this.setState({ over: false, dropped: s.dropped.concat(names) }); },
+      crmDetail: ['Closed won · 212 deals · $4.82M', 'Open pipeline · 486 deals · $11.6M', 'Duplicates removed · 38'],
+      docDetail: ['1  Summary', '2  Bookings and pipeline', '3  Revenue and retention', '4  Burn and runway', '5  Product milestones', '6  Hiring plan · needs headcount sheet']
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "name": "outpost-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 1420",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 1421",
+    "tauri": "tauri",
+    "desktop:build": "bash build-mac.sh"
+  },
+  "dependencies": {
+    "@fontsource/geist": "5.3.0",
+    "@tauri-apps/api": "2.12.4",
+    "lucide-react": "1.63.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.4",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "5.9.3",
+    "vite": "8.3.5"
+  }
+}

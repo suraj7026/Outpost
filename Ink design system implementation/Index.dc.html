@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="stylesheet" href="outpost.css"><script src="outpost.js"></script><title>Outpost · All screens</title></helmet>
+<div style="max-width:1100px;margin:0 auto;padding:12px 32px 80px;display:flex;flex-direction:column;gap:40px">
+  <dc-import name="ViewerBar" code="" label="All screens" next="Design System.dc.html" hint-size="100%,44px"></dc-import>
+  <header style="display:flex;flex-direction:column;gap:10px;max-width:680px">
+    <div style="display:flex;align-items:center;gap:8px;font-weight:600"><span style="width:18px;height:18px;border:1.5px solid var(--ink);border-radius:5px;display:flex;align-items:center;justify-content:center"><span style="width:6px;height:6px;background:var(--ink);border-radius:1px"></span></span>Outpost</div>
+    <h1 style="margin:0;font-size:28px;line-height:36px;font-weight:600;letter-spacing:-0.01em">Screens</h1>
+    <p style="margin:0;color:var(--text-2);text-wrap:pretty">A model-agnostic agent workspace. Agents run on your own server; desktop and phone are thin clients. Every screen is clickable. Press T anywhere to switch between dark and light; the choice carries across screens.</p>
+  </header>
+  <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+    <section style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:baseline;gap:10px"><h2 style="margin:0;font-size:16px;font-weight:600">{{ g.name }}</h2><span style="font-size:13px;color:var(--text-3)">{{ g.note }}</span></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px">
+        <sc-for list="{{ g.items }}" as="s" hint-placeholder-count="4">
+          <a href="{{ s.href }}" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface);transition:border-color 120ms ease-out" style-hover="border-color:var(--border-strong)">
+            <span style="width:32px;height:32px;flex:none;border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-2)"><o-icon name="{{ s.icon }}"></o-icon></span>
+            <div style="flex:1;display:flex;flex-direction:column;min-width:0;line-height:18px"><span style="font-size:13px;font-weight:500">{{ s.title }}</span><span style="font-size:12px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.sub }}</span></div>
+            <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3)">{{ s.code }}</span>
+          </a>
+        </sc-for>
+      </div>
+    </section>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const m = a => a.map(([code, title, sub, icon, href]) => ({ code, title, sub, icon, href }));
+    return {
+      groups: [
+        { name: 'Foundation', note: 'Tokens, type, status system, components', items: m([['DS', 'Graphite / Ink', 'Design system and components', 'swatch-book', 'Design System.dc.html']]) },
+        { name: 'Desktop', note: '1440 × 900', items: m([
+          ['D1', 'Home', 'Composer, modes, recent sessions', 'house', 'D1 Home.dc.html'],
+          ['D2', 'Code session', 'Files, diff, terminal, preview', 'code-xml', 'D2 Code Session.dc.html'],
+          ['D3', 'Code session · approval', 'git push waiting on you', 'shield-alert', 'D3 Code Approval.dc.html'],
+          ['D4', 'Cowork session', 'Outputs, workspace, uploads', 'file-text', 'D4 Cowork Session.dc.html'],
+          ['D5', 'Chat session', 'Single 720px column', 'message-square', 'D5 Chat Session.dc.html'],
+          ['D6', 'Settings · Providers', 'Keys, models, defaults', 'cpu', 'D6 Settings Providers.dc.html'],
+          ['D7', 'Server & devices', 'Health, workspaces, pairing', 'server', 'D7 Server Devices.dc.html'],
+          ['D8', 'Connect to server', 'First run with fingerprint check', 'plug', 'D8 Connect.dc.html']]) },
+        { name: 'Mobile', note: '390 × 844', items: m([
+          ['M1', 'Sessions', 'Needs you, running, recent', 'layers', 'M1 Sessions.dc.html'],
+          ['M2', 'Live session', 'Streaming, continuity line', 'activity', 'M2 Live Session.dc.html'],
+          ['M3', 'Approval sheet', 'Large approve and deny targets', 'shield-alert', 'M3 Approval Sheet.dc.html'],
+          ['M4', 'Diff viewer', 'Read only, per file', 'git-compare', 'M4 Diff Viewer.dc.html'],
+          ['M5', 'Lock screen', 'Notification and Live Activity', 'lock', 'M5 Lock Screen.dc.html'],
+          ['M6', 'Pair device', 'QR scan and fingerprint', 'qr-code', 'M6 Pair Device.dc.html']]) }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

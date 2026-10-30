@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="stylesheet" href="outpost.css"><script src="outpost.js"></script><title>D5 · Chat session</title></helmet>
+<div data-fit="1488" style="width:max-content;margin:0 auto;padding:8px 24px 32px;display:flex;flex-direction:column;gap:8px">
+  <dc-import name="ViewerBar" code="D5" label="Chat session" prev="D4 Cowork Session.dc.html" next="D6 Settings Providers.dc.html" hint-size="1440px,44px"></dc-import>
+  <div style="width:1440px;height:900px;display:flex;background:var(--bg);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+    <dc-import name="Sidebar" active="queue" hint-size="264px,100%"></dc-import>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <header style="display:flex;align-items:center;gap:12px;height:52px;flex:none;padding:0 12px 0 20px;border-bottom:1px solid var(--border)">
+        <o-icon name="message-square" style="color:var(--text-3)"></o-icon>
+        <span style="font-size:14px;font-weight:600">Postgres vs Redis for job queues</span>
+        <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3)">google / gemini-2.5-pro</span>
+        <div style="flex:1"></div>
+        <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3)">6.2k tokens</span>
+        <button title="More" style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border:0;border-radius:6px;background:transparent;color:var(--text-2);cursor:pointer" style-hover="background:var(--ink-subtle)"><o-icon name="ellipsis"></o-icon></button>
+      </header>
+      <div style="flex:1;overflow-y:auto;overflow-x:hidden;padding:32px 32px 16px">
+        <div style="max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:18px;line-height:24px">
+          <div style="align-self:flex-end;max-width:88%;padding:10px 14px;background:var(--raised);border:1px solid var(--border);border-radius:10px;line-height:22px;text-wrap:pretty">We run about 40k background jobs a day (emails, image resizing, webhook retries). Already on Postgres 16. Is it worth adding Redis for the queue, or can Postgres handle it?</div>
+          <p style="margin:0;text-wrap:pretty">At 40k jobs a day, Postgres handles this comfortably. That is roughly one job every two seconds on average, and even a 20× burst stays well within what a single Postgres instance can dequeue with <span style="font-family:'Geist Mono',monospace;font-size:13px">SELECT … FOR UPDATE SKIP LOCKED</span>.</p>
+          <h3 style="margin:8px 0 0;font-size:16px;font-weight:600">When Postgres is the better choice</h3>
+          <ul style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;text-wrap:pretty">
+            <li>Jobs are enqueued in the same transaction as the data they act on, so you never send an email for an order that rolled back.</li>
+            <li>One fewer system to back up, monitor and fail over.</li>
+            <li>Libraries like pg-boss, Graphile Worker and River give you retries, scheduling and dead-letter handling.</li>
+          </ul>
+          <h3 style="margin:8px 0 0;font-size:16px;font-weight:600">When Redis starts to make sense</h3>
+          <ul style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;text-wrap:pretty">
+            <li>Sustained throughput above a few thousand jobs per second.</li>
+            <li>Sub-millisecond pickup latency matters more than durability.</li>
+            <li>You already run Redis for caching and are comfortable operating it.</li>
+          </ul>
+          <p style="margin:0">A minimal dequeue looks like this:</p>
+          <div style="border:1px solid var(--border);border-radius:10px;background:var(--surface);overflow:hidden">
+            <div style="display:flex;align-items:center;height:34px;padding:0 12px;border-bottom:1px solid var(--border);font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3)"><span style="flex:1">sql</span><o-icon name="copy" size="14"></o-icon></div>
+            <pre style="margin:0;padding:12px 14px;overflow-x:auto;font-family:'Geist Mono',monospace;font-size:12px;line-height:20px;color:var(--text)"><span style="font-weight:500">UPDATE</span> jobs <span style="font-weight:500">SET</span> status = <span style="color:var(--text-2)">'running'</span>, locked_at = now()
+<span style="font-weight:500">WHERE</span> id = (
+  <span style="font-weight:500">SELECT</span> id <span style="font-weight:500">FROM</span> jobs
+  <span style="font-weight:500">WHERE</span> status = <span style="color:var(--text-2)">'queued'</span> <span style="font-weight:500">AND</span> run_at &lt;= now()
+  <span style="font-weight:500">ORDER BY</span> priority, run_at
+  <span style="font-weight:500">FOR UPDATE SKIP LOCKED</span>
+  <span style="font-weight:500">LIMIT</span> 1
+)
+<span style="font-weight:500">RETURNING</span> *; <span style="color:var(--text-3)">-- add a partial index on (priority, run_at) WHERE status = 'queued'</span></pre>
+          </div>
+          <p style="margin:0;text-wrap:pretty">My recommendation: stay on Postgres, add the partial index, and vacuum the jobs table aggressively or partition it by day. Revisit Redis if p95 pickup latency passes 500 ms.</p>
+          <div style="display:flex;align-items:center;gap:2px;color:var(--text-3);margin-left:-6px">
+            <button title="Copy" style="display:flex;width:28px;height:28px;align-items:center;justify-content:center;border:0;border-radius:6px;background:transparent;color:inherit;cursor:pointer" style-hover="background:var(--ink-subtle);color:var(--text)"><o-icon name="copy"></o-icon></button>
+            <button title="Retry" style="display:flex;width:28px;height:28px;align-items:center;justify-content:center;border:0;border-radius:6px;background:transparent;color:inherit;cursor:pointer" style-hover="background:var(--ink-subtle);color:var(--text)"><o-icon name="refresh-cw"></o-icon></button>
+            <button title="Continue in Code" style="display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:inherit;font-size:12px;cursor:pointer" style-hover="background:var(--ink-subtle);color:var(--text)"><o-icon name="code-xml"></o-icon>Continue in Code</button>
+          </div>
+          <sc-for list="{{ sent }}" as="m" hint-placeholder-count="0">
+            <div style="align-self:flex-end;max-width:88%;padding:10px 14px;background:var(--raised);border:1px solid var(--border);border-radius:10px;line-height:22px;animation:o-fade 160ms ease-out">{{ m }}</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2)"><o-status kind="running"></o-status>Thinking</div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="padding:0 32px 20px">
+        <div style="max-width:720px;margin:0 auto">
+          <dc-import name="Composer" workspace="" model="google / gemini-2.5-pro" permission="Read only" rows="{{ 1 }}" placeholder="Reply" on-send="{{ onSend }}" hint-size="100%,96px"></dc-import>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { sent: [] };
+  renderVals() {
+    return { sent: this.state.sent, onSend: t => this.setState({ sent: this.state.sent.concat(t) }) };
+  }
+}
+</script>
+</body>
+</html>

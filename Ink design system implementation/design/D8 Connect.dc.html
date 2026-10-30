@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="stylesheet" href="outpost.css"><script src="outpost.js"></script><title>D8 · Connect to server</title></helmet>
+<div data-fit="1488" style="width:max-content;margin:0 auto;padding:8px 24px 32px;display:flex;flex-direction:column;gap:8px">
+  <dc-import name="ViewerBar" code="D8" label="Connect to server · first run" prev="D7 Server Devices.dc.html" next="M1 Sessions.dc.html" hint-size="1440px,44px"></dc-import>
+  <div style="width:1440px;height:900px;display:flex;flex-direction:column;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+    <div style="align-self:stretch;display:flex;align-items:center;gap:8px;height:52px;padding:0 20px;font-weight:600;font-size:14px"><span style="width:18px;height:18px;border:1.5px solid var(--ink);border-radius:5px;display:flex;align-items:center;justify-content:center"><span style="width:6px;height:6px;background:var(--ink);border-radius:1px"></span></span>Outpost</div>
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;width:440px;gap:24px;padding-bottom:52px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3)">
+        <sc-for list="{{ steps }}" as="st" hint-placeholder-count="3">
+          <span style="display:flex;align-items:center;gap:6px;color:{{ st.color }};font-weight:{{ st.w }}"><span style="width:18px;height:18px;border-radius:50%;border:1px solid {{ st.ring }};background:{{ st.fill }};color:{{ st.numColor }};display:flex;align-items:center;justify-content:center;font-family:'Geist Mono',monospace;font-size:12px">{{ st.n }}</span>{{ st.label }}</span>
+          <sc-if value="{{ st.sep }}"><span style="width:24px;height:1px;background:var(--border-strong)"></span></sc-if>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{ s1 }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:20px;animation:o-fade 160ms ease-out">
+          <div style="display:flex;flex-direction:column;gap:8px"><h1 style="margin:0;font-size:28px;line-height:36px;font-weight:600;letter-spacing:-0.01em">Connect to your server</h1><p style="margin:0;color:var(--text-2);text-wrap:pretty">Outpost runs agents on a machine you control. This app is a client for it. Enter the server address, or scan the code shown by <span style="font-family:'Geist Mono',monospace;font-size:13px;color:var(--text)">outpostd pair</span>.</p></div>
+          <label style="display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;font-weight:500">Server URL</span><input value="{{ url }}" onChange="{{ onUrl }}" onKeyDown="{{ onKey }}" style="height:36px;padding:0 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);font-family:'Geist Mono',monospace;font-size:13px;outline:0" style-focus="outline:2px solid var(--ink);outline-offset:2px"></label>
+          <button onClick="{{ connect }}" style="display:flex;align-items:center;justify-content:center;gap:8px;height:36px;border:0;border-radius:6px;background:var(--ink);color:var(--on-ink);font-size:14px;font-weight:500;cursor:pointer" style-hover="opacity:.86"><sc-if value="{{ busy }}"><o-status kind="running"></o-status></sc-if>{{ connectLabel }}</button>
+          <div style="display:flex;align-items:center;gap:12px;font-size:12px;color:var(--text-3)"><span style="flex:1;height:1px;background:var(--border)"></span>or<span style="flex:1;height:1px;background:var(--border)"></span></div>
+          <button onClick="{{ connect }}" style="display:flex;align-items:center;justify-content:center;gap:8px;height:36px;border:1px solid var(--border-strong);border-radius:6px;background:transparent;color:var(--text);font-size:14px;font-weight:500;cursor:pointer" style-hover="background:var(--ink-subtle)"><o-icon name="scan-line"></o-icon>Scan QR code with camera</button>
+          <div style="display:flex;flex-direction:column;gap:6px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+            <span style="font-size:12px;color:var(--text-2)">No server yet? Install it on any Linux or macOS machine:</span>
+            <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text)">curl -fsSL get.outpost.dev | sh &amp;&amp; outpostd pair</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ s2 }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:20px;animation:o-fade 160ms ease-out">
+          <div style="display:flex;flex-direction:column;gap:8px"><h1 style="margin:0;font-size:28px;line-height:36px;font-weight:600;letter-spacing:-0.01em">Confirm the fingerprint</h1><p style="margin:0;color:var(--text-2);text-wrap:pretty">Check that it matches the fingerprint printed in the terminal on <span style="font-family:'Geist Mono',monospace;font-size:13px;color:var(--text)">outpost-01</span>. If it doesn't, stop and don't connect.</p></div>
+          <div style="display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface)">
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3)"><o-icon name="fingerprint" size="14"></o-icon>SHA-256 · <span style="font-family:'Geist Mono',monospace">{{ url }}</span></div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px 12px;font-family:'Geist Mono',monospace;font-size:16px;font-weight:500;letter-spacing:0.04em">
+              <sc-for list="{{ fp }}" as="g" hint-placeholder-count="8"><span>{{ g }}</span></sc-for>
+            </div>
+          </div>
+          <label style="display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;font-weight:500">Name this device</span><input value="{{ device }}" onChange="{{ onDevice }}" style="height:36px;padding:0 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);font-size:14px;outline:0" style-focus="outline:2px solid var(--ink);outline-offset:2px"></label>
+          <div style="display:flex;gap:8px">
+            <button onClick="{{ back }}" style="height:36px;padding:0 14px;border:1px solid var(--border-strong);border-radius:6px;background:transparent;font-size:14px;font-weight:500;cursor:pointer" style-hover="background:var(--ink-subtle)">Back</button>
+            <button onClick="{{ trust }}" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;height:36px;border:0;border-radius:6px;background:var(--ink);color:var(--on-ink);font-size:14px;font-weight:500;cursor:pointer" style-hover="opacity:.86"><sc-if value="{{ busy }}"><o-status kind="running"></o-status></sc-if>Fingerprint matches, connect</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ s3 }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:20px;animation:o-fade 160ms ease-out">
+          <span style="width:40px;height:40px;border-radius:50%;border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center"><o-icon name="check" size="20"></o-icon></span>
+          <div style="display:flex;flex-direction:column;gap:8px"><h1 style="margin:0;font-size:28px;line-height:36px;font-weight:600;letter-spacing:-0.01em">Connected to outpost-01</h1><p style="margin:0;color:var(--text-2)">{{ device }} is paired. Sessions on this server will stay in sync with your other devices.</p></div>
+          <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+            <sc-for list="{{ found }}" as="f" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:13px"><o-icon name="{{ f.icon }}" style="color:var(--text-2)"></o-icon><span style="flex:1">{{ f.label }}</span><span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3)">{{ f.value }}</span></div>
+            </sc-for>
+          </div>
+          <a href="D1 Home.dc.html" style="display:flex;align-items:center;justify-content:center;gap:8px;height:36px;border-radius:6px;background:var(--ink);color:var(--on-ink);font-size:14px;font-weight:500" style-hover="opacity:.86;color:var(--on-ink)">Open Outpost<o-icon name="arrow-right"></o-icon></a>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { step: 1, busy: false, url: 'https://outpost-01.tail3c2e.ts.net:7443', device: "Maya's MacBook Pro" };
+  go(step) { this.setState({ busy: true }); clearTimeout(this.t); this.t = setTimeout(() => this.setState({ busy: false, step }), 900); }
+  componentWillUnmount() { clearTimeout(this.t); }
+  renderVals() {
+    const s = this.state;
+    return {
+      steps: [['Address', 1], ['Verify', 2], ['Done', 3]].map(([label, n], i) => {
+        const done = s.step > n, cur = s.step === n;
+        return { label, n: done ? '✓' : n, sep: i < 2, color: cur || done ? 'var(--text)' : 'var(--text-3)', w: cur ? 500 : 400, ring: cur || done ? 'var(--ink)' : 'var(--border-strong)', fill: done ? 'var(--ink)' : 'transparent', numColor: done ? 'var(--on-ink)' : 'inherit' };
+      }),
+      s1: s.step === 1, s2: s.step === 2, s3: s.step === 3, busy: s.busy,
+      url: s.url, device: s.device,
+      connectLabel: s.busy ? 'Reaching server' : 'Connect',
+      onUrl: e => this.setState({ url: e.target.value }), onDevice: e => this.setState({ device: e.target.value }),
+      onKey: e => { if (e.key === 'Enter') this.go(2); },
+      connect: () => this.go(2), trust: () => this.go(3), back: () => this.setState({ step: 1 }),
+      fp: ['3F9A', 'C21E', '77B0', '4D8C', 'E5A3', '0B6F', '91D2', 'AC47'],
+      found: [['cpu', 'Providers configured', '5'], ['folder', 'Workspaces', '3'], ['activity', 'Sessions running now', '3']].map(([icon, label, value]) => ({ icon, label, value }))
+    };
+  }
+}
+</script>
+</body>
+</html>

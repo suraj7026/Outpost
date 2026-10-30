@@ -2,14 +2,14 @@ import { z } from 'zod';
 import { Mode, RunState, id, requireThat } from '../core/contracts.js';
 import { Ledger } from '../core/ledger.js';
 
-export const NewTask = z.strictObject({ goal: z.string().trim().min(1).max(20000), profile: z.enum(['code','browser','operations','research','cowork','chat']), mode: Mode.default('ask_permission') });
-export interface Task { goal: string; profile: string; state: z.infer<typeof RunState>; runId: string; instructionSequence: number; plan: { title: string; state: string }[]; evidence: string[]; blocker: string | null }
+export const NewTask = z.strictObject({ goal: z.string().trim().min(1).max(20000), profile: z.enum(['code','browser','operations','research','cowork','chat']), mode: Mode.default('ask_permission'), model: z.string().trim().min(1).max(200).optional() });
+export interface Task { goal: string; profile: string; model?: string; state: z.infer<typeof RunState>; runId: string; instructionSequence: number; plan: { title: string; state: string }[]; evidence: string[]; blocker: string | null }
 const terminal = new Set(['cancelled','completed']);
 export class Tasks {
   constructor(readonly db: Ledger) {}
   create(taskId: string, input: unknown) {
     const data = NewTask.parse(input);
-    const task = this.db.put<Task>('task',taskId,0,{ goal: data.goal,profile: data.profile,state: 'queued',runId: id(),instructionSequence: 1,plan: [],evidence: [],blocker: null },'task.created');
+    const task = this.db.put<Task>('task',taskId,0,{ goal: data.goal,profile: data.profile,...(data.model ? { model: data.model } : {}),state: 'queued',runId: id(),instructionSequence: 1,plan: [],evidence: [],blocker: null },'task.created');
     this.db.put('policy',taskId,0,{ mode: data.mode });
     this.db.put('message',id(),0,{ taskId,author: 'owner',text: data.goal,sequence: 1 },'instruction.accepted');
     this.db.enqueue('task.run',{ taskId,runId: task.data.runId });

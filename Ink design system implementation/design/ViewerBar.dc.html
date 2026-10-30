@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="stylesheet" href="outpost.css"><script src="outpost.js"></script></helmet>
+<sc-if value="{{ show }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:12px;height:44px;font-size:13px;color:var(--text-2)">
+  <a href="Index.dc.html" style="display:flex;align-items:center;gap:6px;white-space:nowrap;color:var(--text-2);padding:4px 8px;margin-left:-8px;border-radius:6px" style-hover="background:var(--ink-subtle);color:var(--text)"><o-icon name="layout-grid"></o-icon>All screens</a>
+  <span style="color:var(--text-3)">/</span>
+  <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3)">{{ code }}</span>
+  <span style="color:var(--text);font-weight:500">{{ label }}</span>
+  <div style="flex:1"></div>
+  <sc-if value="{{ hasPrev }}" hint-placeholder-val="{{ true }}"><a href="{{ prev }}" title="Previous screen" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:var(--text-2)" style-hover="background:var(--ink-subtle);color:var(--text)"><o-icon name="arrow-left"></o-icon></a></sc-if>
+  <sc-if value="{{ hasNext }}" hint-placeholder-val="{{ true }}"><a href="{{ next }}" title="Next screen" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:var(--text-2)" style-hover="background:var(--ink-subtle);color:var(--text)"><o-icon name="arrow-right"></o-icon></a></sc-if>
+  <button onClick="{{ toggle }}" title="Toggle theme (T)" style="display:flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:transparent;cursor:pointer;color:var(--text);font-size:13px;transition:background 120ms ease-out" style-hover="background:var(--ink-subtle)"><o-icon name="{{ themeIcon }}"></o-icon>{{ themeLabel }}<kbd style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3);margin-left:2px">T</kbd></button>
+</div></sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:900,&quot;height&quot;:44},&quot;code&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;D2&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;label&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Code session&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;prev&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;next&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { theme: (window.OutpostTheme && OutpostTheme.get()) || 'dark' };
+  componentDidMount() {
+    this.h = e => this.setState({ theme: e.detail });
+    document.addEventListener('outpost-theme', this.h);
+    if (window.OutpostTheme) this.setState({ theme: OutpostTheme.get() });
+  }
+  componentWillUnmount() { document.removeEventListener('outpost-theme', this.h); }
+  renderVals() {
+    const t = this.state.theme, p = this.props;
+    return {
+      show: !window.__outpostEmbed,
+      code: p.code, label: p.label, prev: p.prev, next: p.next,
+      hasPrev: !!p.prev, hasNext: !!p.next,
+      themeIcon: t === 'dark' ? 'moon' : 'sun', themeLabel: t === 'dark' ? 'Dark' : 'Light',
+      toggle: () => window.OutpostTheme && OutpostTheme.toggle()
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -17,13 +17,21 @@ import { renderHTML } from '../documents/documents.js';
 import { MemoryStore } from '../memory/memory.js';
 import { Scheduler } from '../scheduler/scheduler.js';
 import { Notifications } from '../notifier/apns.js';
+import type { InferenceConfiguration } from '../models/inference.js';
+import { registerHosts } from '../operations/hosts.js';
+import type { HostAdministration } from '../operations/hosts.js';
+import { LiveFeed } from './live.js';
+import { registerBrowserUse } from '../browser/browser-use.js';
 
-export const publicKinds = ['task','policy','message','action','artifact','inbox','automation','memory','identity','capability','browser','workflow','source','citation','deployment_evidence','operation','device','recovery'];
+export const publicKinds = ['task','policy','message','action','artifact','inbox','automation','memory','identity','capability','browser','workflow','source','citation','deployment_evidence','operation','device','recovery','tool_stream'];
 const wire = (value: unknown): Json => z.json().parse(value);
 export class Coordinator {
+  readonly live: LiveFeed;
   readonly devices: Devices; readonly tasks: Tasks; readonly artifacts: Artifacts; readonly memory: MemoryStore; readonly scheduler: Scheduler;
   private gates = new Map<string,Gate>(); private runtimes = new Map<string,PiRuntime>(); private jobs = new Set<string>();
-  constructor(readonly db: Ledger, readonly root: string, private options: { apiKey?: string; roles?: unknown; executables?: string[] } = {}) {
+  constructor(readonly db: Ledger, readonly root: string, private options: { apiKey?: string; roles?: unknown; executables?: string[]; inference?: InferenceConfiguration; unrestrictedCommands?: boolean; hosts?: HostAdministration; browserPython?: string } = {}) {
+    this.live = new LiveFeed(db);
+    for (const kind of ['message','tool_stream']) for (const record of db.list(kind)) if (record.data.streaming) db.put(kind,record.id,record.revision,{ ...record.data,streaming: false,interrupted: true });
     this.devices = new Devices(db); this.tasks = new Tasks(db); this.artifacts = new Artifacts(db,join(root,'artifacts')); this.memory = new MemoryStore(db); this.scheduler = new Scheduler(db,this.tasks);
     this.tasks.recover();
     db.db.prepare("UPDATE outbox SET state='unknown' WHERE state='claimed'").run();
@@ -35,8 +43,10 @@ export class Coordinator {
     this.db.need('task',taskId); z.uuid().parse(taskId);
     let gate = this.gates.get(taskId); if (gate) return gate;
     const reviewer = this.options.apiKey && this.options.roles ? cloudReviewer(this.options.apiKey,this.options.roles) : undefined;
-    gate = new Gate(this.db,reviewer); const workspace = new Workspace(join(this.root,'workspaces',taskId));
-    workspace.register(gate); registerInventory(gate); registerCommands(gate,workspace,new Set(this.options.executables ?? []));
+    gate = new Gate(this.db,reviewer,!!this.options.hosts); const workspace = new Workspace(join(this.root,'workspaces',taskId));
+    workspace.register(gate); registerInventory(gate); registerCommands(gate,workspace,new Set(this.options.executables ?? []),this.options.unrestrictedCommands);
+    if (this.options.hosts) registerHosts(gate,this.options.hosts,taskId);
+    if (this.options.browserPython && this.options.inference) registerBrowserUse(gate,this.options.browserPython,{ ...this.options.inference,model: this.db.need<Task>('task',taskId).data.model ?? this.options.inference.model },workspace,this.artifacts,taskId);
     gate.register('artifact.read_text',{ version: 1,effects: ['workspace.read'],parse: input => z.strictObject({ artifactId: z.uuid() }).parse(input),target: args => String(args.artifactId),execute: async args => {
       const artifact = this.db.need('artifact',String(args.artifactId)); requireThat(artifact.data.taskId === taskId,'artifact_scope_denied');
       const bytes = this.artifacts.read(artifact.id); requireThat(bytes.length <= 1024*1024 && !bytes.includes(0),'text_artifact_required');
@@ -101,7 +111,19 @@ export class Coordinator {
     }
     return accepted;
   }
+  runtimeStatus() {
+    return { configured: !!this.options.inference || !!(this.options.apiKey && this.options.roles),model: this.options.inference?.model ?? null,hostAdministration: !!this.options.hosts,browserUse: !!this.options.browserPython,unrestrictedCommands: !!this.options.unrestrictedCommands };
+  }
   query(type: string, payload: Record<string,Json>) {
+    if (type === 'runtime') return wire(this.runtimeStatus());
+    if (type === 'models' && this.options.inference) {
+      const base = this.options.inference.baseUrl.replace(/\/v1\/?$/,'');
+      return fetch(`${base}/api/tags`,{ signal: AbortSignal.timeout(10000),redirect: 'error' }).then(async response => {
+        requireThat(response.ok,'model_catalogue_unavailable');
+        const result = z.object({ models: z.array(z.object({ name: z.string() })) }).parse(await response.json());
+        return wire({ models: result.models.map(model => model.name),defaultModel: this.options.inference?.model });
+      });
+    }
     if (type === 'snapshot') return wire(this.db.snapshot(publicKinds));
     if (type === 'events') {
       const page = this.db.events(z.number().int().parse(payload.after),200);
@@ -109,6 +131,16 @@ export class Coordinator {
     }
     if (type === 'tools') return wire(this.gate(z.string().parse(payload.taskId)).catalogue());
     throw new Fault('unknown_query','Unsupported query',400);
+  }
+  private runPi(taskId: string, prompt: string) {
+    const task = this.db.need<Task>('task',taskId);
+    const inference = this.options.inference ? { ...this.options.inference,...(task.data.model ? { model: task.data.model } : {}) } : undefined;
+    const runtime = this.runtimes.get(taskId) ?? new PiRuntime(this.db,this.gate(taskId),join(this.root,'pi',taskId),this.live);
+    this.runtimes.set(taskId,runtime);
+    void runtime.run(taskId,join(this.root,'workspaces',taskId),prompt,this.options.apiKey ?? 'ollama',this.options.roles,inference).catch(error => {
+      const current = this.db.need<Task>('task',taskId);
+      if (!['paused','cancelled'].includes(current.data.state)) this.db.put('task',taskId,current.revision,{ ...current.data,state: 'interrupted',blocker: `Pi run failed: ${String(error).slice(0,800)}` });
+    });
   }
   async drain() {
     if (!this.dispatchEnabled) return;
@@ -123,17 +155,25 @@ export class Coordinator {
         if (topic === 'action.propose') await this.gate(String(data.taskId)).propose(String(data.taskId),String(data.tool),data.arguments,String(data.operationId));
         else if (topic === 'action.dispatch') { const action = this.db.need<Action>('action',String(data.actionId)); await this.gate(action.data.taskId).dispatch(String(data.actionId)); }
         else if (topic === 'task.pause' || topic === 'task.cancel') await this.runtimes.get(String(data.taskId))?.abort(String(data.taskId));
-        else if (topic === 'task.steer') await this.runtimes.get(String(data.taskId))?.steer(String(data.taskId),String(data.text));
+        else if (topic === 'task.steer') {
+          const taskId = String(data.taskId);
+          const runtime = this.runtimes.get(taskId);
+          if (runtime?.isActive(taskId)) await runtime.steer(taskId,String(data.text));
+          else if (this.options.inference || (this.options.apiKey && this.options.roles)) {
+            const task = this.db.need<Task>('task',taskId);
+            if (!['paused','cancelled','completed'].includes(task.data.state)) {
+              this.db.put('task',taskId,task.revision,{ ...task.data,state: 'running',blocker: null });
+              this.runPi(taskId,String(data.text));
+            }
+          }
+        }
         else if (topic === 'task.run' || topic === 'task.resume') {
           const taskId = String(data.taskId), task = this.db.need<Task>('task',taskId);
           if (task.data.state === 'queued') {
-            if (!this.options.apiKey || !this.options.roles) this.db.put('task',taskId,task.revision,{ ...task.data,state: 'waiting_for_capacity',blocker: 'Configure and qualify Ollama Cloud operator/reviewer roles to run Pi. Local tools can be proposed explicitly.' });
+            if (!this.options.inference && (!this.options.apiKey || !this.options.roles)) this.db.put('task',taskId,task.revision,{ ...task.data,state: 'waiting_for_capacity',blocker: 'Configure an Ollama endpoint and model, or qualified Cloud roles. Local tools can be proposed explicitly.' });
             else {
               this.tasks.claim(taskId,'pi-local');
-              const runtime = this.runtimes.get(taskId) ?? new PiRuntime(this.db,this.gate(taskId),join(this.root,'pi',taskId)); this.runtimes.set(taskId,runtime);
-              void runtime.run(taskId,join(this.root,'workspaces',taskId),task.data.goal,this.options.apiKey,this.options.roles).catch(() => {
-                const current = this.db.need<Task>('task',taskId); if (!['paused','cancelled'].includes(current.data.state)) this.db.put('task',taskId,current.revision,{ ...current.data,state: 'interrupted',blocker: 'Pi run failed; inspect session and operation evidence before resuming' });
-              });
+              this.runPi(taskId,task.data.goal);
             }
           }
         }

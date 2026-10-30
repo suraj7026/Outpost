@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="stylesheet" href="outpost.css"><script src="outpost.js"></script><title>D6 · Settings, providers</title></helmet>
+<div data-fit="1488" style="width:max-content;margin:0 auto;padding:8px 24px 32px;display:flex;flex-direction:column;gap:8px">
+  <dc-import name="ViewerBar" code="D6" label="Settings · Providers" prev="D5 Chat Session.dc.html" next="D7 Server Devices.dc.html" hint-size="1440px,44px"></dc-import>
+  <div style="width:1440px;height:900px;display:flex;background:var(--bg);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+    <dc-import name="Sidebar" active="settings" hint-size="264px,100%"></dc-import>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <header style="display:flex;align-items:center;gap:8px;height:52px;flex:none;padding:0 16px 0 20px;border-bottom:1px solid var(--border);font-size:14px">
+        <span style="color:var(--text-2)">Settings</span><o-icon name="chevron-right" size="14" style="color:var(--text-3)"></o-icon><span style="font-weight:600">Providers</span>
+      </header>
+      <div style="flex:1;min-height:0;display:flex">
+        <nav style="width:208px;flex:none;padding:16px 8px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:2px">
+          <sc-for list="{{ nav }}" as="n" hint-placeholder-count="6">
+            <a href="{{ n.href }}" style="position:relative;display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border-radius:6px;background:{{ n.bg }};color:{{ n.color }};font-size:13px" style-hover="background:var(--ink-subtle);color:var(--text)"><span style="position:absolute;left:0;top:6px;bottom:6px;width:2px;border-radius:2px;background:{{ n.bar }}"></span><o-icon name="{{ n.icon }}"></o-icon>{{ n.label }}</a>
+          </sc-for>
+        </nav>
+        <div style="flex:1;overflow:auto;padding:28px 32px 48px">
+          <div style="max-width:880px;display:flex;flex-direction:column;gap:28px">
+            <div style="display:flex;align-items:flex-start;gap:16px">
+              <div style="flex:1;display:flex;flex-direction:column;gap:4px"><h1 style="margin:0;font-size:20px;line-height:28px;font-weight:600">Providers</h1><p style="margin:0;color:var(--text-2)">Keys are stored on <span style="font-family:'Geist Mono',monospace;font-size:13px">outpost-01</span>, encrypted at rest. Clients never see them.</p></div>
+              <button onClick="{{ addNew }}" style="display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:0;border-radius:6px;background:var(--ink);color:var(--on-ink);font-size:13px;font-weight:500;cursor:pointer" style-hover="opacity:.86"><o-icon name="plus"></o-icon>Add provider</button>
+            </div>
+
+            <div style="display:grid;grid-template-columns:300px minmax(0,1fr);gap:16px;align-items:start">
+              <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:10px;background:var(--surface);overflow:hidden">
+                <sc-for list="{{ providers }}" as="p" hint-placeholder-count="5">
+                  <button onClick="{{ p.pick }}" style="position:relative;display:flex;align-items:center;gap:10px;padding:12px 14px;border:0;border-bottom:1px solid var(--border);background:{{ p.bg }};text-align:left;cursor:pointer" style-hover="background:var(--ink-subtle)">
+                    <span style="position:absolute;left:0;top:10px;bottom:10px;width:2px;border-radius:2px;background:{{ p.bar }}"></span>
+                    <div style="flex:1;display:flex;flex-direction:column;min-width:0"><span style="font-size:13px;font-weight:500;color:var(--text)">{{ p.name }}</span><span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis">{{ p.host }}</span></div>
+                    <sc-if value="{{ p.ok }}"><span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2)"><span style="width:6px;height:6px;border-radius:50%;background:var(--ink)"></span>{{ p.count }} models</span></sc-if>
+                    <sc-if value="{{ p.bad }}"><o-status kind="failed" label="Key rejected"></o-status></sc-if>
+                  </button>
+                </sc-for>
+                <sc-if value="{{ isNew }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:relative;display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--ink-subtle)"><span style="position:absolute;left:0;top:10px;bottom:10px;width:2px;border-radius:2px;background:var(--ink)"></span><o-icon name="plus" style="color:var(--text-2)"></o-icon><span style="font-size:13px;font-weight:500">New provider</span></div>
+                </sc-if>
+              </div>
+
+              <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+                <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)"><span style="font-size:14px;font-weight:600">{{ cur.title }}</span><span style="font-size:12px;color:var(--text-3)">{{ cur.kind }}</span><div style="flex:1"></div><sc-if value="{{ cur.removable }}"><button style="height:28px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:var(--danger);font-size:12px;cursor:pointer" style-hover="background:var(--ink-subtle)">Remove</button></sc-if></div>
+                <div style="display:flex;flex-direction:column;gap:14px;padding:16px">
+                  <sc-if value="{{ isNew }}" hint-placeholder-val="{{ false }}">
+                    <label style="display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;font-weight:500">Provider type</span><div style="display:flex;align-items:center;height:32px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg);font-size:13px"><span style="flex:1">OpenAI-compatible</span><o-icon name="chevrons-up-down" size="14" style="color:var(--text-3)"></o-icon></div></label>
+                  </sc-if>
+                  <label style="display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;font-weight:500">Base URL</span><input value="{{ url }}" onChange="{{ onUrl }}" placeholder="https://api.example.com/v1" style="height:32px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg);font-family:'Geist Mono',monospace;font-size:13px;outline:0" style-focus="outline:2px solid var(--ink);outline-offset:2px"></label>
+                  <label style="display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;font-weight:500">API key</span>
+                    <div style="display:flex;align-items:center;height:32px;padding:0 4px 0 10px;border:1px solid {{ keyBorder }};border-radius:6px;background:var(--bg)"><span style="flex:1;font-family:'Geist Mono',monospace;font-size:13px;color:{{ keyColor }}">{{ keyText }}</span><button onClick="{{ toggleReveal }}" title="Show key" style="display:flex;width:26px;height:26px;align-items:center;justify-content:center;border:0;background:transparent;color:var(--text-3);border-radius:4px;cursor:pointer" style-hover="color:var(--text)"><o-icon name="{{ eye }}"></o-icon></button></div>
+                  </label>
+                  <div style="display:flex;align-items:center;gap:12px;min-height:32px">
+                    <button onClick="{{ test }}" style="display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--border-strong);border-radius:6px;background:transparent;color:var(--text);font-size:13px;font-weight:500;cursor:pointer" style-hover="background:var(--ink-subtle)"><o-icon name="plug"></o-icon>Test connection</button>
+                    <sc-if value="{{ testing }}" hint-placeholder-val="{{ false }}"><span style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2)"><o-status kind="running"></o-status>Testing from outpost-01</span></sc-if>
+                    <sc-if value="{{ resOk }}" hint-placeholder-val="{{ false }}"><span style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2);animation:o-fade 160ms ease-out"><o-status kind="done"></o-status><span style="color:var(--text)">Connected</span><span style="font-family:'Geist Mono',monospace;font-size:12px">{{ resText }}</span></span></sc-if>
+                    <sc-if value="{{ resBad }}" hint-placeholder-val="{{ false }}"><span style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--danger);animation:o-fade 160ms ease-out"><o-status kind="failed" label="401"></o-status><span>API key expired or revoked</span></span></sc-if>
+                  </div>
+                </div>
+                <sc-if value="{{ hasModels }}" hint-placeholder-val="{{ true }}">
+                  <div style="border-top:1px solid var(--border);padding:12px 8px 8px">
+                    <div style="display:flex;align-items:center;padding:0 8px 6px;font-size:13px;color:var(--text-2)"><span style="flex:1">Models</span><span style="font-size:12px;color:var(--text-3)">{{ enabledCount }} enabled</span></div>
+                    <sc-for list="{{ models }}" as="m" hint-placeholder-count="3">
+                      <div style="display:flex;align-items:center;gap:10px;height:40px;padding:0 8px;border-radius:6px" style-hover="background:var(--ink-subtle)">
+                        <button onClick="{{ m.toggle }}" role="switch" aria-checked="{{ m.on }}" style="position:relative;width:28px;height:16px;flex:none;border-radius:999px;border:1px solid {{ m.swBorder }};background:{{ m.swBg }};cursor:pointer;padding:0;transition:background 120ms ease-out"><span style="position:absolute;top:2px;left:{{ m.knob }};width:10px;height:10px;border-radius:50%;background:{{ m.knobBg }};transition:left 120ms ease-out"></span></button>
+                        <span style="font-family:'Geist Mono',monospace;font-size:12px;color:{{ m.color }};flex:1">{{ m.id }}</span>
+                        <sc-for list="{{ m.caps }}" as="c"><span style="display:inline-flex;align-items:center;height:20px;padding:0 6px;border:1px solid var(--border-strong);border-radius:999px;font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-2)">{{ c }}</span></sc-for>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;flex-direction:column;gap:4px"><h2 style="margin:0;font-size:16px;font-weight:600">Default model per mode</h2><p style="margin:0;color:var(--text-2);font-size:13px">Used for new sessions. You can switch models inside any session.</p></div>
+              <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+                <sc-for list="{{ defaults }}" as="d" hint-placeholder-count="3">
+                  <div style="display:grid;grid-template-columns:160px minmax(0,1fr) 320px;align-items:center;gap:16px;padding:12px 16px;border-bottom:1px solid var(--border)">
+                    <span style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500"><o-icon name="{{ d.icon }}" style="color:var(--text-2)"></o-icon>{{ d.label }}</span>
+                    <span style="font-size:12px;color:var(--text-3)">{{ d.note }}</span>
+                    <div style="display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg);font-family:'Geist Mono',monospace;font-size:12px"><span style="color:var(--text-3)">{{ d.provider }} /</span><span style="flex:1">{{ d.model }}</span><o-icon name="chevrons-up-down" size="14" style="color:var(--text-3)"></o-icon></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { sel: 'anthropic', reveal: false, testing: false, result: {}, off: { 'claude-opus-4-1': true, 'gpt-4.1': true, 'llama3.1:8b': true }, urls: {} };
+  static P = {
+    anthropic: ['Anthropic', 'Anthropic API', 'https://api.anthropic.com', 'sk-ant-api03-••••••••••••••••4f2c', 'sk-ant-api03-Xk2v…9Lm4f2c', 'ok', [['claude-sonnet-4-5', ['tools', 'vision', 'reasoning', '200k']], ['claude-opus-4-1', ['tools', 'vision', 'reasoning', '200k']], ['claude-haiku-4-5', ['tools', 'vision', '200k']]]],
+    openai: ['OpenAI', 'OpenAI API', 'https://api.openai.com/v1', 'sk-proj-••••••••••••••••9a1e', 'sk-proj-R7c0…Hq29a1e', 'ok', [['gpt-5', ['tools', 'vision', 'reasoning', '400k']], ['gpt-5-mini', ['tools', 'vision', 'reasoning', '400k']], ['gpt-4.1', ['tools', 'vision', '1m']]]],
+    google: ['Google', 'Gemini API', 'https://generativelanguage.googleapis.com', 'AIza••••••••••••••••••Qe8', 'AIzaSyB4…t1Qe8', 'bad', [['gemini-2.5-pro', ['tools', 'vision', 'reasoning', '1m']], ['gemini-2.5-flash', ['tools', 'vision', '1m']]]],
+    openrouter: ['OpenRouter', 'OpenAI-compatible', 'https://openrouter.ai/api/v1', 'sk-or-v1-••••••••••••••••c07d', 'sk-or-v1-9f3a…e2c07d', 'ok', [['deepseek-r1', ['tools', 'reasoning', '128k']], ['llama-4-maverick', ['tools', 'vision', '1m']]]],
+    ollama: ['Ollama', 'Local on outpost-01', 'http://localhost:11434', '', '', 'ok', [['qwen2.5-coder:32b', ['tools', '32k']], ['llama3.1:8b', ['tools', '128k']]]]
+  };
+  test() {
+    const sel = this.state.sel;
+    this.setState({ testing: true, result: { ...this.state.result, [sel]: null } });
+    clearTimeout(this.t);
+    this.t = setTimeout(() => this.setState({ testing: false, result: { ...this.state.result, [sel]: Component.P[sel] && Component.P[sel][5] === 'bad' ? 'bad' : 'ok' } }), 1100);
+  }
+  componentWillUnmount() { clearTimeout(this.t); }
+  renderVals() {
+    const s = this.state, P = Component.P, isNew = s.sel === 'new', p = P[s.sel];
+    const sel = on => ({ bg: on ? 'var(--ink-subtle)' : 'transparent', bar: on ? 'var(--ink)' : 'transparent' });
+    const providers = Object.keys(P).map(id => {
+      const [name, , url, , , st, models] = P[id];
+      return { name, host: url.replace(/^https?:\/\//, ''), ok: st === 'ok', bad: st === 'bad', count: models.length, ...sel(id === s.sel), pick: () => this.setState({ sel: id, reveal: false, testing: false }) };
+    });
+    const models = isNew ? [] : p[6].map(([id, caps]) => {
+      const on = !s.off[id];
+      return { id, caps, on: String(on), color: on ? 'var(--text)' : 'var(--text-3)', swBg: on ? 'var(--ink)' : 'transparent', swBorder: on ? 'var(--ink)' : 'var(--border-strong)', knob: on ? '14px' : '2px', knobBg: on ? 'var(--on-ink)' : 'var(--text-3)', toggle: () => this.setState({ off: { ...s.off, [id]: on } }) };
+    });
+    const res = s.result[s.sel];
+    const noKey = !isNew && !p[3];
+    return {
+      nav: [['General', 'sliders-horizontal', '#'], ['Providers', 'cpu', 'D6 Settings Providers.dc.html', true], ['Permissions', 'shield', '#'], ['Workspaces', 'folder', '#'], ['Keyboard', 'keyboard', '#'], ['Server & devices', 'server', 'D7 Server Devices.dc.html']].map(([label, icon, href, on]) => ({ label, icon, href, ...sel(on), color: on ? 'var(--text)' : 'var(--text-2)' })),
+      providers, isNew,
+      cur: isNew ? { title: 'New provider', kind: 'Any OpenAI-compatible endpoint', removable: false } : { title: p[0], kind: p[1], removable: true },
+      url: s.urls[s.sel] ?? (isNew ? '' : p[2]),
+      onUrl: e => this.setState({ urls: { ...s.urls, [s.sel]: e.target.value } }),
+      keyText: isNew ? 'Paste an API key' : noKey ? 'No key needed for a local server' : (s.reveal ? p[4] : p[3]),
+      keyColor: isNew || noKey ? 'var(--text-3)' : 'var(--text)',
+      keyBorder: !isNew && p[5] === 'bad' ? 'var(--danger)' : 'var(--border-strong)',
+      eye: s.reveal ? 'eye-off' : 'eye', toggleReveal: e => { e.preventDefault(); this.setState({ reveal: !s.reveal }); },
+      test: () => this.test(), testing: s.testing,
+      resOk: res === 'ok' || (!isNew && res === undefined && !s.testing && p[5] === 'ok'),
+      resBad: res === 'bad' || (!isNew && res === undefined && !s.testing && p[5] === 'bad'),
+      resText: isNew ? '' : (s.sel === 'ollama' ? '4 ms · ' : '212 ms · ') + p[6].length + ' models found',
+      hasModels: !isNew, models, enabledCount: models.filter(m => m.on === 'true').length,
+      addNew: () => this.setState({ sel: 'new', reveal: false, testing: false }),
+      defaults: [
+        ['message-square', 'Chat', 'Fast answers, no workspace', 'google', 'gemini-2.5-pro'],
+        ['file-text', 'Cowork', 'Long documents and spreadsheets', 'openai', 'gpt-5'],
+        ['code-xml', 'Code', 'Tool use in repos and terminals', 'anthropic', 'claude-sonnet-4-5']
+      ].map(([icon, label, note, provider, model]) => ({ icon, label, note, provider, model }))
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: outpost-verification
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cluster-smoke
+  namespace: outpost-verification
+  labels:
+    app: cluster-smoke
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: surajhomeserver
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: server
+      image: busybox:1.37.0
+      command: [sh, -c, 'mkdir -p /tmp/www; echo cluster-network-ok > /tmp/www/index.html; exec httpd -f -p 8080 -h /tmp/www']
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+      readinessProbe:
+        tcpSocket:
+          port: 8080
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 100m, memory: 32Mi}
+      volumeMounts:
+        - name: temporary
+          mountPath: /tmp
+  volumes:
+    - name: temporary
+      emptyDir:
+        sizeLimit: 8Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cluster-smoke
+  namespace: outpost-verification
+spec:
+  selector:
+    app: cluster-smoke
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cross-node-network
+  namespace: outpost-verification
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 180
+  template:
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: surajhomeserver2
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: client
+          image: busybox:1.37.0
+          command: [sh, -ec, 'nslookup kubernetes.default.svc.cluster.local; wget -T 10 -qO- http://cluster-smoke:8080 | grep -x cluster-network-ok']
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 32Mi}

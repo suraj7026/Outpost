@@ -1,0 +1,18 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap');
+:root,[data-theme="dark"]{--canvas:#09090A;--bg:#0F1011;--surface:#16171A;--raised:#1C1D21;--border:#26282C;--border-strong:#34363B;--text:#EDEDEF;--text-2:#A1A3A8;--text-3:#6B6E75;--ink:#EDEDEF;--on-ink:#0F1011;--ink-subtle:rgba(237,237,239,0.08);--danger:#F2555A;--add:#7FD1A8;--add-bg:rgba(127,209,168,0.10);--del:#F2888C;--del-bg:rgba(242,85,90,0.10);--shadow:0 16px 40px rgba(0,0,0,0.55);--scrim:rgba(0,0,0,0.55);color-scheme:dark}
+[data-theme="light"]{--canvas:#EFEFED;--bg:#FAFAF9;--surface:#FFFFFF;--raised:#F4F4F2;--border:#E6E6E3;--border-strong:#D4D4D0;--text:#111113;--text-2:#5C5E63;--text-3:#8E9096;--ink:#111113;--on-ink:#FFFFFF;--ink-subtle:#ECECEA;--danger:#D92D3A;--add:#1F7A4D;--add-bg:#E8F5EE;--del:#B4232F;--del-bg:#FCEBEC;--shadow:0 16px 40px rgba(17,17,19,0.12);--scrim:rgba(17,17,19,0.28);color-scheme:light}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--canvas);color:var(--text);font-family:'Geist',system-ui,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:var(--text);text-decoration:none}
+a:hover{color:var(--text)}
+button,input,textarea,select{font:inherit;color:inherit}
+button{white-space:nowrap}
+input::placeholder,textarea::placeholder{color:var(--text-3)}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:10px;border:3px solid transparent;background-clip:content-box}
+@keyframes o-spin{to{transform:rotate(360deg)}}
+@keyframes o-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+@keyframes o-fade{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
+@keyframes o-sheet{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+@keyframes o-caret{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}

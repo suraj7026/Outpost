@@ -1,0 +1,22 @@
+/* The Dedham Group — Typography Tokens
+   Brand font: Tw Cen MT (proprietary). Web substitute: Jost (loaded via font-face.css). */
+:root {
+  --tdg-font-heading: "Jost", "Tw Cen MT", "Century Gothic", sans-serif;
+  --tdg-font-body:    "Jost", "Tw Cen MT", "Century Gothic", sans-serif;
+
+  /* Type scale (pt-anchored to PPT master) */
+  --tdg-size-topic:       32pt; /* topic / section-divider titles */
+  --tdg-size-slide-title: 24pt; /* headline on body slides */
+  --tdg-size-body:        16pt; /* primary body copy */
+  --tdg-size-body-sm:     14pt; /* dense tables, secondary copy */
+  --tdg-size-caption:     12pt; /* labels, source lines */
+  --tdg-size-footnote:    9pt;  /* footnotes / disclaimers / footer text */
+
+  /* Weights */
+  --tdg-weight-title: 500; /* Jost medium ≈ Tw Cen MT medium */
+  --tdg-weight-body:  400;
+  --tdg-weight-bold:  600;
+
+  /* Line height */
+  --tdg-line-height: 1.25;
+}

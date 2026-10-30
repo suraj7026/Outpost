@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="stylesheet" href="outpost.css"><script src="outpost.js"></script></helmet>
+<div style="position:relative;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface)">
+  <textarea value="{{ text }}" onChange="{{ onText }}" onKeyDown="{{ onKey }}" placeholder="{{ placeholder }}" rows="{{ rows }}" aria-label="Message" style="display:block;width:100%;resize:none;border:0;outline:0;background:transparent;padding:12px 14px 4px;font-size:14px;line-height:20px;color:var(--text)"></textarea>
+  <div style="display:flex;align-items:center;gap:2px;padding:6px 8px 8px">
+    <button title="Attach files" style="flex:none;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border:0;border-radius:6px;background:transparent;color:var(--text-2);cursor:pointer" style-hover="background:var(--ink-subtle);color:var(--text)"><o-icon name="paperclip"></o-icon></button>
+    <sc-if value="{{ hasWorkspace }}" hint-placeholder-val="{{ true }}">
+      <button title="Workspace" style="display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:var(--text-2);cursor:pointer;font-family:'Geist Mono',monospace;font-size:12px;white-space:nowrap;flex:none" style-hover="background:var(--ink-subtle);color:var(--text)"><o-icon name="folder"></o-icon>{{ workspace }}<o-icon name="chevron-down" size="14" style="color:var(--text-3)"></o-icon></button>
+    </sc-if>
+    <button onClick="{{ toggleModel }}" title="Model" style="display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:0;border-radius:6px;background:{{ modelBg }};color:var(--text-2);cursor:pointer;font-family:'Geist Mono',monospace;font-size:12px;white-space:nowrap;min-width:0;flex:0 1 auto" style-hover="background:var(--ink-subtle);color:var(--text)"><o-icon name="cpu"></o-icon><span style="overflow:hidden;text-overflow:ellipsis">{{ model }}</span><o-icon name="chevron-down" size="14" style="color:var(--text-3)"></o-icon></button>
+    <button onClick="{{ togglePerm }}" title="Permission level" style="display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:0;border-radius:6px;background:{{ permBg }};color:var(--text-2);cursor:pointer;font-size:12px;white-space:nowrap;flex:none" style-hover="background:var(--ink-subtle);color:var(--text)"><o-icon name="shield"></o-icon>{{ perm }}<o-icon name="chevron-down" size="14" style="color:var(--text-3)"></o-icon></button>
+    <div style="flex:1;min-width:8px"></div>
+    <sc-if value="{{ showKbd }}" hint-placeholder-val="{{ true }}"><kbd style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3);margin-right:6px;flex:none">⌘↵</kbd></sc-if>
+    <button onClick="{{ send }}" title="Send (⌘↵)" aria-label="Send" style="flex:none;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:0;border-radius:6px;background:var(--ink);color:var(--on-ink);cursor:pointer;opacity:{{ sendOpacity }};transition:opacity 120ms ease-out"><o-icon name="arrow-up"></o-icon></button>
+  </div>
+  <sc-if value="{{ modelOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;left:8px;top:{{ popTop }};bottom:{{ popBottom }};z-index:20;width:440px;padding:6px;background:var(--raised);border:1px solid var(--border-strong);border-radius:10px;box-shadow:var(--shadow);animation:o-fade 140ms ease-out">
+      <div style="display:flex;align-items:center;gap:8px;height:32px;padding:0 8px;margin-bottom:4px;border-bottom:1px solid var(--border);color:var(--text-3);font-size:13px"><o-icon name="search"></o-icon>Search models</div>
+      <sc-for list="{{ models }}" as="m" hint-placeholder-count="5">
+        <button onClick="{{ m.pick }}" style="position:relative;display:flex;align-items:center;gap:8px;width:100%;height:34px;padding:0 8px 0 10px;border:0;border-radius:6px;background:{{ m.bg }};cursor:pointer;text-align:left" style-hover="background:var(--ink-subtle)">
+          <span style="position:absolute;left:0;top:7px;bottom:7px;width:2px;border-radius:2px;background:{{ m.bar }}"></span>
+          <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3)">{{ m.provider }} /</span>
+          <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text);flex:1">{{ m.name }}</span>
+          <sc-for list="{{ m.caps }}" as="c"><span style="display:inline-flex;align-items:center;height:20px;padding:0 6px;border:1px solid var(--border-strong);border-radius:999px;font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-2)">{{ c }}</span></sc-for>
+        </button>
+      </sc-for>
+      <div style="display:flex;justify-content:space-between;padding:8px 8px 2px;margin-top:4px;border-top:1px solid var(--border);font-size:12px;color:var(--text-3)"><span>5 providers connected</span><a href="D6 Settings Providers.dc.html" style="color:var(--text-2)">Manage providers</a></div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ permOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;left:200px;top:{{ popTop }};bottom:{{ popBottom }};z-index:20;width:320px;padding:6px;background:var(--raised);border:1px solid var(--border-strong);border-radius:10px;box-shadow:var(--shadow);animation:o-fade 140ms ease-out">
+      <sc-for list="{{ perms }}" as="q" hint-placeholder-count="4">
+        <button onClick="{{ q.pick }}" style="position:relative;display:flex;flex-direction:column;align-items:flex-start;width:100%;padding:6px 8px 6px 10px;border:0;border-radius:6px;background:{{ q.bg }};cursor:pointer;text-align:left;white-space:normal" style-hover="background:var(--ink-subtle)">
+          <span style="position:absolute;left:0;top:8px;bottom:8px;width:2px;border-radius:2px;background:{{ q.bar }}"></span>
+          <span style="font-size:13px;color:var(--text);font-weight:500">{{ q.label }}</span>
+          <span style="font-size:12px;color:var(--text-2)">{{ q.note }}</span>
+        </button>
+      </sc-for>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:680,&quot;height&quot;:360},&quot;workspace&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;storefront-web&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;model&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;anthropic / claude-sonnet-4-5&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;permission&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Read only&quot;,&quot;Ask before changes&quot;,&quot;Auto-edit&quot;,&quot;Full auto&quot;],&quot;default&quot;:&quot;Ask before changes&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;placeholder&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Describe a task, or type / for commands&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;rows&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:2,&quot;tsType&quot;:&quot;number&quot;},&quot;popDown&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;onSend&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(text:string)=&gt;void&quot;}}">
+class Component extends DCLogic {
+  state = { text: '', model: null, perm: null, modelOpen: false, permOpen: false };
+  static MODELS = [
+    ['anthropic', 'claude-sonnet-4-5', ['tools', 'vision', 'reasoning', '200k']],
+    ['openai', 'gpt-5', ['tools', 'vision', 'reasoning', '400k']],
+    ['google', 'gemini-2.5-pro', ['tools', 'vision', 'reasoning', '1m']],
+    ['openrouter', 'deepseek-r1', ['tools', 'reasoning', '128k']],
+    ['ollama', 'qwen2.5-coder:32b', ['tools', '32k']]
+  ];
+  static PERMS = [
+    ['Read only', 'Can read files and search. No edits or commands.'],
+    ['Ask before changes', 'Asks before every edit and command.'],
+    ['Auto-edit', 'Edits files freely. Asks before commands.'],
+    ['Full auto', 'Runs everything inside the container.']
+  ];
+  send() {
+    const t = this.state.text.trim();
+    if (!t) return;
+    this.props.onSend && this.props.onSend(t);
+    this.setState({ text: '' });
+  }
+  renderVals() {
+    const p = this.props, s = this.state;
+    const model = s.model || p.model || 'anthropic / claude-sonnet-4-5';
+    const perm = s.perm || p.permission || 'Ask before changes';
+    const sel = on => ({ bg: on ? 'var(--ink-subtle)' : 'transparent', bar: on ? 'var(--ink)' : 'transparent' });
+    return {
+      text: s.text, rows: p.rows || 2, showKbd: (p.rows || 2) > 1,
+      placeholder: p.placeholder || 'Describe a task, or type / for commands',
+      workspace: p.workspace || 'storefront-web', hasWorkspace: p.workspace !== '',
+      model, perm, modelOpen: s.modelOpen, permOpen: s.permOpen,
+      modelBg: s.modelOpen ? 'var(--ink-subtle)' : 'transparent', permBg: s.permOpen ? 'var(--ink-subtle)' : 'transparent',
+      popTop: p.popDown ? 'calc(100% + 6px)' : 'auto', popBottom: p.popDown ? 'auto' : 'calc(100% + 6px)',
+      sendOpacity: s.text.trim() ? 1 : 0.4,
+      models: Component.MODELS.map(([pr, n, caps]) => { const id = pr + ' / ' + n; return { provider: pr, name: n, caps, ...sel(id === model), pick: () => this.setState({ model: id, modelOpen: false }) }; }),
+      perms: Component.PERMS.map(([l, note]) => ({ label: l, note, ...sel(l === perm), pick: () => this.setState({ perm: l, permOpen: false }) })),
+      onText: e => this.setState({ text: e.target.value }),
+      onKey: e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); this.send(); } if (e.key === 'Escape') this.setState({ modelOpen: false, permOpen: false }); },
+      send: () => this.send(),
+      toggleModel: () => this.setState({ modelOpen: !s.modelOpen, permOpen: false }),
+      togglePerm: () => this.setState({ permOpen: !s.permOpen, modelOpen: false })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="stylesheet" href="outpost.css"><script src="outpost.js"></script><title>Outpost · Graphite / Ink</title></helmet>
+<div style="max-width:1200px;margin:0 auto;padding:12px 32px 96px;display:flex;flex-direction:column;gap:56px">
+  <dc-import name="ViewerBar" code="DS" label="Graphite / Ink design system" next="D2 Code Session.dc.html" hint-size="100%,44px"></dc-import>
+
+  <header style="display:flex;flex-direction:column;gap:12px;max-width:720px">
+    <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text-3)"><span style="width:18px;height:18px;border:1.5px solid var(--ink);border-radius:5px;display:flex;align-items:center;justify-content:center"><span style="width:6px;height:6px;background:var(--ink);border-radius:1px"></span></span>Outpost</div>
+    <h1 style="margin:0;font-size:28px;line-height:36px;font-weight:600;letter-spacing:-0.01em">Graphite / Ink</h1>
+    <p style="margin:0;font-size:16px;line-height:24px;color:var(--text-2);text-wrap:pretty">Graphite neutrals with no accent hue. The accent is the highest-contrast ink. Hierarchy comes from contrast, weight, spacing and inversion. Red appears only for failures and destructive actions; green and red appear only inside diffs.</p>
+  </header>
+
+  <section style="display:flex;flex-direction:column;gap:20px">
+    <div style="display:flex;flex-direction:column;gap:4px"><h2 style="margin:0;font-size:20px;line-height:28px;font-weight:600">Color</h2><p style="margin:0;color:var(--text-2)">Both modes shown side by side. Tokens are CSS variables that switch with the theme.</p></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px">
+      <sc-for list="{{ modes }}" as="m" hint-placeholder-count="2">
+        <div data-theme="{{ m.id }}" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500"><o-icon name="{{ m.icon }}"></o-icon>{{ m.label }}</div>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+            <sc-for list="{{ m.tokens }}" as="t" hint-placeholder-count="12">
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <div style="height:44px;border-radius:6px;border:1px solid var(--border);background:{{ t.css }}"></div>
+                <div style="display:flex;flex-direction:column;line-height:16px"><span style="font-size:12px;color:var(--text)">{{ t.name }}</span><span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3)">{{ t.hex }}</span></div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden;font-family:'Geist Mono',monospace;font-size:12px;line-height:22px">
+            <div style="display:flex;gap:12px;padding:0 10px;background:var(--del-bg);color:var(--del)"><span style="width:12px">−</span>const [active, setActive] = useState(initial);</div>
+            <div style="display:flex;gap:12px;padding:0 10px;background:var(--add-bg);color:var(--add)"><span style="width:12px">+</span>const active = parseFilters(searchParams);</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:32px">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:4px"><h2 style="margin:0;font-size:20px;line-height:28px;font-weight:600">Type</h2><p style="margin:0;color:var(--text-2)">Geist Sans for UI. Geist Mono for code, paths, model names, commands, token counts and IDs. Weights 400, 500, 600. Sentence case everywhere.</p></div>
+      <div style="display:flex;flex-direction:column;border-top:1px solid var(--border)">
+        <sc-for list="{{ type }}" as="t" hint-placeholder-count="6">
+          <div style="display:grid;grid-template-columns:72px minmax(0,1fr);align-items:baseline;gap:16px;padding:12px 0;border-bottom:1px solid var(--border)">
+            <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3)">{{ t.spec }}</span>
+            <span style="font-size:{{ t.size }};line-height:1.3;font-weight:{{ t.w }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.sample }}</span>
+          </div>
+        </sc-for>
+        <div style="display:grid;grid-template-columns:72px minmax(0,1fr);align-items:baseline;gap:16px;padding:12px 0;border-bottom:1px solid var(--border)"><span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3)">mono 13</span><span style="font-family:'Geist Mono',monospace;font-size:13px">anthropic / claude-sonnet-4-5 · 18.4k tokens</span></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:4px"><h2 style="margin:0;font-size:20px;line-height:28px;font-weight:600">Spacing and shape</h2><p style="margin:0;color:var(--text-2)">4pt grid. 6px radius on controls, 10px on panels and cards, pills for status. Hairline borders instead of shadows; soft shadow only on popovers and sheets.</p></div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <sc-for list="{{ space }}" as="s" hint-placeholder-count="8">
+          <div style="display:flex;align-items:center;gap:12px"><span style="width:28px;font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3);text-align:right">{{ s.n }}</span><span style="height:12px;width:{{ s.w }};background:var(--ink);border-radius:2px"></span></div>
+        </sc-for>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><div style="width:88px;height:32px;border:1px solid var(--border-strong);border-radius:6px"></div><span style="font-size:12px;color:var(--text-2)">6px · controls</span></div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><div style="width:120px;height:64px;border:1px solid var(--border);background:var(--surface);border-radius:10px"></div><span style="font-size:12px;color:var(--text-2)">10px · panels, cards</span></div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><div style="width:88px;height:22px;border:1px solid var(--border-strong);border-radius:999px"></div><span style="font-size:12px;color:var(--text-2)">pill · status</span></div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><div style="width:120px;height:64px;border:1px solid var(--border-strong);background:var(--raised);border-radius:10px;box-shadow:var(--shadow)"></div><span style="font-size:12px;color:var(--text-2)">popover shadow</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:32px">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:4px"><h2 style="margin:0;font-size:20px;line-height:28px;font-weight:600">Icons</h2><p style="margin:0;color:var(--text-2)">Lucide, 16px, 1.5px stroke. Modes are told apart by icon and label.</p></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:4px">
+        <sc-for list="{{ icons }}" as="i" hint-placeholder-count="18">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 4px 10px;border-radius:6px" style-hover="background:var(--ink-subtle)"><o-icon name="{{ i }}"></o-icon><span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">{{ i }}</span></div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:4px"><h2 style="margin:0;font-size:20px;line-height:28px;font-weight:600">Session status</h2><p style="margin:0;color:var(--text-2)">Each state has its own shape, so it reads without color. "Needs you" is the loudest element in the product.</p></div>
+      <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+        <sc-for list="{{ statuses }}" as="s" hint-placeholder-count="5">
+          <div style="display:grid;grid-template-columns:120px minmax(0,1fr);align-items:center;gap:16px;padding:14px 16px;border-bottom:1px solid var(--border)">
+            <div><o-status kind="{{ s.kind }}" label=""></o-status></div>
+            <span style="font-size:13px;color:var(--text-2)">{{ s.note }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;flex-direction:column;gap:4px"><h2 style="margin:0;font-size:20px;line-height:28px;font-weight:600">Motion</h2><p style="margin:0;color:var(--text-2)">Short and ease-out. With reduced motion on, the arc and pulse stop and fades become instant; state stays readable because it lives in shape.</p></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+      <sc-for list="{{ motion }}" as="m" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;gap:6px;padding:14px 16px;border:1px solid var(--border);border-radius:10px">
+          <span style="font-size:13px;font-weight:500">{{ m.name }}</span>
+          <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-2)">{{ m.spec }}</span>
+          <span style="font-size:12px;color:var(--text-3)">{{ m.use }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:24px">
+    <div style="display:flex;flex-direction:column;gap:4px"><h2 style="margin:0;font-size:20px;line-height:28px;font-weight:600">Components</h2><p style="margin:0;color:var(--text-2)">Interactive. Click the mode switcher, tool rows, model and permission chips, and the approval buttons.</p></div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px">
+      <div style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+        <span style="font-size:13px;color:var(--text-2)">Buttons</span>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <button style="display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:0;border-radius:6px;background:var(--ink);color:var(--on-ink);font-size:13px;font-weight:500;cursor:pointer" style-hover="opacity:.86">Start session</button>
+          <button style="display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--border-strong);border-radius:6px;background:transparent;color:var(--text);font-size:13px;font-weight:500;cursor:pointer" style-hover="background:var(--ink-subtle)">Test connection</button>
+          <button style="display:flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:var(--text-2);font-size:13px;cursor:pointer" style-hover="background:var(--ink-subtle);color:var(--text)"><o-icon name="rotate-ccw"></o-icon>Undo turn</button>
+          <button style="display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:0;border-radius:6px;background:var(--danger);color:var(--on-ink);font-size:13px;font-weight:500;cursor:pointer" style-hover="opacity:.88">Revoke device</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <button style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid var(--border-strong);border-radius:6px;background:transparent;color:var(--text);cursor:pointer" title="Icon button"><o-icon name="plus"></o-icon></button>
+          <button style="display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:0;border-radius:6px;background:var(--ink);color:var(--on-ink);font-size:13px;font-weight:500;outline:2px solid var(--ink);outline-offset:2px">Focused</button>
+          <button disabled="" style="display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-3);font-size:13px;font-weight:500">Disabled</button>
+          <button style="display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--border-strong);border-radius:6px;background:transparent;color:var(--danger);font-size:13px;font-weight:500;cursor:pointer" style-hover="background:var(--ink-subtle)"><o-icon name="trash-2"></o-icon>Delete workspace</button>
+        </div>
+        <span style="font-size:12px;color:var(--text-3)">Primary · secondary · ghost · danger. Focus ring is 2px ink with 2px offset.</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px;padding:20px;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+        <span style="font-size:13px;color:var(--text-2)">Inputs</span>
+        <label style="display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;font-weight:500">Base URL</span><input value="https://api.anthropic.com/v1" readonly="" style="height:32px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg);font-family:'Geist Mono',monospace;font-size:13px;outline:0" style-focus="outline:2px solid var(--ink);outline-offset:2px"></label>
+        <label style="display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;font-weight:500">API key</span><div style="display:flex;align-items:center;height:32px;padding:0 4px 0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg)"><span style="flex:1;font-family:'Geist Mono',monospace;font-size:13px">sk-ant-••••••••••••••••4f2c</span><button style="display:flex;width:26px;height:26px;align-items:center;justify-content:center;border:0;background:transparent;color:var(--text-3);border-radius:4px"><o-icon name="eye"></o-icon></button></div></label>
+        <label style="display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;font-weight:500">Server URL</span><input value="outpost-01.local:7443" readonly="" style="height:32px;padding:0 10px;border:1px solid var(--danger);border-radius:6px;background:var(--bg);font-family:'Geist Mono',monospace;font-size:13px;outline:0"><span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--danger)"><o-icon name="circle-alert" size="14"></o-icon>Could not reach host. Check that outpostd is running.</span></label>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+        <span style="font-size:13px;color:var(--text-2)">Mode switcher</span>
+        <div role="tablist" style="display:inline-flex;align-self:flex-start;gap:2px;padding:2px;border:1px solid var(--border);border-radius:8px;background:var(--bg)">
+          <sc-for list="{{ modeTabs }}" as="t" hint-placeholder-count="3">
+            <button role="tab" onClick="{{ t.pick }}" style="display:flex;align-items:center;gap:6px;height:28px;padding:0 12px;border:1px solid {{ t.border }};border-radius:6px;background:{{ t.bg }};color:{{ t.color }};font-size:13px;font-weight:{{ t.w }};cursor:pointer;transition:background 120ms ease-out,color 120ms ease-out"><o-icon name="{{ t.icon }}"></o-icon>{{ t.label }}</button>
+          </sc-for>
+        </div>
+        <span style="font-size:12px;color:var(--text-3)">{{ modeNote }}</span>
+        <span style="font-size:13px;color:var(--text-2);margin-top:8px">Server chip</span>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <a href="D7 Server Devices.dc.html" style="display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 10px;border:1px solid var(--border);border-radius:999px;font-size:12px;color:var(--text-2)" style-hover="background:var(--ink-subtle)"><span style="width:6px;height:6px;border-radius:50%;background:var(--ink)"></span><span style="font-family:'Geist Mono',monospace;color:var(--text)">outpost-01</span>connected<span style="font-family:'Geist Mono',monospace;color:var(--text-3)">38 ms</span></a>
+          <span style="display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 10px;border:1px dashed var(--border-strong);border-radius:999px;font-size:12px;color:var(--text-2)"><o-status kind="running"></o-status><span style="font-family:'Geist Mono',monospace;color:var(--text)">outpost-01</span>reconnecting</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:16px">
+      <div style="display:flex;flex-direction:column;gap:12px;padding:20px;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+        <span style="font-size:13px;color:var(--text-2)">Model picker</span>
+        <div style="display:flex;flex-direction:column;padding:6px;border:1px solid var(--border-strong);border-radius:10px;background:var(--raised)">
+          <sc-for list="{{ models }}" as="m" hint-placeholder-count="5">
+            <button onClick="{{ m.pick }}" style="position:relative;display:flex;align-items:center;gap:8px;height:34px;padding:0 8px 0 10px;border:0;border-radius:6px;background:{{ m.bg }};cursor:pointer;text-align:left" style-hover="background:var(--ink-subtle)">
+              <span style="position:absolute;left:0;top:7px;bottom:7px;width:2px;border-radius:2px;background:{{ m.bar }}"></span>
+              <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3)">{{ m.provider }} /</span>
+              <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text);flex:1">{{ m.name }}</span>
+              <sc-for list="{{ m.caps }}" as="c"><span style="display:inline-flex;align-items:center;height:20px;padding:0 6px;border:1px solid var(--border-strong);border-radius:999px;font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-2)">{{ c }}</span></sc-for>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;padding:20px;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+        <span style="font-size:13px;color:var(--text-2)">Session rows</span>
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="5">
+            <div style="position:relative;display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;background:{{ r.bg }}" style-hover="background:var(--ink-subtle)">
+              <span style="position:absolute;left:0;top:8px;bottom:8px;width:2px;border-radius:2px;background:{{ r.bar }}"></span>
+              <o-icon name="{{ r.icon }}" style="color:var(--text-3)"></o-icon>
+              <div style="display:flex;flex-direction:column;min-width:0"><span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.title }}</span><span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.meta }}</span></div>
+              <o-status kind="{{ r.status }}"></o-status>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:16px">
+      <div style="display:flex;flex-direction:column;gap:8px;padding:20px;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+        <span style="font-size:13px;color:var(--text-2);margin-bottom:4px">Tool-call rows, collapsed</span>
+        <dc-import name="ToolRow" icon="file-search" verb="Read" target="src/FilterBar.tsx" hint-size="100%,30px"></dc-import>
+        <dc-import name="ToolRow" icon="pencil" verb="Edited" target="3 files" add="{{ 146 }}" del="{{ 27 }}" detail="{{ editDetail }}" hint-size="100%,30px"></dc-import>
+        <dc-import name="ToolRow" icon="terminal" verb="Ran" target="pnpm test" result="✓ 11/11" detail="{{ testDetail }}" hint-size="100%,30px"></dc-import>
+        <dc-import name="ToolRow" icon="terminal" verb="Running" target="pnpm lint --fix" status="running" hint-size="100%,30px"></dc-import>
+        <dc-import name="ToolRow" icon="terminal" verb="Ran" target="pnpm e2e checkout.spec.ts" result="✕ 2 failed" failed="{{ true }}" hint-size="100%,30px"></dc-import>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;padding:20px;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+        <span style="font-size:13px;color:var(--text-2)">File output cards</span>
+        <sc-for list="{{ files }}" as="f" hint-placeholder-count="3">
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg)" style-hover="border-color:var(--border-strong)">
+            <span style="width:36px;height:36px;border-radius:6px;border:1px solid var(--border);background:var(--raised);display:flex;align-items:center;justify-content:center;color:var(--text-2)"><o-icon name="{{ f.icon }}"></o-icon></span>
+            <div style="flex:1;display:flex;flex-direction:column;min-width:0"><span style="font-family:'Geist Mono',monospace;font-size:13px">{{ f.name }}</span><span style="font-size:12px;color:var(--text-3)">{{ f.meta }}</span></div>
+            <button title="Download" style="display:flex;width:28px;height:28px;align-items:center;justify-content:center;border:0;border-radius:6px;background:transparent;color:var(--text-2);cursor:pointer" style-hover="background:var(--ink-subtle);color:var(--text)"><o-icon name="download"></o-icon></button>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:16px;align-items:start">
+      <div style="display:flex;flex-direction:column;gap:12px;padding:20px;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+        <span style="font-size:13px;color:var(--text-2)">Approval card</span>
+        <dc-import name="ApprovalCard" hint-size="100%,190px"></dc-import>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;padding:20px;border:1px solid var(--border);border-radius:10px;background:var(--surface);min-height:420px">
+        <span style="font-size:13px;color:var(--text-2)">Composer</span>
+        <dc-import name="Composer" pop-down="{{ true }}" hint-size="100%,108px"></dc-import>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;flex-direction:column;gap:4px"><h2 style="margin:0;font-size:20px;line-height:28px;font-weight:600">Do and don't</h2></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px">
+      <div style="display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--border);border-radius:10px">
+        <div style="display:flex;align-items:center;gap:8px;padding:0 0 0 10px;height:32px;border-radius:6px;background:var(--ink-subtle);position:relative;font-size:13px"><span style="position:absolute;left:0;top:6px;bottom:6px;width:2px;background:var(--ink);border-radius:2px"></span>Fix filter chip sync</div>
+        <div style="display:flex;gap:6px;font-size:13px"><o-icon name="check" style="color:var(--text)"></o-icon><span><b style="font-weight:500">Do</b> mark selection with ink-subtle and a 2px ink bar.</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--border);border-radius:10px">
+        <div style="display:flex;align-items:center;gap:14px;height:32px"><span style="width:8px;height:8px;border-radius:50%;background:var(--text-2)"></span><span style="width:8px;height:8px;border-radius:50%;background:var(--text-3)"></span><span style="width:8px;height:8px;border-radius:50%;background:var(--text)"></span></div>
+        <div style="display:flex;gap:6px;font-size:13px"><o-icon name="x" style="color:var(--danger)"></o-icon><span><b style="font-weight:500">Don't</b> tell states apart with same-shape dots. Use the status glyph set.</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--border);border-radius:10px">
+        <div style="display:flex;align-items:center;gap:10px;height:32px;font-size:12px;color:var(--text-3)"><span style="text-decoration:line-through">RECENT SESSIONS</span><span style="color:var(--text-2)">Recent sessions</span></div>
+        <div style="display:flex;gap:6px;font-size:13px"><o-icon name="x" style="color:var(--danger)"></o-icon><span><b style="font-weight:500">Don't</b> use all-caps labels. Sentence case only.</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--border);border-radius:10px">
+        <div style="display:flex;align-items:center;gap:8px;height:32px"><o-status kind="needs"></o-status><span style="display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;background:var(--ink);color:var(--on-ink);font-size:12px;font-weight:500;opacity:.5;text-decoration:line-through">New</span></div>
+        <div style="display:flex;gap:6px;font-size:13px"><o-icon name="x" style="color:var(--danger)"></o-icon><span><b style="font-weight:500">Don't</b> use ink fill for anything but primary actions and "Needs you".</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--border);border-radius:10px">
+        <div style="display:flex;align-items:center;gap:8px;height:32px;font-family:'Geist Mono',monospace;font-size:12px"><span style="color:var(--text);font-weight:500">const</span><span>active</span><span style="color:var(--text-3)">// from URL</span></div>
+        <div style="display:flex;gap:6px;font-size:13px"><o-icon name="check" style="color:var(--text)"></o-icon><span><b style="font-weight:500">Do</b> keep syntax grayscale. Only diff lines get color.</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--border);border-radius:10px">
+        <div style="height:32px;border-radius:10px;background:var(--surface);box-shadow:var(--shadow);border:1px solid var(--border)"></div>
+        <div style="display:flex;gap:6px;font-size:13px"><o-icon name="x" style="color:var(--danger)"></o-icon><span><b style="font-weight:500">Don't</b> put shadows on inline cards. Hairline borders only.</span></div>
+      </div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { mode: 'code', model: 'anthropic / claude-sonnet-4-5' };
+  static TOK = [
+    ['bg', 'bg', '#0F1011', '#FAFAF9'], ['surface', 'surface', '#16171A', '#FFFFFF'], ['raised', 'raised', '#1C1D21', '#F4F4F2'],
+    ['border', 'border', '#26282C', '#E6E6E3'], ['border-strong', 'border-strong', '#34363B', '#D4D4D0'], ['ink-subtle', 'ink-subtle', 'ink 8%', '#ECECEA'],
+    ['text', 'text', '#EDEDEF', '#111113'], ['text-2', 'text-2', '#A1A3A8', '#5C5E63'], ['text-3', 'text-3', '#6B6E75', '#8E9096'],
+    ['ink', 'ink', '#EDEDEF', '#111113'], ['on-ink', 'on-ink', '#0F1011', '#FFFFFF'], ['danger', 'danger', '#F2555A', '#D92D3A']
+  ];
+  static MODELS = [
+    ['anthropic', 'claude-sonnet-4-5', ['tools', 'vision', 'reasoning', '200k']],
+    ['openai', 'gpt-5', ['tools', 'vision', 'reasoning', '400k']],
+    ['google', 'gemini-2.5-pro', ['tools', 'vision', 'reasoning', '1m']],
+    ['openrouter', 'deepseek-r1', ['tools', 'reasoning', '128k']],
+    ['ollama', 'qwen2.5-coder:32b', ['tools', '32k']]
+  ];
+  renderVals() {
+    const s = this.state, sel = on => ({ bg: on ? 'var(--ink-subtle)' : 'transparent', bar: on ? 'var(--ink)' : 'transparent' });
+    const modes = ['dark', 'light'].map(id => ({ id, label: id === 'dark' ? 'Dark' : 'Light', icon: id === 'dark' ? 'moon' : 'sun',
+      tokens: Component.TOK.map(([name, v, d, l]) => ({ name, css: 'var(--' + v + ')', hex: id === 'dark' ? d : l })) }));
+    const notes = { chat: 'Chat: conversation only. No workspace required.', cowork: 'Cowork: knowledge work that produces documents in a workspace folder.', code: 'Code: repo, diffs and terminal in an isolated worktree.' };
+    return {
+      modes,
+      type: [
+        { spec: '28 / 600', size: '28px', w: 600, sample: 'Connect to your server' },
+        { spec: '20 / 600', size: '20px', w: 600, sample: 'Fix filter chip sync on /products' },
+        { spec: '16 / 500', size: '16px', w: 500, sample: 'Mobile base size for body text' },
+        { spec: '14 / 400', size: '14px', w: 400, sample: 'Desktop base. FilterBar keeps its own copy of state.' },
+        { spec: '13 / 500', size: '13px', w: 500, sample: 'Buttons, rows and tool calls' },
+        { spec: '12 / 400', size: '12px', w: 400, sample: 'Metadata, badges and timestamps' }
+      ],
+      space: [4, 8, 12, 16, 20, 24, 32, 48].map(n => ({ n, w: n * 4 + 'px' })),
+      icons: ['message-square', 'file-text', 'code-xml', 'folder', 'folder-git-2', 'git-branch', 'terminal', 'file-search', 'pencil', 'paperclip', 'cpu', 'shield', 'server', 'smartphone', 'laptop', 'qr-code', 'rotate-ccw', 'settings'],
+      statuses: [
+        { kind: 'running', note: 'Rotating ink arc. The session is working on the server.' },
+        { kind: 'needs', note: 'Inverted pill with a softly pulsing dot. An approval is waiting.' },
+        { kind: 'done', note: 'Check in text-2. Finished without errors.' },
+        { kind: 'failed', note: 'Danger dot and label. A step failed or the agent stopped on an error.' },
+        { kind: 'interrupted', note: 'Hollow circle in text-3. Stopped by the user or a server restart.' }
+      ],
+      motion: [
+        { name: 'Hover, press', spec: '120ms ease-out', use: 'Background and opacity changes on controls' },
+        { name: 'Popover, tab change', spec: '140–160ms ease-out', use: 'Fade plus 2px rise' },
+        { name: 'Sheet', spec: '180ms ease-out', use: 'Mobile approval sheet, 24px rise' },
+        { name: 'Streaming text', spec: '160ms fade per chunk', use: 'New tokens fade in, no typing cursor jitter' },
+        { name: 'Running arc', spec: '1.6s linear, infinite', use: 'Slow on purpose; many can be on screen at once' }
+      ],
+      modeTabs: [['chat', 'Chat', 'message-square'], ['cowork', 'Cowork', 'file-text'], ['code', 'Code', 'code-xml']].map(([id, label, icon]) => {
+        const on = s.mode === id;
+        return { label, icon, bg: on ? 'var(--surface)' : 'transparent', border: on ? 'var(--border-strong)' : 'transparent', color: on ? 'var(--text)' : 'var(--text-2)', w: on ? 500 : 400, pick: () => this.setState({ mode: id }) };
+      }),
+      modeNote: notes[s.mode],
+      models: Component.MODELS.map(([pr, n, caps]) => { const id = pr + ' / ' + n; return { provider: pr, name: n, caps, ...sel(id === s.model), pick: () => this.setState({ model: id }) }; }),
+      rows: [
+        ['code-xml', 'Fix filter chip sync on /products', 'storefront-web · 12m · claude-sonnet-4-5', 'needs', true],
+        ['file-text', 'Draft Q3 board report', 'finance-ops · 34m · gpt-5', 'running'],
+        ['code-xml', 'Add Playwright smoke tests for checkout', 'storefront-web · 2h ago · claude-sonnet-4-5', 'failed'],
+        ['message-square', 'Postgres vs Redis for job queues', 'no workspace · yesterday · gemini-2.5-pro', 'done'],
+        ['code-xml', 'Rotate TLS certs on edge nodes', 'infra · 3d ago · qwen2.5-coder:32b', 'interrupted']
+      ].map(([icon, title, meta, status, on]) => ({ icon, title, meta, status, ...sel(on) })),
+      editDetail: [{ t: 'src/components/FilterBar.tsx', a: 58, d: 21 }, { t: 'src/hooks/useProductFilters.ts', a: 41, d: 6 }, { t: 'src/components/__tests__/FilterBar.test.tsx', a: 47, d: 0 }],
+      testDetail: ['✓ FilterBar › removing a chip updates the URL', '✓ FilterBar › clear all resets search params', '✓ FilterBar › back/forward restores chips', '11 passed · 1.84s'],
+      files: [
+        { icon: 'file-text', name: 'Q3_Report.docx', meta: 'Word document · 14 pages · 2 min ago' },
+        { icon: 'sheet', name: 'pipeline.xlsx', meta: 'Spreadsheet · 3 sheets · 6 min ago' },
+        { icon: 'file-code', name: 'summary.md', meta: 'Markdown · 1.2k words · just now' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

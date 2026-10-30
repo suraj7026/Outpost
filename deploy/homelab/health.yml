@@ -1,0 +1,19 @@
+---
+- name: Read-only host and cluster-service health
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Memory availability
+      ansible.builtin.command: free -h
+      register: memory
+      changed_when: false
+    - name: Print memory
+      ansible.builtin.debug:
+        var: memory.stdout_lines
+    - name: Check K3s service
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - "{{ 'k3s' if inventory_hostname == 'surajhomeserver' else 'k3s-agent' }}"
+      changed_when: false

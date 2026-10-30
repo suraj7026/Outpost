@@ -1,6 +1,8 @@
 # Outpost
 
-A server-owned agent workspace with shared native macOS and iPhone clients, using the **Soft Studio** design language: Geist type, neutral Ink surfaces, rounded panels, and separate conversation/evidence views.
+A server-owned agent workspace. The new macOS client uses **Tauri, TypeScript/React and Rust**, with a genuine AppKit sidebar and Ink-styled conversation/evidence views. The earlier SwiftUI Mac/iPhone clients remain available during migration.
+
+**Start here:** [Tauri desktop](desktop/README.md) · [Private two-server agent deployment](deploy/agent/README.md). The live deployment uses the Pi SDK, the existing Ollama daemon, self-hosted Browser-Use, and explicitly enabled root executors on both servers.
 
 **Status: development implementation, not all specifications complete.** The server has durable tasks, signed device commands, exact-action approvals, verified artifacts and domain-level tool libraries. The clients talk to the real coordinator rather than the in-memory mock. Many libraries still need end-to-end wiring and live qualification. See the [acceptance report](docs/implementation/ACCEPTANCE.md) before treating anything as production-ready.
 
@@ -22,7 +24,18 @@ npm start
 
 The development coordinator listens only on `http://127.0.0.1:4318`, with data under `.outpost/`. `OUTPOST_DATA` selects another data directory; `PORT` changes the port. It does not expose an unauthenticated network service. Do not publish the loopback HTTP endpoint directly to the Internet.
 
-### Mac
+### Mac — Tauri
+
+```sh
+cd desktop
+npm ci
+npm run desktop:build
+open "src-tauri/target/release/bundle/macos/Outpost Desktop.app"
+```
+
+The client reuses the existing macOS Keychain device identity. For the deployed homelab, the private SSH tunnel supplies `http://127.0.0.1:4318`; no new bootstrap token is needed. See [desktop setup and migration limits](desktop/README.md).
+
+### Legacy SwiftUI Mac client
 
 ```sh
 ./clients/build-mac.sh
@@ -31,7 +44,7 @@ open clients/build/Outpost.app
 
 Open **Connection**, leave the loopback server address, enter the bootstrap token and choose **Pair First Device**. The bootstrap route closes after the first device.
 
-Create a task. Without qualified Cloud configuration, its state intentionally becomes **waiting for capacity**, with an explanation. To exercise real local work, open **Evidence → Inspect Machine**, approve the exact read-only action using local authentication, then choose **Run Approved Action**. Approval and execution are separate recorded steps. You can also attach/download verified files, steer/pause/cancel tasks, create simple schedules, and manage scoped memory notes.
+Create a task. Without direct Ollama inference or qualified legacy Cloud configuration, its state intentionally becomes **waiting for capacity**, with an explanation. To exercise real local work, open **Evidence → Inspect Machine**, approve the exact read-only action using local authentication, then choose **Run Approved Action**. Approval and execution are separate recorded steps. You can also attach/download verified files, steer/pause/cancel tasks, create simple schedules, and manage scoped memory notes.
 
 ### iPhone simulator and additional devices
 
@@ -54,7 +67,7 @@ The same enrollment flow is available on either platform. **Trusted Devices** pe
 ## Verification
 
 ```sh
-npm run check                         # 33 backend tests at the recorded revision
+npm run check                         # 40 backend tests at the recorded revision
 swift test --package-path clients     # 3 projection/catalogue tests
 ./clients/build-mac.sh
 npm run qualify                       # local pins/probes; never a live provider qualification
@@ -74,18 +87,24 @@ The native fixture script pairs, creates a real task, proposes machine inspectio
 |---|---|
 | `OUTPOST_DATA` | Durable ledger, artifacts, task workspaces and Pi session root |
 | `OUTPOST_PAIRING_TOKEN` | First-device bootstrap secret; route closes after first enrollment |
+| `OUTPOST_OLLAMA_BASE_URL`, `OUTPOST_OLLAMA_MODEL` | Direct Ollama-compatible endpoint and exact model name; the homelab uses the existing daemon for local/Cloud models |
+| `OUTPOST_FULL_CONTROL` | `true` permits arbitrary workspace executables; task policy still controls dispatch |
+| `OUTPOST_HOST_TOKEN`, `OUTPOST_HOST_MAIN`, `OUTPOST_HOST_WORKER` | Explicitly enables authenticated, unrestricted root executors; keep the token private |
+| `OUTPOST_BROWSER_PYTHON` | Persistent Browser-Use venv interpreter; local Chromium with ChatOllama |
 | `OUTPOST_EXECUTABLES` | Colon-separated absolute executables eligible for the gated command tool; **not a sandbox** |
 | `OLLAMA_API_KEY` | Actual owner-authorized Ollama Cloud account key; never commit it |
 | `OUTPOST_ROLES_FILE` | JSON matching [the deliberately unqualified example](docs/implementation/roles.example.json); must reference real conformance evidence before enabling |
 | `APNS_KEY_FILE`, `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_TOPIC`, `APNS_ENVIRONMENT` | Direct APNs provider configuration; signing entitlements and real device delivery are not provisioned by this repository |
 
-Do not flip `qualified` to `true` merely to bypass the model gate. The flag is an operator declaration, not a benchmark. The operator/reviewer must be distinct; actual reviewer size, licences, reliability and acceptable false-allow thresholds still need evidence. The vision role is reserved but not wired into the current Pi adapter.
+Do not flip `qualified` to `true` merely to bypass the model gate. The flag is an operator declaration, not a benchmark. The operator/reviewer must be distinct; actual reviewer size, licences, reliability and acceptable false-allow thresholds still need evidence. The legacy vision role is reserved. Direct Ollama inference and Browser-Use have a separate vision configuration; support still depends on the exact selected model.
 
 ## Repository map
 
 - `server/core/`, `server/gateway/`: durable SQLite WAL records, events, outbox, signed HTTP.
 - `server/policy/`, `server/tasks/`, `server/pi-adapter/`: mode gate, task lifecycle and pinned Pi integration.
 - Other `server/` directories: independently tested domain capabilities; not all are exposed as running coordinator tools.
+- `desktop/`: Tauri client, React screens, Rust signing/transport, native AppKit sidebar.
+- `deploy/agent/`: two-host root executors and workspace coordinator deployment.
 - `clients/Shared/`: shared SwiftUI workspace, Keychain signing, encrypted cache and projections.
 - `clients/macOS/`, `clients/iOS/`: platform entry points.
 - `spec/`: 31 specifications and ownership of all 270 requirements.
@@ -94,4 +113,6 @@ Do not flip `qualified` to `true` merely to bypass the model gate. The flag is a
 
 ## Safety and completion limits
 
-This is a **cooperative local deployment**. It does not establish the protected Ubuntu host/guest boundary required for root-capable work. Keep privileged commands, personal provider credentials and real money out of unqualified fixtures. Live Cloud inference, eligible payment routes, real APNs delivery, complete redaction, physical two-client convergence, full-system restoration and distribution have not been qualified. No module is declared production-complete solely because its unit fixtures pass.
+This is a **private, explicitly privileged deployment**, not a hostile-agent sandbox. When host administration and a task's full-control mode are enabled, the agent can execute arbitrary root commands on both servers and read host secrets. Authentication and private networking protect entry; they do not constrain an authorized agent. Untrusted web content and model mistakes remain risks. Cloud-selected Ollama models send task/tool/page context to Ollama Cloud.
+
+One exact Ollama Cloud model and the live file/command/root/browser path have been exercised; this is not universal model or production qualification. Payments, real APNs delivery, complete redaction, physical two-client convergence, full-system restoration and signed/notarized distribution remain unqualified. No module is declared production-complete solely because its unit fixtures pass.

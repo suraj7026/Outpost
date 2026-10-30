@@ -1,0 +1,1892 @@
+[
+  {
+    "id": "TASK-01",
+    "name": "Outcome-based requests",
+    "detail": "Accept a goal in natural language; identify deliverables, relevant machine/accounts, constraints, and completion evidence before substantial work.",
+    "priority": "C",
+    "category": "Goals, tasks, and execution continuity"
+  },
+  {
+    "id": "TASK-02",
+    "name": "One task across tools",
+    "detail": "Continue from research to browser, terminal, code, documents, and service management without making the owner recreate the request in another mode.",
+    "priority": "C",
+    "category": "Goals, tasks, and execution continuity"
+  },
+  {
+    "id": "TASK-03",
+    "name": "Visible working plan",
+    "detail": "Show a concise editable plan with completed, active, blocked, and deferred steps; distinguish an estimate from an execution guarantee.",
+    "priority": "C",
+    "category": "Goals, tasks, and execution continuity"
+  },
+  {
+    "id": "TASK-04",
+    "name": "Durable run lifecycle",
+    "detail": "Persist queued, running, waiting, verifying, completed, failed, interrupted, and cancelled states independently of connected clients.",
+    "priority": "C",
+    "category": "Goals, tasks, and execution continuity"
+  },
+  {
+    "id": "TASK-05",
+    "name": "Steering and queued follow-ups",
+    "detail": "Let the user correct the active goal or queue another instruction; show when the correction was accepted and prevent obsolete work continuing silently.",
+    "priority": "C",
+    "category": "Goals, tasks, and execution continuity"
+  },
+  {
+    "id": "TASK-06",
+    "name": "Pause, cancel, and resume",
+    "detail": "Stop at a safe boundary when possible; record subprocesses and external effects that cannot be instantly cancelled; resume from a durable checkpoint.",
+    "priority": "C",
+    "category": "Goals, tasks, and execution continuity"
+  },
+  {
+    "id": "TASK-07",
+    "name": "Independent conversations",
+    "detail": "Support concurrent tasks on one machine with explicit file/service locks, resource quotas, and account identity; do not confuse shared OS access with isolation.",
+    "priority": "C",
+    "category": "Goals, tasks, and execution continuity"
+  },
+  {
+    "id": "TASK-08",
+    "name": "Task branches and retries",
+    "detail": "Fork a task from a checkpoint, retry a failed step, compare outcomes, and retain abandoned branches without repeating irreversible actions.",
+    "priority": "E",
+    "category": "Goals, tasks, and execution continuity"
+  },
+  {
+    "id": "TASK-09",
+    "name": "Long-running missions",
+    "detail": "Work for hours or days through waits, provider failures, machine restarts, and human approval; use structured checkpoints instead of relying on one context window.",
+    "priority": "E",
+    "category": "Goals, tasks, and execution continuity"
+  },
+  {
+    "id": "TASK-10",
+    "name": "Evidence-based handoff",
+    "detail": "Finish with changed files, URLs, service state, command/test results, receipts, remaining blockers, and a clear statement of what was actually verified.",
+    "priority": "C",
+    "category": "Goals, tasks, and execution continuity"
+  },
+  {
+    "id": "FS-01",
+    "name": "Personal home directory",
+    "detail": "Maintain an agent home with projects, documents, downloads, outputs, scratch, and task state; survive reboots and app updates.",
+    "priority": "C",
+    "category": "Persistent filesystem and knowledge workspace"
+  },
+  {
+    "id": "FS-02",
+    "name": "Full file operations",
+    "detail": "Read, write, edit, move, copy, rename, archive, extract, and search files; surface symlinks, permissions, encoding, and size limits.",
+    "priority": "C",
+    "category": "Persistent filesystem and knowledge workspace"
+  },
+  {
+    "id": "FS-03",
+    "name": "Fast discovery",
+    "detail": "Use ripgrep/glob and indexed metadata, then scoped semantic retrieval where useful; search hidden files only when relevant and authorized.",
+    "priority": "C",
+    "category": "Persistent filesystem and knowledge workspace"
+  },
+  {
+    "id": "FS-04",
+    "name": "Reliable transfers",
+    "detail": "Resumable upload/download with checksums, progress, cancellation, conflict choices, and destination visibility on both clients.",
+    "priority": "C",
+    "category": "Persistent filesystem and knowledge workspace"
+  },
+  {
+    "id": "FS-05",
+    "name": "Structured artifacts",
+    "detail": "Attach files and directories to tasks with type, size, provenance, version, preview, and final/intermediate status.",
+    "priority": "C",
+    "category": "Persistent filesystem and knowledge workspace"
+  },
+  {
+    "id": "FS-06",
+    "name": "Version and restore",
+    "detail": "Checkpoint task-owned files and offer restore previews; distinguish file restore, Git restore, and whole-machine recovery.",
+    "priority": "C",
+    "category": "Persistent filesystem and knowledge workspace"
+  },
+  {
+    "id": "FS-07",
+    "name": "Shared and isolated folders",
+    "detail": "Reuse common reference material while isolating unrelated work; warn before two tasks modify the same shared asset.",
+    "priority": "C",
+    "category": "Persistent filesystem and knowledge workspace"
+  },
+  {
+    "id": "FS-08",
+    "name": "Storage services and connectors",
+    "detail": "Keep artifact/object storage on the Ubuntu server, optionally through a self-hosted compatible service. External Drive/NAS/account connectors are explicit task targets, not required backend storage.",
+    "priority": "E",
+    "category": "Persistent filesystem and knowledge workspace"
+  },
+  {
+    "id": "FS-09",
+    "name": "File intake pipeline",
+    "detail": "Detect duplicates, classify documents, extract metadata/OCR, quarantine suspicious inputs, and create searchable local indexes.",
+    "priority": "E",
+    "category": "Persistent filesystem and knowledge workspace"
+  },
+  {
+    "id": "FS-10",
+    "name": "Storage lifecycle",
+    "detail": "Show disk use, temporary-file retention, trash, backups, and artifacts pinned against cleanup; require approval for broad destructive cleanup.",
+    "priority": "C",
+    "category": "Persistent filesystem and knowledge workspace"
+  },
+  {
+    "id": "RUN-01",
+    "name": "Noninteractive shell",
+    "detail": "Execute commands with explicit cwd, arguments, environment, timeout, exit code, and bounded model-facing output; retain complete logs as artifacts.",
+    "priority": "C",
+    "category": "Terminal, processes, and installed applications"
+  },
+  {
+    "id": "RUN-02",
+    "name": "Agent-only interactive PTY",
+    "detail": "Handle REPLs, prompts, SSH and terminal programs inside the server worker. Return captured activity/evidence to clients; do not expose a user terminal console.",
+    "priority": "E",
+    "category": "Terminal, processes, and installed applications"
+  },
+  {
+    "id": "RUN-03",
+    "name": "Background processes",
+    "detail": "Start, attach, inspect, signal, and stop long processes; track descendants and distinguish command completion from a service remaining healthy.",
+    "priority": "C",
+    "category": "Terminal, processes, and installed applications"
+  },
+  {
+    "id": "RUN-04",
+    "name": "Resource supervision",
+    "detail": "Limit CPU, RAM, disk, process count, runtime, browser slots, and GPU concurrency per task; explain queueing and out-of-memory failures.",
+    "priority": "C",
+    "category": "Terminal, processes, and installed applications"
+  },
+  {
+    "id": "RUN-05",
+    "name": "Cancellation propagation",
+    "detail": "Propagate aborts through Pi, tool calls, subprocess groups, browsers, and downloads; record orphan cleanup rather than falsely claiming immediate cancellation.",
+    "priority": "C",
+    "category": "Terminal, processes, and installed applications"
+  },
+  {
+    "id": "RUN-06",
+    "name": "Structured command tools",
+    "detail": "Offer typed wrappers for common operations while retaining general shell; sensitive wrappers enforce resource and argument restrictions outside the guest.",
+    "priority": "C",
+    "category": "Terminal, processes, and installed applications"
+  },
+  {
+    "id": "RUN-07",
+    "name": "Remote SSH operations",
+    "detail": "Connect to explicitly enrolled hosts using scoped credentials; preserve host-key checking and show which machine every command targets.",
+    "priority": "E",
+    "category": "Terminal, processes, and installed applications"
+  },
+  {
+    "id": "RUN-08",
+    "name": "Headless application automation",
+    "detail": "Use CLI/API and headless conversion interfaces for installed software; return logs, screenshots and artifacts. Linux desktop environments and generic desktop automation are out of scope.",
+    "priority": "E",
+    "category": "Terminal, processes, and installed applications"
+  },
+  {
+    "id": "RUN-09",
+    "name": "Environment profiles",
+    "detail": "Select language/runtime/tool versions and task-specific env without leaking one project's credentials or dependency state into another.",
+    "priority": "C",
+    "category": "Terminal, processes, and installed applications"
+  },
+  {
+    "id": "RUN-10",
+    "name": "Reusable procedures",
+    "detail": "Save a verified sequence as a versioned recipe with parameters, prerequisites, permissions, rollback notes, and tests.",
+    "priority": "E",
+    "category": "Terminal, processes, and installed applications"
+  },
+  {
+    "id": "SYS-01",
+    "name": "Machine inventory",
+    "detail": "Inspect OS, architecture, CPU/GPU, RAM, storage, ports, users, network, running services, and installed tool versions.",
+    "priority": "C",
+    "category": "Sudo and administration of the Ubuntu machine"
+  },
+  {
+    "id": "SYS-02",
+    "name": "Approved sudo",
+    "detail": "Request a scoped administrative action with a reason and impact preview; execute it through the protected privilege path and return the result.",
+    "priority": "C",
+    "category": "Sudo and administration of the Ubuntu machine"
+  },
+  {
+    "id": "SYS-03",
+    "name": "Root maintenance lease",
+    "detail": "Allow the owner to grant broad root over the agent's Ubuntu workspace for a bounded maintenance window, clearly showing reduced internal enforcement.",
+    "priority": "E",
+    "category": "Sudo and administration of the Ubuntu machine"
+  },
+  {
+    "id": "SYS-04",
+    "name": "Service management",
+    "detail": "Create/update/restart/stop task-owned systemd services, inspect journals, set restart policy, and verify health; system-wide changes follow admin policy.",
+    "priority": "C",
+    "category": "Sudo and administration of the Ubuntu machine"
+  },
+  {
+    "id": "SYS-05",
+    "name": "Package and runtime maintenance",
+    "detail": "Install, pin, update, and remove OS packages or runtimes, including approved non-default repositories; preserve inventory and rollback information.",
+    "priority": "C",
+    "category": "Sudo and administration of the Ubuntu machine"
+  },
+  {
+    "id": "SYS-06",
+    "name": "Users and permissions",
+    "detail": "Manage task accounts, groups, file ownership, SSH access and service identities through explicitly scoped admin operations.",
+    "priority": "E",
+    "category": "Sudo and administration of the Ubuntu machine"
+  },
+  {
+    "id": "SYS-07",
+    "name": "Network administration",
+    "detail": "Diagnose DNS/routes/TLS/firewall; preview externally reachable ports and protect the remote recovery channel before applying changes.",
+    "priority": "E",
+    "category": "Sudo and administration of the Ubuntu machine"
+  },
+  {
+    "id": "SYS-08",
+    "name": "Reboot-aware work",
+    "detail": "Plan updates and reboots, save state, warn affected tasks, boot automatically, and verify workers/services rejoin.",
+    "priority": "E",
+    "category": "Sudo and administration of the Ubuntu machine"
+  },
+  {
+    "id": "SYS-09",
+    "name": "Storage administration",
+    "detail": "Manage task volumes, mounts, quotas, logs and image cleanup; require stronger approval for formatting, destructive migrations, or broad deletions.",
+    "priority": "E",
+    "category": "Sudo and administration of the Ubuntu machine"
+  },
+  {
+    "id": "SYS-10",
+    "name": "External rescue",
+    "detail": "Restore a snapshot, replace a broken guest, revoke its broker credentials, or attach recovery media without relying on the damaged agent OS.",
+    "priority": "C",
+    "category": "Sudo and administration of the Ubuntu machine"
+  },
+  {
+    "id": "PKG-01",
+    "name": "Missing-tool discovery",
+    "detail": "Recognize when a task needs a tool; inspect available versions and trusted installation routes before proposing an installation.",
+    "priority": "C",
+    "category": "Software acquisition and capability installation"
+  },
+  {
+    "id": "PKG-02",
+    "name": "Standard package ecosystems",
+    "detail": "Support apt, project-local pip/uv, npm/pnpm, containers, and language-native tooling; prefer isolated project installs where appropriate.",
+    "priority": "C",
+    "category": "Software acquisition and capability installation"
+  },
+  {
+    "id": "PKG-03",
+    "name": "Capability catalogue",
+    "detail": "Show available packs, installed state, dependencies, permissions, licences, external services, disk footprint, and required secrets.",
+    "priority": "E",
+    "category": "Software acquisition and capability installation"
+  },
+  {
+    "id": "PKG-04",
+    "name": "Install plans",
+    "detail": "Present exact source/version, packages, elevated steps, new services/ports, estimated resource use, and any recurring spend.",
+    "priority": "C",
+    "category": "Software acquisition and capability installation"
+  },
+  {
+    "id": "PKG-05",
+    "name": "Installation grants",
+    "detail": "Approve a bounded installation plan once instead of prompting for every harmless substep; reject changes that expand its scope.",
+    "priority": "C",
+    "category": "Software acquisition and capability installation"
+  },
+  {
+    "id": "PKG-06",
+    "name": "Version and provenance record",
+    "detail": "Track package/image digests, source URLs, maintainer identity where available, install scripts, dependency lockfiles, and the task that requested them.",
+    "priority": "C",
+    "category": "Software acquisition and capability installation"
+  },
+  {
+    "id": "PKG-07",
+    "name": "Health and smoke checks",
+    "detail": "Run a capability's declared test after installation and before advertising it as usable; surface missing accounts separately from missing software.",
+    "priority": "C",
+    "category": "Software acquisition and capability installation"
+  },
+  {
+    "id": "PKG-08",
+    "name": "Update and rollback",
+    "detail": "Review capability updates, stage them, compare changed permissions, roll back failures, and uninstall without losing unrelated user data.",
+    "priority": "E",
+    "category": "Software acquisition and capability installation"
+  },
+  {
+    "id": "PKG-09",
+    "name": "Agent-authored tools",
+    "detail": "Let Pi build a new adapter or recipe in a staging area; require checks and owner approval before giving it new trust, privileged execution, or secrets.",
+    "priority": "E",
+    "category": "Software acquisition and capability installation"
+  },
+  {
+    "id": "PKG-10",
+    "name": "Rebuildable machine",
+    "detail": "Export an environment manifest and reconstruct tools on a replacement Ubuntu machine; exclude secret values and verify application data restoration separately.",
+    "priority": "E",
+    "category": "Software acquisition and capability installation"
+  },
+  {
+    "id": "WEB-01",
+    "name": "Headless server browser",
+    "detail": "Run Chromium headlessly on Ubuntu Server; preserve task ownership, tabs, downloads and process health. Viewing/takeover is browser-scoped and does not require a Linux desktop.",
+    "priority": "C",
+    "category": "Headless browser operation, viewing and takeover"
+  },
+  {
+    "id": "WEB-02",
+    "name": "Observe-act-verify tools",
+    "detail": "Navigate, inspect semantic snapshots, click, type, select, scroll, upload, download, and verify the changed state using fresh page references.",
+    "priority": "C",
+    "category": "Headless browser operation, viewing and takeover"
+  },
+  {
+    "id": "WEB-03",
+    "name": "Visual perception",
+    "detail": "Use screenshots and an evaluated open vision model for image/canvas-based interfaces; fall back to human takeover when perception is insufficient.",
+    "priority": "E",
+    "category": "Headless browser operation, viewing and takeover"
+  },
+  {
+    "id": "WEB-04",
+    "name": "Durable browser identities",
+    "detail": "Reuse explicitly chosen identities across tasks while isolating accounts and preventing concurrent mutation of the same profile.",
+    "priority": "C",
+    "category": "Headless browser operation, viewing and takeover"
+  },
+  {
+    "id": "WEB-05",
+    "name": "Live browser viewer",
+    "detail": "Watch the server browser on Mac/iPhone with URL, active account, task, and current action; do not confuse a remote frame with a locally authenticated website.",
+    "priority": "C",
+    "category": "Headless browser operation, viewing and takeover"
+  },
+  {
+    "id": "WEB-06",
+    "name": "Human takeover",
+    "detail": "Pause agent input, give the owner exclusive control, handle login/challenges or delicate interactions, then explicitly return control.",
+    "priority": "C",
+    "category": "Headless browser operation, viewing and takeover"
+  },
+  {
+    "id": "WEB-07",
+    "name": "Multi-tab research",
+    "detail": "Organize tabs by task, handle popups/frames/dialogs, retain useful pages, and close abandoned sessions under resource policy.",
+    "priority": "C",
+    "category": "Headless browser operation, viewing and takeover"
+  },
+  {
+    "id": "WEB-08",
+    "name": "Reliable page data",
+    "detail": "Extract tables, forms, text, links, PDFs, and screenshots with source and timestamp; preserve original downloads alongside transformed data.",
+    "priority": "C",
+    "category": "Headless browser operation, viewing and takeover"
+  },
+  {
+    "id": "WEB-09",
+    "name": "Debug and test websites",
+    "detail": "Inspect console/network/errors, emulate viewports, capture traces, run browser tests, and compare visual states on task-owned apps.",
+    "priority": "C",
+    "category": "Headless browser operation, viewing and takeover"
+  },
+  {
+    "id": "WEB-10",
+    "name": "Browser session recovery",
+    "detail": "Persist permitted task/identity state and restore browser sessions after crashes or restarts; retain downloads/evidence and reacquire human control safely. No Linux desktop fallback.",
+    "priority": "C",
+    "category": "Headless browser operation, viewing and takeover"
+  },
+  {
+    "id": "ID-01",
+    "name": "Account inventory",
+    "detail": "Show connected services, account identity, scopes, profile location, last use, expiry, and whether an identity is broker-protected or delegated to the machine.",
+    "priority": "C",
+    "category": "Accounts, local Chrome, passwords, and authentication"
+  },
+  {
+    "id": "ID-02",
+    "name": "OAuth and delegated access",
+    "detail": "Prefer official OAuth/device flows and narrow service credentials where supported; separate read, draft, send, admin, and billing privileges.",
+    "priority": "C",
+    "category": "Accounts, local Chrome, passwords, and authentication"
+  },
+  {
+    "id": "ID-03",
+    "name": "Fresh server login",
+    "detail": "Open a selected account in the protected server browser and let the owner sign in; persist only the state required for the delegated workflow.",
+    "priority": "C",
+    "category": "Accounts, local Chrome, passwords, and authentication"
+  },
+  {
+    "id": "ID-04",
+    "name": "Local Chrome companion",
+    "detail": "Consent-based Mac bridge for selected local tabs or an approved browser session; visible connection indicator, short lease, revocation, and no open public debugging port.",
+    "priority": "E",
+    "category": "Accounts, local Chrome, passwords, and authentication"
+  },
+  {
+    "id": "ID-05",
+    "name": "Selected credential migration",
+    "detail": "Preview and approve chosen account credentials, transfer them encrypted to a protected vault, and report exactly what was imported; avoid an automatic whole-password-store export.",
+    "priority": "E",
+    "category": "Accounts, local Chrome, passwords, and authentication"
+  },
+  {
+    "id": "ID-06",
+    "name": "Selected session transfer",
+    "detail": "Copy supported origin-scoped session state only after explicit review; record expiry and source; detect reauthentication requirements rather than promise transparent cross-OS login.",
+    "priority": "E",
+    "category": "Accounts, local Chrome, passwords, and authentication"
+  },
+  {
+    "id": "ID-07",
+    "name": "Secret-use requests",
+    "detail": "Resolve opaque secret references for an approved origin/purpose; keep plaintext out of Pi prompts, ordinary logs, task files, screenshots, and shell history wherever the broker controls them.",
+    "priority": "C",
+    "category": "Accounts, local Chrome, passwords, and authentication"
+  },
+  {
+    "id": "ID-08",
+    "name": "MFA, OTP, and passkeys",
+    "detail": "Hand off user presence, hardware key, passkey and financial challenges; support narrow one-time code input without storing authenticator recovery material in the agent home.",
+    "priority": "C",
+    "category": "Accounts, local Chrome, passwords, and authentication"
+  },
+  {
+    "id": "ID-09",
+    "name": "Account lifecycle",
+    "detail": "Refresh scoped tokens, detect logout/expiry, revoke grants, disconnect accounts, rotate exposed credentials, and show affected tasks.",
+    "priority": "C",
+    "category": "Accounts, local Chrome, passwords, and authentication"
+  },
+  {
+    "id": "ID-10",
+    "name": "Agent-first identity separation",
+    "detail": "Default to dedicated agent-owned accounts created by the owner; support separately scoped owner identities, explicit selection per task and no silent fallback to a more privileged owner account.",
+    "priority": "C",
+    "category": "Accounts, local Chrome, passwords, and authentication"
+  },
+  {
+    "id": "CAP-01",
+    "name": "Challenge recognition",
+    "detail": "Distinguish CAPTCHA, login, MFA, permission denial, rate limit, paywall, and page failure; choose the correct waiting state.",
+    "priority": "C",
+    "category": "CAPTCHA, verification, and human assistance"
+  },
+  {
+    "id": "CAP-02",
+    "name": "Resume after a challenge",
+    "detail": "Preserve task/tab/form state, request help once, and resume from a verified page state after resolution.",
+    "priority": "C",
+    "category": "CAPTCHA, verification, and human assistance"
+  },
+  {
+    "id": "CAP-03",
+    "name": "Self-hosted solver plugins",
+    "detail": "Expose installed local challenge helpers to Pi for supported authorized workflows; any model reasoning uses the approved Ollama Cloud route. No hosted CAPTCHA-solving vendor is a default dependency.",
+    "priority": "E",
+    "category": "CAPTCHA, verification, and human assistance"
+  },
+  {
+    "id": "CAP-04",
+    "name": "Local solving experiments",
+    "detail": "Evaluate open OCR/vision models for supported non-sensitive challenge tasks; label measured coverage and failure rates, not \"solves any CAPTCHA.\"",
+    "priority": "A",
+    "category": "CAPTCHA, verification, and human assistance"
+  },
+  {
+    "id": "CAP-05",
+    "name": "Challenge budget",
+    "detail": "Bound local solver attempts, runtime and Ollama Cloud inference use; stop and request human help when the approved budget or capability is exhausted.",
+    "priority": "E",
+    "category": "CAPTCHA, verification, and human assistance"
+  },
+  {
+    "id": "CAP-06",
+    "name": "Human challenge UI",
+    "detail": "Open the exact live browser state on Mac or phone; pause competing input and confirm a resolution before the agent continues.",
+    "priority": "C",
+    "category": "CAPTCHA, verification, and human assistance"
+  },
+  {
+    "id": "CAP-07",
+    "name": "Challenge memory",
+    "detail": "Record that a site/account often needs help and prefer a stable authorized session or official API where possible; do not store reusable challenge secrets.",
+    "priority": "E",
+    "category": "CAPTCHA, verification, and human assistance"
+  },
+  {
+    "id": "CAP-08",
+    "name": "Respect explicit denial",
+    "detail": "If a service denies access or forbids the workflow, stop or use an authorized alternative; do not turn challenge handling into evasion of an access restriction.",
+    "priority": "C",
+    "category": "CAPTCHA, verification, and human assistance"
+  },
+  {
+    "id": "CAP-09",
+    "name": "Challenge observability",
+    "detail": "Show site, challenge class, elapsed wait, attempts, cost, and what is needed from the owner; redact sensitive challenge content in retained logs.",
+    "priority": "C",
+    "category": "CAPTCHA, verification, and human assistance"
+  },
+  {
+    "id": "CAP-10",
+    "name": "Provider conformance",
+    "detail": "Test timeout, cancellation, unsupported challenge, duplicate callbacks and failed solutions; solver success alone never proves the intended task succeeded.",
+    "priority": "E",
+    "category": "CAPTCHA, verification, and human assistance"
+  },
+  {
+    "id": "DEV-01",
+    "name": "Repository understanding",
+    "detail": "Inspect project instructions, architecture, build/test commands, dependency graph, and recent changes before modifying code.",
+    "priority": "C",
+    "category": "Coding and software engineering"
+  },
+  {
+    "id": "DEV-02",
+    "name": "Reproduce and debug",
+    "detail": "Reproduce failures, gather logs/stack traces, create a minimal case where helpful, and test the suspected cause before declaring a fix.",
+    "priority": "C",
+    "category": "Coding and software engineering"
+  },
+  {
+    "id": "DEV-03",
+    "name": "Precise edits",
+    "detail": "Use patches/unique-match edits with conflict detection; preserve unrelated changes and reject stale edits rather than overwrite silently.",
+    "priority": "C",
+    "category": "Coding and software engineering"
+  },
+  {
+    "id": "DEV-04",
+    "name": "Semantic code tools",
+    "detail": "LSP diagnostics, symbols, definitions/references, rename/refactor assistance, and code-aware search through installable language packs.",
+    "priority": "E",
+    "category": "Coding and software engineering"
+  },
+  {
+    "id": "DEV-05",
+    "name": "Build and test",
+    "detail": "Discover and run appropriate unit/integration/end-to-end checks; retain outputs and distinguish failure, skipped checks, and passing checks.",
+    "priority": "C",
+    "category": "Coding and software engineering"
+  },
+  {
+    "id": "DEV-06",
+    "name": "Feature implementation",
+    "detail": "Implement UI/backend/scripts, update relevant docs, handle migrations, and produce a reviewable change set with acceptance evidence.",
+    "priority": "C",
+    "category": "Coding and software engineering"
+  },
+  {
+    "id": "DEV-07",
+    "name": "Browser-driven development",
+    "detail": "Start preview servers, inspect pages, exercise flows, collect console/network evidence, and iterate on screenshots within the same task.",
+    "priority": "C",
+    "category": "Coding and software engineering"
+  },
+  {
+    "id": "DEV-08",
+    "name": "Code review",
+    "detail": "Review local diffs or PRs for correctness, tests, security, performance and regressions; attach evidence to precise changed locations.",
+    "priority": "E",
+    "category": "Coding and software engineering"
+  },
+  {
+    "id": "DEV-09",
+    "name": "Change checkpoints",
+    "detail": "View changes per turn and full branch; undo files and coordinate Pi context so an abandoned edit is not still assumed to exist.",
+    "priority": "C",
+    "category": "Coding and software engineering"
+  },
+  {
+    "id": "DEV-10",
+    "name": "Platform-specific build handoff",
+    "detail": "Ubuntu handles Linux-capable builds. Xcode/iOS signing needs the owner's Mac as an explicit local-client handoff, not a required second Outpost backend or hosted build service.",
+    "priority": "A",
+    "category": "Coding and software engineering"
+  },
+  {
+    "id": "GIT-01",
+    "name": "GitHub CLI",
+    "detail": "Install and use `gh` for authorized repository, issue, PR, checks, release and API work; show account/repository context before mutations.",
+    "priority": "C",
+    "category": "GitHub, Git hosting, and delivery"
+  },
+  {
+    "id": "GIT-02",
+    "name": "Repository lifecycle",
+    "detail": "Clone, initialize, fork and publish repositories; ask before changing visibility, deleting a repository, or exposing private material.",
+    "priority": "C",
+    "category": "GitHub, Git hosting, and delivery"
+  },
+  {
+    "id": "GIT-03",
+    "name": "Branches and worktrees",
+    "detail": "Isolate task branches, manage remotes/upstreams, preserve dirty worktrees, and clean up only after a verified handoff or owner rule.",
+    "priority": "C",
+    "category": "GitHub, Git hosting, and delivery"
+  },
+  {
+    "id": "GIT-04",
+    "name": "Commits and PRs",
+    "detail": "Generate useful commit messages and PR descriptions, attach issues/evidence, request reviewers, and keep final titles aligned with actual scope.",
+    "priority": "C",
+    "category": "GitHub, Git hosting, and delivery"
+  },
+  {
+    "id": "GIT-05",
+    "name": "CI investigation",
+    "detail": "Read checks, bounded logs/artifacts, and annotations; diagnose failures, propose reruns where authorized, and fix them without fabricated success.",
+    "priority": "C",
+    "category": "GitHub, Git hosting, and delivery"
+  },
+  {
+    "id": "GIT-06",
+    "name": "Review-response work",
+    "detail": "Incorporate reviewer comments, track resolved/unresolved items, and prepare responses for approved submission.",
+    "priority": "E",
+    "category": "GitHub, Git hosting, and delivery"
+  },
+  {
+    "id": "GIT-07",
+    "name": "Merge and release",
+    "detail": "Prepare merge/release summaries and artifacts; execute merges, tags, production deployments or rollback only under applicable authority.",
+    "priority": "E",
+    "category": "GitHub, Git hosting, and delivery"
+  },
+  {
+    "id": "GIT-08",
+    "name": "Conflicts and history",
+    "detail": "Rebase/merge with conflict resolution; preview force-push/reset/history-rewrite effects and retain a recovery reference.",
+    "priority": "C",
+    "category": "GitHub, Git hosting, and delivery"
+  },
+  {
+    "id": "GIT-09",
+    "name": "Git hosting adapters",
+    "detail": "Optional GitLab, Forgejo/Gitea and other hosts through their APIs/CLIs; retain host/account-specific authorization.",
+    "priority": "E",
+    "category": "GitHub, Git hosting, and delivery"
+  },
+  {
+    "id": "GIT-10",
+    "name": "Repository event tasks",
+    "detail": "Turn approved issue/PR/CI webhooks into scoped tasks, deduplicate events, and avoid executing instructions embedded in untrusted comments as owner authority.",
+    "priority": "E",
+    "category": "GitHub, Git hosting, and delivery"
+  },
+  {
+    "id": "OPS-01",
+    "name": "Diagnose running services",
+    "detail": "Inspect health, processes, logs, ports, queues, dependency failures and disk pressure; correlate evidence before changing the service.",
+    "priority": "C",
+    "category": "Server operations, deployments, and cloud resources"
+  },
+  {
+    "id": "OPS-02",
+    "name": "Container operations",
+    "detail": "Build images, run Compose/Podman/Docker workloads, inspect logs and health, and manage task-owned volumes/networks under explicit host authority.",
+    "priority": "C",
+    "category": "Server operations, deployments, and cloud resources"
+  },
+  {
+    "id": "OPS-03",
+    "name": "Deployment workflow",
+    "detail": "Build, stage, test, compare versions and deploy; capture rollout/rollback evidence and actual environment ownership.",
+    "priority": "E",
+    "category": "Server operations, deployments, and cloud resources"
+  },
+  {
+    "id": "OPS-04",
+    "name": "Infrastructure as code",
+    "detail": "Prepare and explain Terraform/OpenTofu/Ansible changes, review plans, and apply only within an approved resource/cost scope.",
+    "priority": "E",
+    "category": "Server operations, deployments, and cloud resources"
+  },
+  {
+    "id": "OPS-05",
+    "name": "Cloud and hosting adapters",
+    "detail": "Install provider CLIs/connectors for explicitly connected accounts; inspect resources, troubleshoot builds, manage approved changes and record provider operation IDs.",
+    "priority": "E",
+    "category": "Server operations, deployments, and cloud resources"
+  },
+  {
+    "id": "OPS-06",
+    "name": "Domain/DNS/TLS work",
+    "detail": "Inspect and prepare domain records and certificates; show mail/verification impacts and request approval for public routing or domain purchases.",
+    "priority": "E",
+    "category": "Server operations, deployments, and cloud resources"
+  },
+  {
+    "id": "OPS-07",
+    "name": "Databases and migrations",
+    "detail": "Run authorized queries, inspect plans, back up and restore, prepare migrations, and distinguish production from disposable development data.",
+    "priority": "E",
+    "category": "Server operations, deployments, and cloud resources"
+  },
+  {
+    "id": "OPS-08",
+    "name": "Incident procedures",
+    "detail": "Execute a preapproved playbook, gather an incident timeline, apply bounded remediation, and escalate instead of widening authority when it fails.",
+    "priority": "E",
+    "category": "Server operations, deployments, and cloud resources"
+  },
+  {
+    "id": "OPS-09",
+    "name": "Cost-aware resource lifecycle",
+    "detail": "Estimate provisioning charges, enforce external limits where available, tag ownership, track expiry, and clean up only resources covered by the task.",
+    "priority": "E",
+    "category": "Server operations, deployments, and cloud resources"
+  },
+  {
+    "id": "OPS-10",
+    "name": "Agent self-maintenance",
+    "detail": "Diagnose its own worker/browser/tool failures and prepare updates; a separate trusted supervisor owns coordinator updates, credential policy and recovery.",
+    "priority": "C",
+    "category": "Server operations, deployments, and cloud resources"
+  },
+  {
+    "id": "RES-01",
+    "name": "Self-hosted search",
+    "detail": "Run a search adapter/metasearch service on Ubuntu, expose it to Pi, and query public upstream sources under their access limits; no managed search API is required.",
+    "priority": "C",
+    "category": "Web research and information gathering"
+  },
+  {
+    "id": "RES-02",
+    "name": "Source-grounded answers",
+    "detail": "Record source URL/title, access time, relevant evidence, publication date when available, and confidence; distinguish observation from inference.",
+    "priority": "C",
+    "category": "Web research and information gathering"
+  },
+  {
+    "id": "RES-03",
+    "name": "Deep research tasks",
+    "detail": "Decompose questions, compare sources, follow citations, track unresolved claims, and deliver a report with a supporting evidence folder.",
+    "priority": "E",
+    "category": "Web research and information gathering"
+  },
+  {
+    "id": "RES-04",
+    "name": "Structured extraction",
+    "detail": "Extract public or authorized account data into tables/JSON/CSV with schemas, deduplication, unit/currency normalization, and validation.",
+    "priority": "C",
+    "category": "Web research and information gathering"
+  },
+  {
+    "id": "RES-05",
+    "name": "Responsible crawling",
+    "detail": "Scope domains/pages, rate-limit, checkpoint, honor applicable access restrictions, and stop on explicit blocks rather than silently escalating methods.",
+    "priority": "E",
+    "category": "Web research and information gathering"
+  },
+  {
+    "id": "RES-06",
+    "name": "Change monitoring",
+    "detail": "Watch selected pages, docs, releases, prices or public records; retain before/after evidence and alert only on user-defined meaningful change.",
+    "priority": "E",
+    "category": "Web research and information gathering"
+  },
+  {
+    "id": "RES-07",
+    "name": "Mixed-source research",
+    "detail": "Combine repo files, PDFs, spreadsheets, browser pages and connected knowledge sources with provenance for each claim.",
+    "priority": "C",
+    "category": "Web research and information gathering"
+  },
+  {
+    "id": "RES-08",
+    "name": "Comparison dossiers",
+    "detail": "Build vendor/tool/travel/product comparisons including total costs, availability uncertainty, trade-offs, and links without making a purchase.",
+    "priority": "E",
+    "category": "Web research and information gathering"
+  },
+  {
+    "id": "RES-09",
+    "name": "Reproducible datasets",
+    "detail": "Retain extraction code, source versions, filters and refresh procedures; show gaps and failed pages instead of hiding incomplete coverage.",
+    "priority": "E",
+    "category": "Web research and information gathering"
+  },
+  {
+    "id": "RES-10",
+    "name": "Research-to-action handoff",
+    "detail": "Turn a verified finding into a proposed code change, server action, draft communication or purchase plan while preserving the next action's approval boundary.",
+    "priority": "E",
+    "category": "Web research and information gathering"
+  },
+  {
+    "id": "DOC-01",
+    "name": "Read heterogeneous documents",
+    "detail": "Parse PDF, office files, HTML, Markdown, text and scanned images; retain page/sheet/section references and mark extraction failures.",
+    "priority": "C",
+    "category": "Documents, spreadsheets, presentations, and files as deliverables"
+  },
+  {
+    "id": "DOC-02",
+    "name": "Write reports and documents",
+    "detail": "Produce DOCX, PDF, Markdown and HTML with headings, tables, citations, charts and reusable owner templates.",
+    "priority": "C",
+    "category": "Documents, spreadsheets, presentations, and files as deliverables"
+  },
+  {
+    "id": "DOC-03",
+    "name": "Spreadsheet work",
+    "detail": "Create and edit XLSX/CSV, formulas, formatting and charts; recalculate with a compatible engine and check representative formula results.",
+    "priority": "C",
+    "category": "Documents, spreadsheets, presentations, and files as deliverables"
+  },
+  {
+    "id": "DOC-04",
+    "name": "Slide decks",
+    "detail": "Generate PPTX and rendered previews from research, data or a reference deck; inspect layouts instead of claiming a saved file is presentation-ready.",
+    "priority": "E",
+    "category": "Documents, spreadsheets, presentations, and files as deliverables"
+  },
+  {
+    "id": "DOC-05",
+    "name": "PDF workflows",
+    "detail": "Merge/split, extract, annotate, fill supported forms, redact where technically validated, and generate PDFs while preserving original evidence.",
+    "priority": "E",
+    "category": "Documents, spreadsheets, presentations, and files as deliverables"
+  },
+  {
+    "id": "DOC-06",
+    "name": "Render and inspect",
+    "detail": "Render final documents to pages/slides and check clipping, pagination, fonts, charts and missing content; store previews beside the original artifact.",
+    "priority": "C",
+    "category": "Documents, spreadsheets, presentations, and files as deliverables"
+  },
+  {
+    "id": "DOC-07",
+    "name": "Revision and review",
+    "detail": "Compare document versions, apply requested changes, show meaningful diffs or redlines when supported, and retain a recoverable earlier version.",
+    "priority": "E",
+    "category": "Documents, spreadsheets, presentations, and files as deliverables"
+  },
+  {
+    "id": "DOC-08",
+    "name": "Batch transformations",
+    "detail": "Convert, rename, classify, summarize and organize large document collections with restartable progress and per-file failures.",
+    "priority": "E",
+    "category": "Documents, spreadsheets, presentations, and files as deliverables"
+  },
+  {
+    "id": "DOC-09",
+    "name": "Template library",
+    "detail": "Owner-approved branding, layouts, writing conventions, spreadsheets and reports that can be selected per task without granting new external authority.",
+    "priority": "E",
+    "category": "Documents, spreadsheets, presentations, and files as deliverables"
+  },
+  {
+    "id": "DOC-10",
+    "name": "Delivery workflow",
+    "detail": "Package outputs, show provenance and unresolved issues, then download/share/upload/send only under the destination's applicable permission.",
+    "priority": "C",
+    "category": "Documents, spreadsheets, presentations, and files as deliverables"
+  },
+  {
+    "id": "DATA-01",
+    "name": "Local analysis",
+    "detail": "Use Python, pandas/Polars, SQL or DuckDB-style tooling for cleaning, joining, aggregation, validation and reproducible calculations.",
+    "priority": "C",
+    "category": "Data analysis and databases"
+  },
+  {
+    "id": "DATA-02",
+    "name": "Data quality reports",
+    "detail": "Identify missing values, duplicate records, schema drift, inconsistent units, outliers and rejected rows with counts and reproducible checks.",
+    "priority": "C",
+    "category": "Data analysis and databases"
+  },
+  {
+    "id": "DATA-03",
+    "name": "Charts and explanations",
+    "detail": "Produce appropriate charts/tables with labelled units, filters, assumptions and a link to the data and calculation used.",
+    "priority": "C",
+    "category": "Data analysis and databases"
+  },
+  {
+    "id": "DATA-04",
+    "name": "Query connected databases",
+    "detail": "Connect to approved databases with read-only roles by default; show database/environment, row limits and query cost controls.",
+    "priority": "E",
+    "category": "Data analysis and databases"
+  },
+  {
+    "id": "DATA-05",
+    "name": "Approved data mutations",
+    "detail": "Preview update/delete scope, take a viable backup where possible, use transactions, verify counts, and require write authority distinct from read access.",
+    "priority": "E",
+    "category": "Data analysis and databases"
+  },
+  {
+    "id": "DATA-06",
+    "name": "Data pipelines",
+    "detail": "Build restartable import/export and transformation jobs with checkpoints, schemas, lineage and explicit destination permissions.",
+    "priority": "E",
+    "category": "Data analysis and databases"
+  },
+  {
+    "id": "DATA-07",
+    "name": "API datasets",
+    "detail": "Paginate, respect rate limits, resume extraction, reconcile totals, and preserve source IDs rather than silently drop failed pages.",
+    "priority": "E",
+    "category": "Data analysis and databases"
+  },
+  {
+    "id": "DATA-08",
+    "name": "Notebook and script outputs",
+    "detail": "Deliver runnable scripts/notebooks, dependency manifests and a concise method, with sensitive values represented as references.",
+    "priority": "E",
+    "category": "Data analysis and databases"
+  },
+  {
+    "id": "DATA-09",
+    "name": "Large-data execution",
+    "detail": "Stream or chunk oversized inputs, estimate disk/RAM, avoid loading everything into model context, and fail clearly when resources are insufficient.",
+    "priority": "E",
+    "category": "Data analysis and databases"
+  },
+  {
+    "id": "DATA-10",
+    "name": "Business/finance preparation",
+    "detail": "Prepare reconciliations, invoice summaries, expense categorization and operational reports with traceable calculations; submissions or transfers use separate authority.",
+    "priority": "E",
+    "category": "Data analysis and databases"
+  },
+  {
+    "id": "COM-01",
+    "name": "Email reading and triage",
+    "detail": "Search/summarize approved mailboxes, extract action items and attachments, and organize labels under configured authority.",
+    "priority": "E",
+    "category": "Email, calendar, messaging, and collaboration"
+  },
+  {
+    "id": "COM-02",
+    "name": "Draft and send mail",
+    "detail": "Draft context-aware replies, show exact recipients/content/attachments, and send only with current-task or standing send authorization.",
+    "priority": "E",
+    "category": "Email, calendar, messaging, and collaboration"
+  },
+  {
+    "id": "COM-03",
+    "name": "Calendar assistance",
+    "detail": "Find availability, propose times, prepare events and handle recurrence/time zones; distinguish a private reminder from sending attendees invitations.",
+    "priority": "E",
+    "category": "Email, calendar, messaging, and collaboration"
+  },
+  {
+    "id": "COM-04",
+    "name": "Chat integrations",
+    "detail": "Optional Telegram, Slack, Discord, Matrix or other official connectors with explicit channel, sender identity and outbound scope.",
+    "priority": "E",
+    "category": "Email, calendar, messaging, and collaboration"
+  },
+  {
+    "id": "COM-05",
+    "name": "Meeting preparation",
+    "detail": "Compile agendas, relevant files, prior decisions, open questions and follow-up drafts from authorized sources.",
+    "priority": "E",
+    "category": "Email, calendar, messaging, and collaboration"
+  },
+  {
+    "id": "COM-06",
+    "name": "Contact and relationship context",
+    "detail": "Store owner-reviewed contact identities and preferred channels; disambiguate similar names before an external send.",
+    "priority": "E",
+    "category": "Email, calendar, messaging, and collaboration"
+  },
+  {
+    "id": "COM-07",
+    "name": "Task intake from messages",
+    "detail": "Turn approved incoming requests into queued work; treat third-party content as data and never as automatic authority to spend or elevate.",
+    "priority": "E",
+    "category": "Email, calendar, messaging, and collaboration"
+  },
+  {
+    "id": "COM-08",
+    "name": "Notification routing",
+    "detail": "Persist completion/failure/action-required notices in the server inbox and stream them to connected clients; optional owner-connected channels are task destinations, not a hosted notification backend.",
+    "priority": "C",
+    "category": "Email, calendar, messaging, and collaboration"
+  },
+  {
+    "id": "COM-09",
+    "name": "Shared systems administration",
+    "detail": "Optional ticketing, project boards, CRM, knowledge bases and business tools through installable adapters, with audit and resource-specific permission.",
+    "priority": "A",
+    "category": "Email, calendar, messaging, and collaboration"
+  },
+  {
+    "id": "COM-10",
+    "name": "Delivery reconciliation",
+    "detail": "Detect whether a send or update already succeeded before retrying; retain provider IDs and mark uncertain outcomes for inspection.",
+    "priority": "E",
+    "category": "Email, calendar, messaging, and collaboration"
+  },
+  {
+    "id": "LIFE-01",
+    "name": "Account administration",
+    "detail": "Retrieve statements/invoices, inspect settings, prepare profile updates, and execute approved account changes through supported sites/APIs.",
+    "priority": "E",
+    "category": "Personal administration and delegated errands"
+  },
+  {
+    "id": "LIFE-02",
+    "name": "Travel and appointments",
+    "detail": "Research options, compare complete prices and constraints, prepare booking details, then stop for required booking/payment confirmation.",
+    "priority": "E",
+    "category": "Personal administration and delegated errands"
+  },
+  {
+    "id": "LIFE-03",
+    "name": "Forms and applications",
+    "detail": "Assemble required documents, fill authorized forms, show declarations and final fields, and obtain permission for submission or attestation.",
+    "priority": "E",
+    "category": "Personal administration and delegated errands"
+  },
+  {
+    "id": "LIFE-04",
+    "name": "Shopping and procurement",
+    "detail": "Compare stock/specifications, construct a cart, calculate total cost, and ask for the transaction-specific purchase described in PAY.",
+    "priority": "E",
+    "category": "Personal administration and delegated errands"
+  },
+  {
+    "id": "LIFE-05",
+    "name": "Subscription management",
+    "detail": "Inventory explicitly connected subscriptions, track renewal dates, flag price changes, and prepare or perform approved cancellations.",
+    "priority": "E",
+    "category": "Personal administration and delegated errands"
+  },
+  {
+    "id": "LIFE-06",
+    "name": "Returns and support",
+    "detail": "Gather order evidence, prepare support tickets, request approved returns/refunds, and track response/status without inventing a successful resolution.",
+    "priority": "E",
+    "category": "Personal administration and delegated errands"
+  },
+  {
+    "id": "LIFE-07",
+    "name": "Personal file organization",
+    "detail": "Organize receipts, records, photos and downloads; show proposed mass changes and preserve originals/backups.",
+    "priority": "E",
+    "category": "Personal administration and delegated errands"
+  },
+  {
+    "id": "LIFE-08",
+    "name": "Deadline preparation",
+    "detail": "Track renewals, application deadlines and owner-defined obligations; collect required material and remind only under an approved schedule.",
+    "priority": "E",
+    "category": "Personal administration and delegated errands"
+  },
+  {
+    "id": "LIFE-09",
+    "name": "Multi-step errands",
+    "detail": "Combine research, document preparation, browser actions, correspondence and payment preparation under one visible task and authority envelope.",
+    "priority": "A",
+    "category": "Personal administration and delegated errands"
+  },
+  {
+    "id": "LIFE-10",
+    "name": "Home and lab integrations",
+    "detail": "Optional enrolled home-server, NAS or device APIs; expose device state and require specific approval for changes with physical consequences.",
+    "priority": "A",
+    "category": "Personal administration and delegated errands"
+  },
+  {
+    "id": "PAY-01",
+    "name": "Purchase preparation",
+    "detail": "Research, select items, prepare a cart and calculate total including currency, tax, shipping, deposits and recurring terms before requesting payment.",
+    "priority": "E",
+    "category": "Payments, purchases, budgets, and receipts"
+  },
+  {
+    "id": "PAY-02",
+    "name": "Whole payment workflow approval",
+    "detail": "On either native client, approve merchant/payee, purpose, items, funding alias, maximum total/currency, delivery, recurrence, expiry and included checkout-to-receipt steps; require current owner authentication.",
+    "priority": "E",
+    "category": "Payments, purchases, budgets, and receipts"
+  },
+  {
+    "id": "PAY-03",
+    "name": "Authorized workflow execution and handoff",
+    "detail": "Execute the owner-approved payment workflow through a supported broker/provider route; do not repeat prompts for included routine steps. Hand off issuer authentication or unsupported final checkout, and reconcile the real result.",
+    "priority": "E",
+    "category": "Payments, purchases, budgets, and receipts"
+  },
+  {
+    "id": "PAY-04",
+    "name": "Brokered payment method",
+    "detail": "Use tokenized/provider-supported payment credentials outside the root-capable machine; never place the owner's general-purpose card or wallet secrets in Pi context.",
+    "priority": "E",
+    "category": "Payments, purchases, budgets, and receipts"
+  },
+  {
+    "id": "PAY-05",
+    "name": "Bounded virtual instrument",
+    "detail": "Optional provider-issued virtual card or delegated instrument with available merchant/category/amount/time controls; only if the owner's location and account are eligible.",
+    "priority": "A",
+    "category": "Payments, purchases, budgets, and receipts"
+  },
+  {
+    "id": "PAY-06",
+    "name": "Standing purchase mandate",
+    "detail": "Explicit opt-in rules for narrow repeat purchases: supplier, purpose, per-order/cumulative budget, currency, frequency, expiry and allowed recurrence; owner can revoke.",
+    "priority": "A",
+    "category": "Payments, purchases, budgets, and receipts"
+  },
+  {
+    "id": "PAY-07",
+    "name": "Step-up authentication",
+    "detail": "Pause for bank/card/UPI/wallet authentication where required; the owner completes PIN, biometrics, passkey or OTP in the appropriate trusted interface.",
+    "priority": "E",
+    "category": "Payments, purchases, budgets, and receipts"
+  },
+  {
+    "id": "PAY-08",
+    "name": "No duplicate purchases",
+    "detail": "Maintain a purchase ledger and operation key, reserve concurrent budget, verify provider/order state after timeouts, and never blindly replay a checkout click.",
+    "priority": "E",
+    "category": "Payments, purchases, budgets, and receipts"
+  },
+  {
+    "id": "PAY-09",
+    "name": "Receipts and aftercare",
+    "detail": "Save invoices/receipts, record order and subscription IDs, track delivery/refund state, and prepare approved cancellation or return actions.",
+    "priority": "E",
+    "category": "Payments, purchases, budgets, and receipts"
+  },
+  {
+    "id": "PAY-10",
+    "name": "Spending control centre",
+    "detail": "Show pending/committed/settled spend, recurring commitments, budget reservations, failed attempts and disputed or unknown outcomes; reconcile against provider records.",
+    "priority": "E",
+    "category": "Payments, purchases, budgets, and receipts"
+  },
+  {
+    "id": "AUTO-01",
+    "name": "One-time and recurring work",
+    "detail": "Natural-language schedules, explicit time zone, next-run preview, start/end dates, and support for one-off, interval and calendar schedules.",
+    "priority": "C",
+    "category": "Scheduling, monitoring, and proactive work"
+  },
+  {
+    "id": "AUTO-02",
+    "name": "Meaningful monitors",
+    "detail": "Watch a URL, repo, service, folder, CI run, invoice or other resource; wake the model only when a condition or useful interval warrants it.",
+    "priority": "E",
+    "category": "Scheduling, monitoring, and proactive work"
+  },
+  {
+    "id": "AUTO-03",
+    "name": "Durable scheduling semantics",
+    "detail": "Record scheduled occurrence IDs, missed-run policy, retries and deduplication; define catch-up behavior after outages and daylight-saving changes.",
+    "priority": "C",
+    "category": "Scheduling, monitoring, and proactive work"
+  },
+  {
+    "id": "AUTO-04",
+    "name": "Webhook and event triggers",
+    "detail": "Authenticate incoming events, deduplicate/replay safely, rate-limit, and map them to a constrained task rather than unrestricted prompt execution.",
+    "priority": "E",
+    "category": "Scheduling, monitoring, and proactive work"
+  },
+  {
+    "id": "AUTO-05",
+    "name": "Heartbeat goals",
+    "detail": "Periodically inspect an owner-authorized objective and continue useful work; remain quiet on unchanged/non-actionable state.",
+    "priority": "E",
+    "category": "Scheduling, monitoring, and proactive work"
+  },
+  {
+    "id": "AUTO-06",
+    "name": "Bounded automatic remediation",
+    "detail": "Run a tested procedure only on specified services/resources, with rate/attempt limits, rollback and escalation.",
+    "priority": "E",
+    "category": "Scheduling, monitoring, and proactive work"
+  },
+  {
+    "id": "AUTO-07",
+    "name": "Approval while unattended",
+    "detail": "Persist requests, notify once under policy, stop at the protected step, and expire or reschedule safely when no owner responds.",
+    "priority": "C",
+    "category": "Scheduling, monitoring, and proactive work"
+  },
+  {
+    "id": "AUTO-08",
+    "name": "Resource and spend budgets",
+    "detail": "Limit model runtime, browser slots, API fees, cloud use and purchase authority per automation; prevent overlapping instances unless explicitly allowed.",
+    "priority": "E",
+    "category": "Scheduling, monitoring, and proactive work"
+  },
+  {
+    "id": "AUTO-09",
+    "name": "Automation management",
+    "detail": "List, explain, test, pause, resume, edit and delete automations; show their permissions, last results, next run and change history.",
+    "priority": "C",
+    "category": "Scheduling, monitoring, and proactive work"
+  },
+  {
+    "id": "AUTO-10",
+    "name": "Schedules are explicit authority",
+    "detail": "A memory note or generated plan does not silently create recurring work; scheduler/standing grants require an owner-authorized operation and record.",
+    "priority": "C",
+    "category": "Scheduling, monitoring, and proactive work"
+  },
+  {
+    "id": "MEM-01",
+    "name": "Explicit durable memory",
+    "detail": "Save owner preferences, project conventions, decisions and known service facts with source, date, scope and correction history.",
+    "priority": "C",
+    "category": "Memory, personal knowledge, and retrieval"
+  },
+  {
+    "id": "MEM-02",
+    "name": "Episodic task history",
+    "detail": "Search previous work, results, errors and supporting artifacts; summarize what happened without replacing retained evidence.",
+    "priority": "C",
+    "category": "Memory, personal knowledge, and retrieval"
+  },
+  {
+    "id": "MEM-03",
+    "name": "Local semantic retrieval",
+    "detail": "Use approved local embeddings plus keyword search; keep indexes rebuildable and respect source/account boundaries.",
+    "priority": "E",
+    "category": "Memory, personal knowledge, and retrieval"
+  },
+  {
+    "id": "MEM-04",
+    "name": "Task working state",
+    "detail": "Save current plan, facts, files, active processes, pending decisions and next action before context compaction or a long wait.",
+    "priority": "C",
+    "category": "Memory, personal knowledge, and retrieval"
+  },
+  {
+    "id": "MEM-05",
+    "name": "Provenance and freshness",
+    "detail": "Mark direct observation, owner instruction, imported note and inference; revalidate stale operational facts before consequential action.",
+    "priority": "C",
+    "category": "Memory, personal knowledge, and retrieval"
+  },
+  {
+    "id": "MEM-06",
+    "name": "Inspect, correct, and forget",
+    "detail": "Provide a memory browser, edit/supersede/delete actions and deletion propagation to indexes; explain retained audit/backup limits.",
+    "priority": "E",
+    "category": "Memory, personal knowledge, and retrieval"
+  },
+  {
+    "id": "MEM-07",
+    "name": "Knowledge collections",
+    "detail": "Index selected repos, folders and connected sources into named collections with update schedules and access scopes.",
+    "priority": "E",
+    "category": "Memory, personal knowledge, and retrieval"
+  },
+  {
+    "id": "MEM-08",
+    "name": "Procedure learning",
+    "detail": "Propose a reusable skill from a successful task, include prerequisites and verification, and request review before expanding its authority.",
+    "priority": "E",
+    "category": "Memory, personal knowledge, and retrieval"
+  },
+  {
+    "id": "MEM-09",
+    "name": "Memory never grants permission",
+    "detail": "Keep remembered preferences and past approvals separate from live policy/grants; a retrieved page cannot promote itself into owner instructions.",
+    "priority": "C",
+    "category": "Memory, personal knowledge, and retrieval"
+  },
+  {
+    "id": "MEM-10",
+    "name": "Controlled consolidation",
+    "detail": "Deduplicate and condense notes in the background, preserve source links, flag contradictions, and keep an owner-readable change history.",
+    "priority": "A",
+    "category": "Memory, personal knowledge, and retrieval"
+  },
+  {
+    "id": "TEAM-01",
+    "name": "Worker roles",
+    "detail": "Optional coding, browser, research, document, operations and verification workers, all implemented on Pi-compatible integration paths where practical.",
+    "priority": "E",
+    "category": "Specialized workers and coordinated parallel work"
+  },
+  {
+    "id": "TEAM-02",
+    "name": "Bounded delegation",
+    "detail": "Parent assigns a concrete deliverable, resources, budget, deadline and tool loadout; child authority is a subset of the parent's current grant.",
+    "priority": "E",
+    "category": "Specialized workers and coordinated parallel work"
+  },
+  {
+    "id": "TEAM-03",
+    "name": "Task dependency graph",
+    "detail": "Model prerequisites, parallel steps and joins; persist progress and avoid declaring a mission done while required children remain unresolved.",
+    "priority": "E",
+    "category": "Specialized workers and coordinated parallel work"
+  },
+  {
+    "id": "TEAM-04",
+    "name": "Workspace coordination",
+    "detail": "Separate worktrees or folders, account/profile leases, service locks, and explicit merge/handoff of shared results.",
+    "priority": "E",
+    "category": "Specialized workers and coordinated parallel work"
+  },
+  {
+    "id": "TEAM-05",
+    "name": "Cloud-capacity-aware queue",
+    "detail": "Schedule Pi model calls within Ollama Cloud account limits and task budgets; show quota/backoff state and separately bound local browser/tool workers.",
+    "priority": "C",
+    "category": "Specialized workers and coordinated parallel work"
+  },
+  {
+    "id": "TEAM-06",
+    "name": "Independent verification",
+    "detail": "Run deterministic checks or a separately scoped verifier; label model-based review as supporting judgment, not proof of correctness.",
+    "priority": "E",
+    "category": "Specialized workers and coordinated parallel work"
+  },
+  {
+    "id": "TEAM-07",
+    "name": "Budget inheritance",
+    "detail": "Charge nested tools/workers to the initiating task, prevent recursive runaway spawning, and cap depth/concurrency.",
+    "priority": "E",
+    "category": "Specialized workers and coordinated parallel work"
+  },
+  {
+    "id": "TEAM-08",
+    "name": "Worker recovery",
+    "detail": "Replace a crashed worker, attach its durable state, and reconcile outstanding effects before retrying the assigned step.",
+    "priority": "E",
+    "category": "Specialized workers and coordinated parallel work"
+  },
+  {
+    "id": "TEAM-09",
+    "name": "Owner-visible delegation",
+    "detail": "Show what each worker is doing, machine/account used, pending approval and final artifact; hide noisy internal chatter by default.",
+    "priority": "E",
+    "category": "Specialized workers and coordinated parallel work"
+  },
+  {
+    "id": "TEAM-10",
+    "name": "Same-server worker expansion",
+    "detail": "Scale isolated worker processes, containers or VMs on the same Ubuntu server with capability discovery, leases and quotas. A multi-server fleet is outside the current hosting scope.",
+    "priority": "A",
+    "category": "Specialized workers and coordinated parallel work"
+  },
+  {
+    "id": "EXT-01",
+    "name": "Pi extension support",
+    "detail": "Load approved, pinned extensions and skills through the chosen SDK adapter; expose compatible configuration and clear runtime failures.",
+    "priority": "C",
+    "category": "Plugins, skills, MCP, and reusable capabilities"
+  },
+  {
+    "id": "EXT-02",
+    "name": "Self-hosted MCP connectors",
+    "detail": "Run MCP adapters/servers on Ubuntu over stdio or local authenticated transport, expose them to Pi, and mediate their authorized calls to external task services.",
+    "priority": "E",
+    "category": "Plugins, skills, MCP, and reusable capabilities"
+  },
+  {
+    "id": "EXT-03",
+    "name": "Simple CLI adapters",
+    "detail": "Wrap an installed CLI with structured inputs/results, help/discovery, exit handling and capability metadata without needing a new full plugin framework.",
+    "priority": "C",
+    "category": "Plugins, skills, MCP, and reusable capabilities"
+  },
+  {
+    "id": "EXT-04",
+    "name": "Capability manifest",
+    "detail": "Declare tools, dependencies, executable hashes, data destinations, secrets, permissions, update source, licences and smoke tests.",
+    "priority": "E",
+    "category": "Plugins, skills, MCP, and reusable capabilities"
+  },
+  {
+    "id": "EXT-05",
+    "name": "Dynamic tool discovery",
+    "detail": "Search/load only tools relevant to the current step; keep hundreds of integrations from overwhelming a smaller model's context.",
+    "priority": "C",
+    "category": "Plugins, skills, MCP, and reusable capabilities"
+  },
+  {
+    "id": "EXT-06",
+    "name": "Capability packs",
+    "detail": "Bundle software, skills, schemas and tests for coding, browser work, documents, operations, communications or data analysis.",
+    "priority": "E",
+    "category": "Plugins, skills, MCP, and reusable capabilities"
+  },
+  {
+    "id": "EXT-07",
+    "name": "In-process trust distinction",
+    "detail": "Treat Pi extensions as executable trusted code; run less-trusted connectors in separate processes/containers with mediated resources.",
+    "priority": "C",
+    "category": "Plugins, skills, MCP, and reusable capabilities"
+  },
+  {
+    "id": "EXT-08",
+    "name": "Permissions on upgrade",
+    "detail": "Compare changed capabilities/scopes, require owner approval for escalation, and pin the version used by existing jobs until a compatible transition.",
+    "priority": "E",
+    "category": "Plugins, skills, MCP, and reusable capabilities"
+  },
+  {
+    "id": "EXT-09",
+    "name": "Local interoperability adapters",
+    "detail": "Optional ACP engines and agent adapters run on Ubuntu and are exposed to Pi; task import/export or authorized protocol exchange does not outsource execution or expand authority.",
+    "priority": "A",
+    "category": "Plugins, skills, MCP, and reusable capabilities"
+  },
+  {
+    "id": "EXT-10",
+    "name": "Owner's private registry",
+    "detail": "Save verified packs/recipes, stage new versions, inspect provenance and roll back; avoid automatic execution of arbitrary marketplace content.",
+    "priority": "E",
+    "category": "Plugins, skills, MCP, and reusable capabilities"
+  },
+  {
+    "id": "MODEL-01",
+    "name": "Ollama Cloud primary path",
+    "detail": "Route Pi through the server-hosted gateway to approved Cloud models; keep the cloud credential out of clients/guest-wide config and make hosted inference visible.",
+    "priority": "C",
+    "category": "Ollama Cloud and open-model operations"
+  },
+  {
+    "id": "MODEL-02",
+    "name": "Cloud capability probes",
+    "detail": "Test tools/results, streaming, images, context and cancellation on the actual hosted route. Validate data locally; do not assume Cloud-enforced structured output.",
+    "priority": "C",
+    "category": "Ollama Cloud and open-model operations"
+  },
+  {
+    "id": "MODEL-03",
+    "name": "Operator, reviewer and vision roles",
+    "detail": "Qualify Cloud operator/coding, a separate smaller safety reviewer for Auto, and vision roles; self-host embedding/indexing helpers. Reviewer failure or uncertain classification asks the owner.",
+    "priority": "C",
+    "category": "Ollama Cloud and open-model operations"
+  },
+  {
+    "id": "MODEL-04",
+    "name": "Explicit model inventory",
+    "detail": "Record hosted API ID, licence/source, observed version/digest if available, effective capabilities/context, qualification date and fallback list; do not invent provider-hidden runtime details.",
+    "priority": "C",
+    "category": "Ollama Cloud and open-model operations"
+  },
+  {
+    "id": "MODEL-05",
+    "name": "Cloud health and usage",
+    "detail": "Show availability, latency, throughput, task usage, quota/rate limits where exposed, request failures, retries and budget state; unknown usage remains unknown.",
+    "priority": "C",
+    "category": "Ollama Cloud and open-model operations"
+  },
+  {
+    "id": "MODEL-06",
+    "name": "Context management",
+    "detail": "Retrieve relevant files, truncate verbose output, summarize with provenance, preserve durable task state and reserve space for tool results.",
+    "priority": "C",
+    "category": "Ollama Cloud and open-model operations"
+  },
+  {
+    "id": "MODEL-07",
+    "name": "Task-based evaluations",
+    "detail": "Measure coding, browser, document and operations success with deterministic validators; report failure modes and human intervention rate.",
+    "priority": "C",
+    "category": "Ollama Cloud and open-model operations"
+  },
+  {
+    "id": "MODEL-08",
+    "name": "Approved Cloud fallback",
+    "detail": "Retry transient failures or select another qualified open model on Ollama Cloud within the task's data/budget scope. Otherwise pause; no silent provider or local-runtime switch.",
+    "priority": "E",
+    "category": "Ollama Cloud and open-model operations"
+  },
+  {
+    "id": "MODEL-09",
+    "name": "Hosted model changes",
+    "detail": "Requalify changed IDs/behavior and retirements, keep alternative qualified models, and avoid promising rollback to cloud revisions the provider no longer serves.",
+    "priority": "E",
+    "category": "Ollama Cloud and open-model operations"
+  },
+  {
+    "id": "MODEL-10",
+    "name": "Efficient execution modes",
+    "detail": "Small tool loadouts, locally validated structured data, deterministic recipes, context budgets and concurrency matched to Cloud quotas plus local tool capacity.",
+    "priority": "E",
+    "category": "Ollama Cloud and open-model operations"
+  },
+  {
+    "id": "MEDIA-01",
+    "name": "Voice task input",
+    "detail": "Record a voice note in the client, transcribe locally or on the owner's server, show the text, and treat ambiguous sensitive instructions as needing clarification.",
+    "priority": "E",
+    "category": "Voice, images, video, and media work"
+  },
+  {
+    "id": "MEDIA-02",
+    "name": "Spoken updates",
+    "detail": "Optional local speech output for progress and answers; provide transcript, mute, interruption and privacy controls.",
+    "priority": "A",
+    "category": "Voice, images, video, and media work"
+  },
+  {
+    "id": "MEDIA-03",
+    "name": "Screenshot understanding",
+    "detail": "Attach images or selected screen regions for analysis; explicitly confirm destination when local content leaves the Mac.",
+    "priority": "E",
+    "category": "Voice, images, video, and media work"
+  },
+  {
+    "id": "MEDIA-04",
+    "name": "OCR and scanned records",
+    "detail": "Extract text/tables from images and scans with coordinates/confidence where available and an owner-visible correction path.",
+    "priority": "E",
+    "category": "Voice, images, video, and media work"
+  },
+  {
+    "id": "MEDIA-05",
+    "name": "Image transformations",
+    "detail": "Resize, crop, annotate, compress, convert and organize assets using installed tools; preserve originals and check the visual result.",
+    "priority": "E",
+    "category": "Voice, images, video, and media work"
+  },
+  {
+    "id": "MEDIA-06",
+    "name": "Open image-generation tools",
+    "detail": "Optional self-hosted generation/editing worker when hardware and model licence allow; separately label generated imagery and required GPU resources.",
+    "priority": "A",
+    "category": "Voice, images, video, and media work"
+  },
+  {
+    "id": "MEDIA-07",
+    "name": "Audio/video processing",
+    "detail": "Use installable media tools for clipping, transcoding, subtitles, transcription, frame extraction and exports with input/output provenance.",
+    "priority": "E",
+    "category": "Voice, images, video, and media work"
+  },
+  {
+    "id": "MEDIA-08",
+    "name": "Meeting recordings",
+    "detail": "Process owner-supplied/authorized recordings into notes and action items; meeting capture itself requires a separate consented integration.",
+    "priority": "E",
+    "category": "Voice, images, video, and media work"
+  },
+  {
+    "id": "MEDIA-09",
+    "name": "Multimodal deliverables",
+    "detail": "Combine screenshots, charts, recordings and text into reports, tutorials or demos with reviewable intermediate artifacts.",
+    "priority": "A",
+    "category": "Voice, images, video, and media work"
+  },
+  {
+    "id": "MEDIA-10",
+    "name": "Media resource budgets",
+    "detail": "Queue large jobs, estimate storage/runtime, set retention and cancellation rules, and avoid starving the main operator's inference.",
+    "priority": "E",
+    "category": "Voice, images, video, and media work"
+  },
+  {
+    "id": "MAC-01",
+    "name": "Native app shell",
+    "detail": "SwiftUI/AppKit windows, menus, keyboard navigation, drag/drop and accessibility; retain the Ink hierarchy and restrained visual language.",
+    "priority": "C",
+    "category": "Native Swift macOS experience"
+  },
+  {
+    "id": "MAC-02",
+    "name": "Projects and tasks sidebar",
+    "detail": "Group projects, recent tasks, needs-you requests and running work; support search, pin/archive, unread/completion states and machine context.",
+    "priority": "C",
+    "category": "Native Swift macOS experience"
+  },
+  {
+    "id": "MAC-03",
+    "name": "Conversation and plan",
+    "detail": "Stream readable messages and public progress, show tool rows and task steps, and support steering, attachments, model/profile choices and cancellation.",
+    "priority": "C",
+    "category": "Native Swift macOS experience"
+  },
+  {
+    "id": "MAC-04",
+    "name": "Contextual evidence surfaces",
+    "detail": "Present task plans, changed files/diffs, live browser, read-only action evidence, screenshots and generated outputs. No user shell, arbitrary server filesystem console or Linux desktop viewer.",
+    "priority": "C",
+    "category": "Native Swift macOS experience"
+  },
+  {
+    "id": "MAC-05",
+    "name": "Code review surface",
+    "detail": "Turn/branch diffs, file tree, changed-file summary, checkpoint restore, checks and PR context in the style of t3code's workflow.",
+    "priority": "C",
+    "category": "Native Swift macOS experience"
+  },
+  {
+    "id": "MAC-06",
+    "name": "Machine and capabilities",
+    "detail": "Health, installed tools, service/process inventory, resource queue, storage and capability installation/update screens.",
+    "priority": "C",
+    "category": "Native Swift macOS experience"
+  },
+  {
+    "id": "MAC-07",
+    "name": "Approvals and accounts",
+    "detail": "Trusted decision centre with exact action previews, account scope, grants, revocation, and device authentication for high-impact actions.",
+    "priority": "C",
+    "category": "Native Swift macOS experience"
+  },
+  {
+    "id": "MAC-08",
+    "name": "Local companion",
+    "detail": "Optional selected-tab/file/screen bridge, share extension or share-sheet intake where supported, and clear revocable consent for each local capability.",
+    "priority": "E",
+    "category": "Native Swift macOS experience"
+  },
+  {
+    "id": "MAC-09",
+    "name": "Automation and memory tools",
+    "detail": "Native lists/editors for schedules, monitors, stored procedures, memory inspection, evidence history and configuration changes.",
+    "priority": "E",
+    "category": "Native Swift macOS experience"
+  },
+  {
+    "id": "MAC-10",
+    "name": "Native quality",
+    "detail": "Dark/light parity, Dynamic Type where applicable, VoiceOver, visible focus, reduced motion, keyboard shortcuts and usable large transcripts.",
+    "priority": "C",
+    "category": "Native Swift macOS experience"
+  },
+  {
+    "id": "PHONE-01",
+    "name": "Native sessions and inbox",
+    "detail": "Needs you, running and recent work with mode/profile icon, task title, machine/account summary and accessible touch targets.",
+    "priority": "C",
+    "category": "iPhone, continuity, and remote control"
+  },
+  {
+    "id": "PHONE-02",
+    "name": "Equal client continuity",
+    "detail": "Read and create the same server-owned conversations/tasks, steer/cancel, change control mode, review evidence and approve workflows from either device; reconnect without missing or duplicated committed content.",
+    "priority": "C",
+    "category": "iPhone, continuity, and remote control"
+  },
+  {
+    "id": "PHONE-03",
+    "name": "Equal native approvals",
+    "detail": "Review exact actions, scope and whole payment workflow details on either client; authenticate sensitive decisions and resolve once on the server. No Mac-only payment approval dependency.",
+    "priority": "C",
+    "category": "iPhone, continuity, and remote control"
+  },
+  {
+    "id": "PHONE-04",
+    "name": "Server inbox and Apple push",
+    "detail": "Persist notices on Ubuntu, stream to active clients and send APNs notifications directly from the Ubuntu notifier; deep-link and replay server state when the app opens. Push is not authoritative or guaranteed immediate.",
+    "priority": "C",
+    "category": "iPhone, continuity, and remote control"
+  },
+  {
+    "id": "PHONE-05",
+    "name": "Browser takeover",
+    "detail": "Inspect and interact with the live remote browser using zoom/touch/keyboard; display the account and return-control action clearly.",
+    "priority": "E",
+    "category": "iPhone, continuity, and remote control"
+  },
+  {
+    "id": "PHONE-06",
+    "name": "File and voice intake",
+    "detail": "Upload from Files/share sheet/camera/voice, with destination and local/server processing visibility, then preview and share returned artifacts.",
+    "priority": "E",
+    "category": "iPhone, continuity, and remote control"
+  },
+  {
+    "id": "PHONE-07",
+    "name": "Pairing and revocation",
+    "detail": "QR/fingerprint confirmation, Keychain-held device identity, last seen, lost-device revoke, and explicit re-pair after trust changes.",
+    "priority": "C",
+    "category": "iPhone, continuity, and remote control"
+  },
+  {
+    "id": "PHONE-08",
+    "name": "Readable offline history",
+    "detail": "Cache selected transcripts/artifacts with local protection, mark staleness, and avoid queuing offline financial approvals as if still current.",
+    "priority": "E",
+    "category": "iPhone, continuity, and remote control"
+  },
+  {
+    "id": "PHONE-09",
+    "name": "Lock-screen notifications and status",
+    "detail": "Use the owner-approved APNs exception for privacy-preserving alerts; optional Live Activities show status/freshness. Require the unlocked app for sensitive approval or payment authorization.",
+    "priority": "E",
+    "category": "iPhone, continuity, and remote control"
+  },
+  {
+    "id": "PHONE-10",
+    "name": "Remote emergency controls",
+    "detail": "Revoke a task's external grants, stop workers, pause automations, and ask the trusted supervisor to recover the guest, even if its agent process is stuck.",
+    "priority": "E",
+    "category": "iPhone, continuity, and remote control"
+  },
+  {
+    "id": "TRUST-01",
+    "name": "Three modes and scoped authority",
+    "detail": "Persist Full control, Auto and Ask permission on the server with scope, policy version, expiry and revocation. Auto uses a smaller independent reviewer; Ask permission gates every work action; protected trust changes stay owner-only.",
+    "priority": "C",
+    "category": "Trust, privacy, policy, and audit"
+  },
+  {
+    "id": "TRUST-02",
+    "name": "External effect mediation",
+    "detail": "Broker protected account, payment, production and trust changes; prevent alternate shell/HTTP/MCP paths from silently gaining those credentials.",
+    "priority": "C",
+    "category": "Trust, privacy, policy, and audit"
+  },
+  {
+    "id": "TRUST-03",
+    "name": "Instruction provenance",
+    "detail": "Distinguish owner instructions from pages, files, tool output and messages; untrusted content cannot create policy, schedules or new approving devices.",
+    "priority": "C",
+    "category": "Trust, privacy, policy, and audit"
+  },
+  {
+    "id": "TRUST-04",
+    "name": "Sensitive-data minimization",
+    "detail": "Redact secrets, OTPs and private payment details across text, structured tool results, screenshots, traces, exports and crash reports.",
+    "priority": "C",
+    "category": "Trust, privacy, policy, and audit"
+  },
+  {
+    "id": "TRUST-05",
+    "name": "Protected audit trail",
+    "detail": "Record intent, authority, approval, execution, provider IDs and verification outside the machine's root-accessible storage.",
+    "priority": "C",
+    "category": "Trust, privacy, policy, and audit"
+  },
+  {
+    "id": "TRUST-06",
+    "name": "Reauthentication and exact binding",
+    "detail": "Require current owner presence for high-impact grants; reject altered requests, stale carts, changed destinations and replayed decision signatures.",
+    "priority": "C",
+    "category": "Trust, privacy, policy, and audit"
+  },
+  {
+    "id": "TRUST-07",
+    "name": "Data boundaries",
+    "detail": "Per-project/account retrieval scope, controlled file uploads, SSRF protection for broker services, and explicit routes to approved private-network resources.",
+    "priority": "C",
+    "category": "Trust, privacy, policy, and audit"
+  },
+  {
+    "id": "TRUST-08",
+    "name": "Revocation and emergency stop",
+    "detail": "Revoke future capabilities and sessions promptly; distinguish revocation from refunding money or undoing an already completed action.",
+    "priority": "C",
+    "category": "Trust, privacy, policy, and audit"
+  },
+  {
+    "id": "TRUST-09",
+    "name": "Plugin and dependency trust",
+    "detail": "Pinned dependencies/images, staged updates, extension provenance, permission diffs and no automatic promotion of agent-written trusted code.",
+    "priority": "C",
+    "category": "Trust, privacy, policy, and audit"
+  },
+  {
+    "id": "TRUST-10",
+    "name": "Owner visibility and export",
+    "detail": "Inspect active permissions, external identities, task evidence, retained data and exports; provide deletion/retention controls with backup/audit limitations explained.",
+    "priority": "E",
+    "category": "Trust, privacy, policy, and audit"
+  },
+  {
+    "id": "REL-01",
+    "name": "Health and diagnosis",
+    "detail": "Surface control plane, Pi, machine, browser, model, broker and storage health separately; show actionable reasons and affected tasks.",
+    "priority": "C",
+    "category": "Reliability, backup, resource economics, and recovery"
+  },
+  {
+    "id": "REL-02",
+    "name": "Transactional outbox",
+    "detail": "Persist accepted intent before work, dispatch effects with deduplication, record actual completion and reconcile uncertain outcomes on recovery.",
+    "priority": "C",
+    "category": "Reliability, backup, resource economics, and recovery"
+  },
+  {
+    "id": "REL-03",
+    "name": "End-to-end identity",
+    "detail": "Carry task/run/tool/effect/approval IDs across workers and clients; show a unified timeline without exposing secrets or hidden model reasoning.",
+    "priority": "C",
+    "category": "Reliability, backup, resource economics, and recovery"
+  },
+  {
+    "id": "REL-04",
+    "name": "Backup and restore",
+    "detail": "Server-local ledger/account/workspace backups and host-owned guest snapshots, plus owner-exportable offline copies and tested restoration. No hosted backup backend is required.",
+    "priority": "C",
+    "category": "Reliability, backup, resource economics, and recovery"
+  },
+  {
+    "id": "REL-05",
+    "name": "Safe upgrades",
+    "detail": "Pin compatible versions, drain or interrupt work predictably, back up before migrations, and roll back worker/client incompatibilities.",
+    "priority": "C",
+    "category": "Reliability, backup, resource economics, and recovery"
+  },
+  {
+    "id": "REL-06",
+    "name": "Resource economics",
+    "detail": "Track server resources, Ollama Cloud usage/limits, browser/tool work and authorized external purchases separately; do not assume Cloud inference is unlimited or free.",
+    "priority": "E",
+    "category": "Reliability, backup, resource economics, and recovery"
+  },
+  {
+    "id": "REL-07",
+    "name": "Deterministic fixtures",
+    "detail": "Script Pi/model/tool outputs for reconnect, parallel approvals, malformed actions, crashes, timeouts and duplicate events without paid live dependencies.",
+    "priority": "C",
+    "category": "Reliability, backup, resource economics, and recovery"
+  },
+  {
+    "id": "REL-08",
+    "name": "Real model/site evaluations",
+    "detail": "Version a representative suite, measure completion and intervention, and rerun before changing the model, browser or privileged integrations.",
+    "priority": "C",
+    "category": "Reliability, backup, resource economics, and recovery"
+  },
+  {
+    "id": "REL-09",
+    "name": "Graceful degradation",
+    "detail": "Continue safe local work during a connector outage, queue model-limited tasks, stop protected actions when authority is unavailable and explain the limit.",
+    "priority": "C",
+    "category": "Reliability, backup, resource economics, and recovery"
+  },
+  {
+    "id": "REL-10",
+    "name": "Long-term portability",
+    "detail": "Export tasks, artifacts, environment manifests, memory and compatible Pi sessions; move machines without losing permission history or silently retaining revoked secrets.",
+    "priority": "E",
+    "category": "Reliability, backup, resource economics, and recovery"
+  }
+]

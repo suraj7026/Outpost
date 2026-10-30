@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+mkdir -p "$HOME/projects" "$HOME/.pi/agent" "$HOME/.local/bin" "$HOME/.cache/npm"
+for pair in 'bash_profile:.bash_profile' 'tmux.conf:.tmux.conf'; do
+  source_name=${pair%%:*}
+  destination=${pair#*:}
+  if [[ ! -e "$HOME/$destination" ]]; then
+    cp "/opt/workspace/defaults/$source_name" "$HOME/$destination"
+  fi
+done
+tmux new-session -d -s main -c /workspace 'bash -l'
+touch /tmp/workspace-ready
+printf 'Workspace ready: node=%s uid=%s; files persist, running processes do not survive pod replacement.\n' "${WORKSPACE_NODE:-unknown}" "$(id -u)"
+exec sleep infinity

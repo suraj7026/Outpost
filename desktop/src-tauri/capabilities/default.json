@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Local Outpost window; signed server requests and native navigation only",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

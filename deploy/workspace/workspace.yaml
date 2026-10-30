@@ -1,0 +1,145 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pi-workspace-home
+spec:
+  capacity:
+    storage: 30Gi
+  volumeMode: Filesystem
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: pi-workspace
+    name: home
+  local:
+    path: /srv/remotejobs/pi-workspace
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: [surajhomeserver2]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: home
+  namespace: pi-workspace
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: ""
+  volumeName: pi-workspace-home
+  resources:
+    requests:
+      storage: 30Gi
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: isolate-workspace
+  namespace: pi-workspace
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 0.0.0.0/8
+              - 10.0.0.0/8
+              - 100.64.0.0/10
+              - 127.0.0.0/8
+              - 169.254.0.0/16
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 224.0.0.0/4
+              - 240.0.0.0/4
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pi-workspace
+  namespace: pi-workspace
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: pi-workspace
+  template:
+    metadata:
+      labels:
+        app: pi-workspace
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      nodeSelector:
+        kubernetes.io/hostname: surajhomeserver2
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: workspace
+          image: docker.io/library/homelab-pi-workspace:1.4.0-1
+          imagePullPolicy: Never
+          workingDir: /home/node
+          env:
+            - name: WORKSPACE_NODE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: "2"
+              memory: 4Gi
+              ephemeral-storage: 1Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+              ephemeral-storage: 8Gi
+          readinessProbe:
+            exec:
+              command: [test, -f, /tmp/workspace-ready]
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          volumeMounts:
+            - {name: home, mountPath: /home/node}
+            - {name: tmp, mountPath: /tmp}
+            - {name: shm, mountPath: /dev/shm}
+      volumes:
+        - name: home
+          persistentVolumeClaim:
+            claimName: home
+        - name: tmp
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi

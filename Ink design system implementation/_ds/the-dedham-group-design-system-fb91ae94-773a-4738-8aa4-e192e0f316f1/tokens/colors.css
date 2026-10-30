@@ -1,0 +1,36 @@
+/* The Dedham Group — Color Tokens (exact hex from TDG Powerpoint Template 2026 theme1.xml) */
+:root {
+  /* Brand neutrals */
+  --tdg-navy:        #1C2C59; /* primary — titles, dark fills, section headers */
+  --tdg-navy-title:  #1C2D59; /* title text (theme near-identical navy) */
+  --tdg-steel:       #526B7A; /* secondary text, muted UI */
+  --tdg-black:       #000000;
+  --tdg-white:       #FFFFFF;
+
+  /* Accent palette (chart series + emphasis, in theme order) */
+  --tdg-accent-blue:   #27698D; /* accent1 — primary accent, key highlights, footer rule */
+  --tdg-accent-teal:   #469086; /* accent2 */
+  --tdg-accent-green:  #4EA72E; /* accent3 — positive / growth */
+  --tdg-accent-amber:  #FFB100; /* accent4 — caution / callouts */
+  --tdg-accent-orange: #E97132; /* accent5 */
+  --tdg-accent-maroon: #8D3641; /* accent6 — negative / risk */
+
+  /* Links */
+  --tdg-link:         #69B5D5;
+  --tdg-link-visited: #FFB100;
+
+  /* Semantic roles */
+  --tdg-text:        var(--tdg-navy);
+  --tdg-text-muted:  var(--tdg-steel);
+  --tdg-bg:          var(--tdg-white);
+  --tdg-bg-dark:     var(--tdg-navy);
+  --tdg-rule:        var(--tdg-accent-blue);
+
+  /* Chart series (ordered) */
+  --tdg-series-1: var(--tdg-accent-blue);
+  --tdg-series-2: var(--tdg-accent-teal);
+  --tdg-series-3: var(--tdg-accent-amber);
+  --tdg-series-4: var(--tdg-accent-orange);
+  --tdg-series-5: var(--tdg-accent-green);
+  --tdg-series-6: var(--tdg-accent-maroon);
+}

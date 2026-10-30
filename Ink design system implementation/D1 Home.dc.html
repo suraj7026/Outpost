@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="stylesheet" href="outpost.css"><script src="outpost.js"></script><title>D1 · Home</title></helmet>
+<div data-fit="1488" style="width:max-content;margin:0 auto;padding:8px 24px 32px;display:flex;flex-direction:column;gap:8px">
+  <dc-import name="ViewerBar" code="D1" label="Home" prev="Design System.dc.html" next="D2 Code Session.dc.html" hint-size="1440px,44px"></dc-import>
+  <div style="width:1440px;height:900px;display:flex;background:var(--bg);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+    <dc-import name="Sidebar" active="" hint-size="264px,100%"></dc-import>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <header style="display:flex;align-items:center;gap:12px;height:52px;flex:none;padding:0 16px 0 20px;border-bottom:1px solid var(--border)">
+        <span style="font-size:14px;font-weight:600">Home</span>
+        <div style="flex:1"></div>
+        <a href="D7 Server Devices.dc.html" style="display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 10px;border:1px solid var(--border);border-radius:999px;font-size:12px;color:var(--text-2);white-space:nowrap" style-hover="background:var(--ink-subtle)"><span style="width:6px;height:6px;border-radius:50%;background:var(--ink)"></span><span style="font-family:'Geist Mono',monospace;color:var(--text)">outpost-01</span>connected<span style="font-family:'Geist Mono',monospace;color:var(--text-3)">38 ms</span></a>
+      </header>
+      <div style="flex:1;overflow:auto;display:flex;flex-direction:column;align-items:center;padding:120px 32px 48px">
+        <div style="width:100%;max-width:720px;display:flex;flex-direction:column;gap:20px">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:16px">
+            <h1 style="margin:0;font-size:28px;line-height:36px;font-weight:600;letter-spacing:-0.01em">What should run next?</h1>
+            <div role="tablist" style="display:inline-flex;gap:2px;padding:2px;border:1px solid var(--border);border-radius:8px;background:var(--bg)">
+              <sc-for list="{{ modeTabs }}" as="t" hint-placeholder-count="3">
+                <button role="tab" onClick="{{ t.pick }}" style="display:flex;align-items:center;gap:6px;height:28px;padding:0 12px;border:1px solid {{ t.border }};border-radius:6px;background:{{ t.bg }};color:{{ t.color }};font-size:13px;font-weight:{{ t.w }};cursor:pointer;transition:background 120ms ease-out,color 120ms ease-out"><o-icon name="{{ t.icon }}"></o-icon>{{ t.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+          <dc-import name="Composer" workspace="{{ workspace }}" model="{{ model }}" permission="{{ perm }}" placeholder="{{ placeholder }}" rows="{{ 3 }}" pop-down="{{ true }}" on-send="{{ onSend }}" hint-size="100%,128px"></dc-import>
+          <span style="font-size:12px;color:var(--text-3);text-align:center">{{ hint }}</span>
+
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:40px">
+            <div style="display:flex;align-items:center;gap:8px;padding:0 10px;font-size:13px;color:var(--text-2)"><span>Recent sessions</span><div style="flex:1"></div><span style="font-size:12px;color:var(--text-3)">2 running · 1 needs you</span></div>
+            <div style="display:flex;flex-direction:column;border-top:1px solid var(--border)">
+              <sc-for list="{{ recent }}" as="r" hint-placeholder-count="6">
+                <a href="{{ r.href }}" style="display:grid;grid-template-columns:16px minmax(0,1fr) 180px 72px 88px;align-items:center;gap:12px;height:48px;padding:0 10px;border-bottom:1px solid var(--border);color:var(--text);transition:background 120ms ease-out" style-hover="background:var(--ink-subtle)">
+                  <o-icon name="{{ r.icon }}" style="color:var(--text-3)"></o-icon>
+                  <div style="display:flex;flex-direction:column;min-width:0;line-height:18px"><span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.title }}</span><span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-3)">{{ r.ws }}</span></div>
+                  <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.model }}</span>
+                  <span style="font-size:12px;color:var(--text-3);text-align:right">{{ r.time }}</span>
+                  <div style="display:flex;justify-content:flex-end"><o-status kind="{{ r.status }}"></o-status></div>
+                </a>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { mode: 'code' };
+  renderVals() {
+    const m = this.state.mode;
+    const cfg = {
+      chat: ['', 'google / gemini-2.5-pro', 'Read only', 'Ask anything', 'Chat has no workspace. Nothing is written to disk.', 'D5 Chat Session.dc.html'],
+      cowork: ['finance-ops', 'openai / gpt-5', 'Auto-edit', 'Describe a document, analysis or report', 'Outputs are saved to finance-ops/outputs on outpost-01.', 'D4 Cowork Session.dc.html'],
+      code: ['storefront-web', 'anthropic / claude-sonnet-4-5', 'Ask before changes', 'Describe a change, bug or task in storefront-web', 'Code sessions run in a new worktree. main stays untouched.', 'D2 Code Session.dc.html']
+    }[m];
+    return {
+      modeTabs: [['chat', 'Chat', 'message-square'], ['cowork', 'Cowork', 'file-text'], ['code', 'Code', 'code-xml']].map(([id, label, icon]) => {
+        const on = m === id;
+        return { label, icon, bg: on ? 'var(--surface)' : 'transparent', border: on ? 'var(--border-strong)' : 'transparent', color: on ? 'var(--text)' : 'var(--text-2)', w: on ? 500 : 400, pick: () => this.setState({ mode: id }) };
+      }),
+      workspace: cfg[0], model: cfg[1], perm: cfg[2], placeholder: cfg[3], hint: cfg[4],
+      onSend: () => { window.__outpostNav ? window.__outpostNav(cfg[5]) : (location.href = cfg[5]); },
+      recent: [
+        ['code-xml', 'Fix filter chip sync on /products', 'storefront-web', 'claude-sonnet-4-5', '12m', 'needs', 'D3 Code Approval.dc.html'],
+        ['file-text', 'Draft Q3 board report', 'finance-ops', 'gpt-5', '34m', 'running', 'D4 Cowork Session.dc.html'],
+        ['code-xml', 'Add Playwright smoke tests for checkout', 'storefront-web', 'claude-sonnet-4-5', '2h ago', 'failed', 'D2 Code Session.dc.html'],
+        ['file-text', 'Reconcile September pipeline', 'finance-ops', 'gpt-5', 'Yesterday', 'done', 'D4 Cowork Session.dc.html'],
+        ['message-square', 'Postgres vs Redis for job queues', 'no workspace', 'gemini-2.5-pro', 'Yesterday', 'done', 'D5 Chat Session.dc.html'],
+        ['code-xml', 'Rotate TLS certs on edge nodes', 'infra', 'qwen2.5-coder:32b', '3d ago', 'interrupted', 'D2 Code Session.dc.html']
+      ].map(([icon, title, ws, model, time, status, href]) => ({ icon, title, ws, model, time, status, href }))
+    };
+  }
+}
+</script>
+</body>
+</html>

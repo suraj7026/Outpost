@@ -1,0 +1,20 @@
+#!/usr/bin/env node
+const { chromium } = require('/opt/workspace/node_modules/playwright');
+
+(async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+    await page.setContent('<!doctype html><html><head><title>Workspace browser OK</title></head><body><h1>Chromium runs inside the workspace.</h1></body></html>');
+    const title = await page.title();
+    if (title !== 'Workspace browser OK') throw new Error(`Unexpected title: ${title}`);
+    const output = process.argv[2] || '/workspace/browser-check.png';
+    await page.screenshot({ path: output });
+    console.log(JSON.stringify({ node: process.env.WORKSPACE_NODE, title, screenshot: output }));
+  } finally {
+    await browser.close();
+  }
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

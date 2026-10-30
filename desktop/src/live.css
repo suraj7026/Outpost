@@ -1,0 +1,47 @@
+.thinking-block {
+  margin: 10px 0 18px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+.thinking-block summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+}
+.thinking-block summary::-webkit-details-marker {
+  display: none;
+}
+.thinking-block[open] summary > svg {
+  transform: rotate(90deg);
+}
+.thinking-block summary .small {
+  margin-left: auto;
+  font-size: 11px;
+}
+.thinking-block pre {
+  max-height: 320px;
+  overflow: auto;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+.stream-label {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--positive);
+}
+.stream-placeholder {
+  font-size: 12px;
+  color: var(--muted);
+}
+.live-tool summary {
+  color: var(--text);
+}
+.live-tool .action-state {
+  color: var(--positive);
+}

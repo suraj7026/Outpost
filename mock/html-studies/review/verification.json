@@ -1,0 +1,472 @@
+{
+  "results": [
+    {
+      "id": "studio",
+      "width": 1440,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "studio",
+      "width": 1440,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "studio",
+      "width": 1024,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "studio",
+      "width": 1024,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "studio",
+      "width": 768,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "studio",
+      "width": 768,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "studio",
+      "width": 390,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "studio",
+      "width": 390,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "focus",
+      "width": 1440,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "focus",
+      "width": 1440,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "focus",
+      "width": 1024,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "focus",
+      "width": 1024,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "focus",
+      "width": 768,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "focus",
+      "width": 768,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "focus",
+      "width": 390,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "focus",
+      "width": 390,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "horizon",
+      "width": 1440,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "horizon",
+      "width": 1440,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "horizon",
+      "width": 1024,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "horizon",
+      "width": 1024,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "horizon",
+      "width": 768,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "horizon",
+      "width": 768,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "horizon",
+      "width": 390,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "horizon",
+      "width": 390,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "editorial",
+      "width": 1440,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "editorial",
+      "width": 1440,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "editorial",
+      "width": 1024,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "editorial",
+      "width": 1024,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "editorial",
+      "width": 768,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "editorial",
+      "width": 768,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "editorial",
+      "width": 390,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "editorial",
+      "width": 390,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "dock",
+      "width": 1440,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "dock",
+      "width": 1440,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "dock",
+      "width": 1024,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "dock",
+      "width": 1024,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 32,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "dock",
+      "width": 768,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "dock",
+      "width": 768,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "dock",
+      "width": 390,
+      "theme": "dark",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    },
+    {
+      "id": "dock",
+      "width": 390,
+      "theme": "light",
+      "overflow": 0,
+      "title": "Fix product filters",
+      "buttons": 0,
+      "minControl": 44,
+      "errors": [],
+      "composer": true
+    }
+  ],
+  "frames": [
+    {
+      "title": "Soft studio workspace preview",
+      "design": "studio",
+      "theme": "dark"
+    },
+    {
+      "title": "Focus workspace preview",
+      "design": "focus",
+      "theme": "dark"
+    },
+    {
+      "title": "Horizon workspace preview",
+      "design": "horizon",
+      "theme": "dark"
+    },
+    {
+      "title": "Editorial workspace preview",
+      "design": "editorial",
+      "theme": "dark"
+    },
+    {
+      "title": "Dock workspace preview",
+      "design": "dock",
+      "theme": "dark"
+    }
+  ],
+  "consoleErrors": []
+}

@@ -1,0 +1,12 @@
+umask 077
+export PATH="$HOME/.local/bin:$PATH"
+export PS1='[workspace:${WORKSPACE_NODE:-unknown}] \w \$ '
+export HISTFILE="$HOME/.bash_history"
+export HISTSIZE=10000
+export HISTFILESIZE=20000
+shopt -s histappend
+# Do not record commands prefixed with a space. Prefer /login to exporting keys.
+export HISTCONTROL=ignoreboth
+PROMPT_COMMAND='history -a'
+if [[ -f "$HOME/.bashrc" ]]; then source "$HOME/.bashrc"; fi
+if [[ -r /etc/bash_completion ]]; then source /etc/bash_completion; fi

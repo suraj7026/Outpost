@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="stylesheet" href="outpost.css"><script src="outpost.js"></script></helmet>
+<div style="display:flex;flex-direction:column;animation:o-fade 160ms ease-out">
+  <button onClick="{{ toggle }}" style="display:flex;align-items:center;gap:8px;width:100%;min-height:{{ minH }};padding:4px 8px;margin-left:-8px;background:transparent;border:0;border-radius:6px;cursor:pointer;color:var(--text-2);text-align:left;font-size:{{ fs }};transition:background 120ms ease-out" style-hover="background:var(--ink-subtle)">
+    <o-icon name="{{ icon }}" style="color:var(--text-3)"></o-icon>
+    <span style="color:var(--text);font-weight:500;flex:none">{{ verb }}</span>
+    <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">{{ target }}</span>
+    <sc-if value="{{ hasCounts }}" hint-placeholder-val="{{ false }}"><span style="display:flex;gap:6px;font-family:'Geist Mono',monospace;font-size:12px;flex:none"><span style="color:var(--add)">+{{ add }}</span><span style="color:var(--del)">−{{ del }}</span></span></sc-if>
+    <sc-if value="{{ hasResult }}" hint-placeholder-val="{{ false }}"><span style="font-family:'Geist Mono',monospace;font-size:12px;color:{{ resultColor }};flex:none">{{ result }}</span></sc-if>
+    <div style="flex:1"></div>
+    <sc-if value="{{ hasStatus }}" hint-placeholder-val="{{ false }}"><o-status kind="{{ status }}"></o-status></sc-if>
+    <sc-if value="{{ hasDetail }}" hint-placeholder-val="{{ false }}"><o-icon name="{{ chev }}" style="color:var(--text-3)"></o-icon></sc-if>
+  </button>
+  <sc-if value="{{ open }}" hint-placeholder-val="{{ false }}">
+    <div style="margin:2px 0 6px 16px;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-family:'Geist Mono',monospace;font-size:12px;line-height:20px;color:var(--text-2);display:flex;flex-direction:column;animation:o-fade 140ms ease-out">
+      <sc-for list="{{ lines }}" as="l" hint-placeholder-count="2">
+        <div style="display:flex;gap:12px;white-space:pre"><span style="flex:1;overflow:hidden;text-overflow:ellipsis">{{ l.t }}</span><sc-if value="{{ l.c }}"><span style="color:var(--add)">+{{ l.a }}</span><span style="color:var(--del)">−{{ l.d }}</span></sc-if></div>
+      </sc-for>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:560,&quot;height&quot;:140},&quot;icon&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;pencil&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;verb&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Edited&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;target&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;3 files&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;add&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:146,&quot;tsType&quot;:&quot;number&quot;},&quot;del&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:27,&quot;tsType&quot;:&quot;number&quot;},&quot;result&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;status&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;&quot;,&quot;running&quot;,&quot;done&quot;,&quot;failed&quot;],&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;open&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;failed&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;detail&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;Array&lt;string|{t:string,a:number,d:number}&gt;&quot;}}">
+class Component extends DCLogic {
+  state = { open: null };
+  renderVals() {
+    const p = this.props;
+    const lines = (p.detail || []).map(l => typeof l === 'string' ? { t: l, c: false } : { ...l, c: l.a != null });
+    const open = this.state.open ?? !!p.open;
+    return {
+      icon: p.icon || 'file', verb: p.verb, minH: p.size === 'lg' ? '44px' : '30px', fs: p.size === 'lg' ? '14px' : '13px', target: p.target,
+      add: p.add, del: p.del, hasCounts: p.add != null,
+      result: p.result, hasResult: !!p.result, resultColor: p.failed ? 'var(--danger)' : 'var(--text-2)',
+      status: p.status, hasStatus: !!p.status,
+      lines, hasDetail: lines.length > 0, open: open && lines.length > 0,
+      chev: open ? 'chevron-down' : 'chevron-right',
+      toggle: () => lines.length && this.setState({ open: !open })
+    };
+  }
+}
+</script>
+</body>
+</html>

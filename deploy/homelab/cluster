@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export KUBECONFIG="$HOME/.kube/config"
+root="$HOME/outpost-cluster"
+kubectl_bin="$HOME/.local/bin/kubectl"
+case "${1:-status}" in
+  status) "$kubectl_bin" get nodes -o wide; "$kubectl_bin" get pods -A -o wide ;;
+  usage) "$kubectl_bin" top nodes --show-capacity; "$kubectl_bin" top pods -A ;;
+  hosts) ansible all -i "$root/inventory.ini" -m ansible.builtin.ping ;;
+  run)
+    shift
+    [[ $# -gt 0 ]] || { echo 'Usage: cluster run "free -h"' >&2; exit 2; }
+    ansible all -i "$root/inventory.ini" -m ansible.builtin.command -a "$*"
+    ;;
+  kubectl) shift; exec "$kubectl_bin" "$@" ;;
+  *) echo 'Usage: cluster {status|usage|hosts|run COMMAND|kubectl ARGS}' >&2; exit 2 ;;
+esac

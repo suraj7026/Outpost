@@ -1,0 +1,11 @@
+[Unit]
+Description=Private loopback forwarding to the Outpost workspace coordinator
+After=network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/kubectl --kubeconfig=%h/.kube/config -n pi-workspace port-forward --address=127.0.0.1 deployment/pi-workspace 4318:4318
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

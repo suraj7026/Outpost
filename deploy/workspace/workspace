@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
+KUBECTL="$HOME/.local/bin/kubectl"
+NS=pi-workspace
+DEPLOYMENT=pi-workspace
+k() { "$KUBECTL" --namespace "$NS" "$@"; }
+usage() {
+  printf '%s\n' \
+    'workspace                  Start/reconnect to the persistent tmux terminal' \
+    'workspace start            Start the pod without attaching' \
+    'workspace status           Show pod placement and persistent storage' \
+    'workspace shell            Open a separate shell (not protected by tmux)' \
+    'workspace exec COMMAND ... Run a command; arguments are not shell-expanded' \
+    'workspace forward PORT     Forward a pod port to server 1 localhost' \
+    'workspace stop             Stop workspace AND Outpost; keep files (asks)' \
+    'workspace logs             Show container startup logs' \
+    '' \
+    'Detach without stopping your agent: Ctrl-b, then d.' \
+    'Files persist across pod replacement; tmux processes do not.'
+}
+start() {
+  local replicas
+  if ! replicas=$(k get deployment "$DEPLOYMENT" -o jsonpath='{.spec.replicas}'); then
+    printf 'Workspace not provisioned. See ~/pi-workspace/README.md.\n' >&2
+    return 1
+  fi
+  if [[ "$replicas" == 0 ]]; then
+    k scale "deployment/$DEPLOYMENT" --replicas=1 >&2
+  fi
+  k rollout status "deployment/$DEPLOYMENT" --timeout=180s >&2
+}
+require_terminal() {
+  if [[ ! -t 0 || ! -t 1 ]]; then
+    printf 'An interactive terminal is required. Use ssh -t, or workspace exec COMMAND.\n' >&2
+    return 2
+  fi
+  if [[ -z ${TERM:-} || ${TERM:-} == dumb ]]; then
+    export TERM=xterm-256color
+  fi
+}
+command=${1:-attach}
+if (($#)); then shift; fi
+case "$command" in
+  attach|shell)
+    (($# == 0)) || { usage >&2; exit 2; }
+    require_terminal
+    start
+    if [[ "$command" == attach ]]; then
+      exec "$KUBECTL" -n "$NS" exec -it "deployment/$DEPLOYMENT" -c workspace -- \
+        env "TERM=${TERM:-xterm-256color}" tmux new-session -A -s main -c /workspace 'bash -l'
+    fi
+    exec "$KUBECTL" -n "$NS" exec -it "deployment/$DEPLOYMENT" -c workspace -- \
+      env "TERM=${TERM:-xterm-256color}" bash -lc 'cd /workspace; exec bash -l'
+    ;;
+  start)
+    (($# == 0)) || { usage >&2; exit 2; }
+    start
+    ;;
+  status)
+    k get deployment,pods,pvc -o wide
+    ;;
+  exec)
+    (($# > 0)) || { usage >&2; exit 2; }
+    start
+    exec "$KUBECTL" -n "$NS" exec -i "deployment/$DEPLOYMENT" -c workspace -- "$@"
+    ;;
+  forward)
+    [[ $# == 1 && "$1" =~ ^[0-9]{4,5}$ ]] || { usage >&2; exit 2; }
+    port=$((10#$1))
+    ((port >= 1024 && port <= 65535)) || { printf 'Port must be 1024–65535.\n' >&2; exit 2; }
+    start
+    exec "$KUBECTL" -n "$NS" port-forward --address=127.0.0.1 "deployment/$DEPLOYMENT" "$port:$port"
+    ;;
+  stop)
+    (($# == 0)) || { usage >&2; exit 2; }
+    require_terminal
+    printf 'This stops Outpost AND terminates Pi, browsers, builds and tmux. Files remain.\nType stop to confirm: ' >&2
+    read -r confirmation
+    [[ "$confirmation" == stop ]] || { printf 'Cancelled.\n' >&2; exit 1; }
+    k scale "deployment/$DEPLOYMENT" --replicas=0
+    ;;
+  logs)
+    k logs "deployment/$DEPLOYMENT" -c workspace --tail=100
+    ;;
+  help|--help|-h) usage ;;
+  *) usage >&2; exit 2 ;;
+esac

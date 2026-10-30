@@ -53,7 +53,7 @@ public struct WorkspaceView: View {
             await connection.connect()
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(3)) } catch { break }
-                await connection.sync()
+                if connection.connected { await connection.sync() } else { await connection.connect() }
             }
         }
     }
@@ -95,7 +95,7 @@ public struct WorkspaceView: View {
                     }.buttonStyle(.plain)
                     Divider()
                 }
-                Text("Development build · Cloud roles and production integrations require qualification.").font(.caption).foregroundStyle(.secondary)
+                Text("Private agent workspace · Review recorded actions and evidence.").font(.caption).foregroundStyle(.secondary)
             }.padding(32).frame(maxWidth: 1040, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
         }.navigationTitle("Workspace")
     }
@@ -106,7 +106,8 @@ struct NewTaskView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var goal = ""
     @State private var profile = "code"
-    @State private var mode = "ask_permission"
+    @State private var mode = "full_control"
+    @State private var model = ""
     let onCreate: (String) -> Void
     var body: some View {
         NavigationStack {
@@ -114,14 +115,15 @@ struct NewTaskView: View {
                 Section("Outcome") { TextField("What should Outpost accomplish?", text: $goal, axis: .vertical).lineLimit(4...10).accessibilityIdentifier("task-goal") }
                 Picker("Starting Profile", selection: $profile) { ForEach(["code", "browser", "operations", "research", "cowork", "chat"], id: \.self) { Text($0.capitalized).tag($0) } }
                 ModePicker(mode: $mode)
-                Text("Ask permission gates every tool action, including reads. Full control never grants payment or owner-account authority.").font(.callout).foregroundStyle(.secondary)
+                TextField("Ollama model (blank uses server default)", text: $model)
+                Text("Full Control executes without individual approvals, including root commands on connected hosts when host administration is enabled. Ask Permission pauses before each action.").font(.callout).foregroundStyle(.secondary)
             }
             .navigationTitle("New Task").toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Create Task") {
                         let key = UUID().uuidString.lowercased()
-                        Task { await connection.send("task.create", id: key, revision: 0, payload: ["goal": .string(goal), "profile": .string(profile), "mode": .string(mode)]); if connection.error == nil { onCreate(key); dismiss() } }
+                        Task { await connection.send("task.create", id: key, revision: 0, payload: ["goal": .string(goal), "profile": .string(profile), "mode": .string(mode)].merging(model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [:] : ["model": .string(model.trimmingCharacters(in: .whitespacesAndNewlines))], uniquingKeysWith: { _, new in new })); if connection.error == nil { onCreate(key); dismiss() } }
                     }.accessibilityIdentifier("create-task").disabled(goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || connection.busy)
                 }
             }

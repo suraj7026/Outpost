@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="stylesheet" href="outpost.css"><script src="outpost.js"></script></helmet>
+<div style="position:relative;width:390px;height:844px;display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--border-strong);border-radius:48px;overflow:hidden;font-size:16px">
+  <div style="display:flex;align-items:center;height:54px;flex:none;padding:0 28px 0 36px;font-size:16px;font-weight:600"><span style="flex:1">9:41</span><span style="display:flex;gap:6px;align-items:center"><o-icon name="signal"></o-icon><o-icon name="wifi"></o-icon><o-icon name="battery-full" size="20"></o-icon></span></div>
+  <div style="display:flex;align-items:center;gap:4px;height:52px;flex:none;padding:0 8px;border-bottom:1px solid var(--border)">
+    <a href="M1 Sessions.dc.html" title="Back" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--text)"><o-icon name="chevron-left" size="24"></o-icon></a>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;line-height:18px">
+      <span style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Fix filter chip sync on /products</span>
+      <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3)"><o-icon name="code-xml" size="14"></o-icon><span style="font-family:'Geist Mono',monospace">storefront-web · fix/filter-sync</span></span>
+    </div>
+    <a href="M4 Diff Viewer.dc.html" title="View diff" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--text-2)"><o-icon name="git-compare" size="20"></o-icon></a>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;height:36px;flex:none;padding:0 20px;border-bottom:1px solid var(--border);background:var(--surface);font-size:13px;color:var(--text-2);white-space:nowrap">
+    <o-icon name="laptop" size="14" style="color:var(--text-3)"></o-icon><span>Started on MacBook</span><span style="color:var(--text-3)">·</span><span>{{ contLabel }}</span><div style="flex:1"></div><o-status kind="{{ headStatus }}"></o-status>
+  </div>
+  <div style="flex:1;overflow-y:auto;overflow-x:hidden;padding:16px 20px 16px 20px;display:flex;flex-direction:column;gap:14px;line-height:24px">
+    <div style="align-self:flex-end;max-width:88%;padding:10px 14px;background:var(--raised);border:1px solid var(--border);border-radius:10px;font-size:15px;line-height:22px">Filter chips on /products get out of sync with the URL. Fix it and add a test.</div>
+    <div style="display:flex;flex-direction:column;padding-left:8px">
+      <dc-import name="ToolRow" size="lg" icon="file-search" verb="Read" target="2 files" detail="{{ readDetail }}" hint-size="100%,44px"></dc-import>
+      <dc-import name="ToolRow" size="lg" icon="pencil" verb="Edited" target="3 files" add="{{ 146 }}" del="{{ 27 }}" detail="{{ editDetail }}" hint-size="100%,44px"></dc-import>
+      <dc-import name="ToolRow" size="lg" icon="terminal" verb="Ran" target="pnpm test" result="✓ 11/11" hint-size="100%,44px"></dc-import>
+    </div>
+    <p style="margin:0;text-wrap:pretty">All 11 tests pass, including 3 new ones for chip removal, clear all, and back/forward navigation.</p>
+    <sc-if value="{{ streaming }}" hint-placeholder-val="{{ true }}">
+      <p style="margin:0;text-wrap:pretty">{{ streamText }}<span style="display:inline-block;width:8px;height:17px;margin-left:2px;vertical-align:-3px;background:var(--ink);animation:o-caret 1s steps(1) infinite"></span></p>
+      <div style="padding-left:8px"><dc-import name="ToolRow" size="lg" icon="terminal" verb="Running" target="pnpm lint --fix" status="running" hint-size="100%,44px"></dc-import></div>
+    </sc-if>
+    <sc-if value="{{ afterLint }}" hint-placeholder-val="{{ false }}">
+      <p style="margin:0">Running lint on the changed files, then I'll push the branch.</p>
+      <div style="padding-left:8px"><dc-import name="ToolRow" size="lg" icon="terminal" verb="Ran" target="pnpm lint --fix" result="✓ 0 problems" hint-size="100%,44px"></dc-import></div>
+    </sc-if>
+    <sc-if value="{{ waiting }}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{ openSheet }}" style="display:flex;align-items:center;gap:10px;min-height:52px;padding:0 14px;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface);text-align:left;cursor:pointer">
+        <o-status kind="needs"></o-status><span style="flex:1;font-family:'Geist Mono',monospace;font-size:13px;overflow:hidden;text-overflow:ellipsis">git push origin fix/filter-sync</span><o-icon name="chevron-up" style="color:var(--text-3)"></o-icon>
+      </button>
+    </sc-if>
+    <sc-if value="{{ approved }}" hint-placeholder-val="{{ false }}">
+      <div style="padding-left:8px"><dc-import name="ToolRow" size="lg" icon="terminal" verb="Ran" target="git push origin fix/filter-sync" result="✓" hint-size="100%,44px"></dc-import></div>
+      <p style="margin:0;animation:o-fade 160ms ease-out">Pushed. Approved from iPhone. Want me to open a PR?</p>
+    </sc-if>
+    <sc-if value="{{ denied }}" hint-placeholder-val="{{ false }}">
+      <p style="margin:0;animation:o-fade 160ms ease-out">Okay, I won't push. The branch stays local in the worktree.</p>
+    </sc-if>
+  </div>
+  <div style="flex:none;padding:8px 12px 34px;border-top:1px solid var(--border);background:var(--bg)">
+    <div style="display:flex;align-items:flex-end;gap:8px;padding:6px 6px 6px 14px;border:1px solid var(--border-strong);border-radius:22px;background:var(--surface)">
+      <input placeholder="Reply to the agent" aria-label="Reply" style="flex:1;min-width:0;height:36px;border:0;outline:0;background:transparent;font-size:16px">
+      <button title="Send" style="width:36px;height:36px;flex:none;display:flex;align-items:center;justify-content:center;border:0;border-radius:50%;background:var(--ink);color:var(--on-ink)"><o-icon name="arrow-up" size="18"></o-icon></button>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;padding:8px 6px 0;font-size:12px;color:var(--text-3)"><o-icon name="cpu" size="14"></o-icon><span style="font-family:'Geist Mono',monospace">anthropic / claude-sonnet-4-5</span><div style="flex:1"></div><o-icon name="shield" size="14"></o-icon>Ask before changes</div>
+  </div>
+
+  <sc-if value="{{ sheet }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeSheet }}" style="position:absolute;inset:0;background:var(--scrim);animation:o-fade 180ms ease-out"></div>
+    <div role="dialog" aria-label="Approval request" style="position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:16px;padding:8px 20px 34px;background:var(--surface);border-top:1px solid var(--border-strong);border-radius:20px 20px 0 0;box-shadow:var(--shadow);animation:o-sheet 180ms ease-out">
+      <div style="align-self:center;width:36px;height:5px;border-radius:3px;background:var(--border-strong)"></div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px"><o-status kind="needs" size="lg"></o-status><div style="flex:1"></div><span style="font-size:13px;color:var(--text-3)">Also on MacBook</span></div>
+        <span style="font-size:20px;font-weight:600;line-height:28px">Push fix/filter-sync to origin?</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;font-family:'Geist Mono',monospace;font-size:14px"><span style="color:var(--text-3)">$</span>git push origin fix/filter-sync</div>
+      <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:10px">
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:14px"><span style="font-weight:500">4 commits · 3 files</span><div style="flex:1"></div><span style="font-family:'Geist Mono',monospace;font-size:13px;color:var(--add)">+146</span><span style="font-family:'Geist Mono',monospace;font-size:13px;color:var(--del)">−27</span></div>
+        <sc-for list="{{ files }}" as="f" hint-placeholder-count="3">
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;font-family:'Geist Mono',monospace;font-size:13px"><span style="flex:1;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.p }}</span><span style="color:var(--add)">+{{ f.a }}</span><span style="color:var(--del)">−{{ f.d }}</span></div>
+        </sc-for>
+        <a href="M4 Diff Viewer.dc.html" style="display:flex;align-items:center;gap:6px;height:44px;padding:0 14px;border-top:1px solid var(--border);font-size:14px;color:var(--text)">View full diff<div style="flex:1"></div><o-icon name="chevron-right" style="color:var(--text-3)"></o-icon></a>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2)"><span style="display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border:1px solid var(--border-strong);border-radius:999px;color:var(--text);font-weight:500"><o-icon name="shield-alert" size="14"></o-icon>Medium risk</span>Writes to a remote branch</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button onClick="{{ deny }}" style="height:52px;border:1px solid var(--border-strong);border-radius:10px;background:transparent;font-size:16px;font-weight:500;cursor:pointer">Deny</button>
+        <button onClick="{{ approve }}" style="height:52px;border:0;border-radius:10px;background:var(--ink);color:var(--on-ink);font-size:16px;font-weight:500;cursor:pointer">Approve</button>
+      </div>
+      <button onClick="{{ approve }}" style="height:44px;border:0;background:transparent;font-size:14px;color:var(--text-2);cursor:pointer">Always allow in storefront-web</button>
+    </div>
+  </sc-if>
+  <div style="position:absolute;left:50%;bottom:8px;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:var(--text)"></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;approval&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  static TEXT = 'Running lint on the changed files. If it passes I’ll push fix/filter-sync, which needs your approval.';
+  state = { n: 0, sheet: null, decision: null };
+  componentDidMount() {
+    if (this.props.approval) return;
+    this.iv = setInterval(() => this.setState(s => {
+      if (s.n >= Component.TEXT.length) { clearInterval(this.iv); return null; }
+      return { n: Math.min(Component.TEXT.length, s.n + 3) };
+    }), 60);
+  }
+  componentWillUnmount() { clearInterval(this.iv); }
+  renderVals() {
+    const p = this.props, s = this.state, appr = !!p.approval;
+    const sheet = appr && !s.decision && (s.sheet ?? true);
+    return {
+      contLabel: appr ? 'waiting 12 min' : 'running 12 min',
+      headStatus: appr && !s.decision ? 'needs' : 'running',
+      streaming: !appr, streamText: Component.TEXT.slice(0, s.n),
+      afterLint: appr, waiting: appr && !s.decision, sheet,
+      approved: s.decision === 'approved', denied: s.decision === 'denied',
+      openSheet: () => this.setState({ sheet: true }), closeSheet: () => this.setState({ sheet: false }),
+      approve: () => this.setState({ decision: 'approved' }), deny: () => this.setState({ decision: 'denied' }),
+      files: [['src/components/FilterBar.tsx', 58, 21], ['src/hooks/useProductFilters.ts', 41, 6], ['…/__tests__/FilterBar.test.tsx', 47, 0]].map(([p, a, d]) => ({ p, a, d })),
+      readDetail: ['src/components/FilterBar.tsx', 'src/hooks/useProductFilters.ts'],
+      editDetail: [{ t: 'FilterBar.tsx', a: 58, d: 21 }, { t: 'useProductFilters.ts', a: 41, d: 6 }, { t: 'FilterBar.test.tsx', a: 47, d: 0 }]
+    };
+  }
+}
+</script>
+</body>
+</html>

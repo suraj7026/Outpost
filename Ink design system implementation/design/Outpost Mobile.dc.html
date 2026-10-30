@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><script>window.__outpostEmbed = true;</script><link rel="stylesheet" href="outpost.css"><script src="outpost.js"></script><title>Outpost · Mobile</title></helmet>
+<div onClickCapture="{{ onNav }}" style="min-height:100vh;padding-top:16px">
+  <div style="position:relative;width:560px;margin:0 auto">
+    <sc-if value="{{ isM1 }}" hint-placeholder-val="{{ false }}"><dc-import name="M1 Sessions" hint-size="560px,890px"></dc-import></sc-if>
+    <sc-if value="{{ isM2 }}" hint-placeholder-val="{{ false }}"><dc-import name="M2 Live Session" hint-size="560px,890px"></dc-import></sc-if>
+    <sc-if value="{{ isM3 }}" hint-placeholder-val="{{ false }}"><dc-import name="M3 Approval Sheet" hint-size="560px,890px"></dc-import></sc-if>
+    <sc-if value="{{ isM4 }}" hint-placeholder-val="{{ false }}"><dc-import name="M4 Diff Viewer" hint-size="560px,890px"></dc-import></sc-if>
+    <sc-if value="{{ isM5 }}" hint-placeholder-val="{{ false }}"><dc-import name="M5 Lock Screen" hint-size="560px,890px"></dc-import></sc-if>
+    <sc-if value="{{ isM6 }}" hint-placeholder-val="{{ false }}"><dc-import name="M6 Pair Device" hint-size="560px,890px"></dc-import></sc-if>
+    <button onClick="{{ toggleLock }}" title="{{ lockTitle }}" aria-label="{{ lockTitle }}" style="position:absolute;left:476px;top:210px;width:5px;height:84px;padding:0;border:0;border-radius:0 3px 3px 0;background:var(--border-strong);cursor:pointer;transition:background 120ms ease-out" style-hover="background:var(--text-3)"></button>
+    <span style="position:absolute;left:490px;top:238px;font-size:12px;color:var(--text-3);white-space:nowrap">{{ lockLabel }}</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  static R = { M1: 'M1 Sessions', M2: 'M2 Live Session', M3: 'M3 Approval Sheet', M4: 'M4 Diff Viewer', M5: 'M5 Lock Screen', M6: 'M6 Pair Device' };
+  static KEY = 'outpost-mobile-route';
+  _embed = (window.__outpostEmbed = true);
+  state = { r: this.initial(), prev: 'M1' };
+  initial() {
+    const h = location.hash.slice(1);
+    if (Component.R[h]) return h;
+    try { const s = localStorage.getItem(Component.KEY); if (Component.R[s]) return s; } catch (e) {}
+    return 'M6';
+  }
+  componentDidMount() {
+    this.hc = () => { const h = location.hash.slice(1); if (Component.R[h] && h !== this.state.r) this.setState({ r: h }); };
+    addEventListener('hashchange', this.hc);
+    if (location.hash.slice(1) !== this.state.r) history.replaceState(null, '', '#' + this.state.r);
+  }
+  componentWillUnmount() { removeEventListener('hashchange', this.hc); }
+  go(r) {
+    if (r === this.state.r) return;
+    try { localStorage.setItem(Component.KEY, r); } catch (e) {}
+    location.hash = r;
+    this.setState(s => ({ r, prev: s.r === 'M5' ? s.prev : s.r }));
+  }
+  renderVals() {
+    const s = this.state, v = {};
+    Object.keys(Component.R).forEach(k => { v['is' + k] = s.r === k; });
+    const locked = s.r === 'M5';
+    v.lockTitle = locked ? 'Unlock phone' : 'Lock phone';
+    v.lockLabel = locked ? 'Side button · unlock' : 'Side button · lock';
+    v.toggleLock = () => this.go(locked ? (s.prev || 'M1') : 'M5');
+    v.onNav = e => {
+      const a = e.target.closest && e.target.closest('a[href]');
+      if (!a) return;
+      const href = decodeURIComponent(a.getAttribute('href') || '');
+      if (href === '#' || href === '') { e.preventDefault(); return; }
+      const m = href.match(/(?:^|\/)(M\d) [^/]*\.dc\.html$/);
+      if (m && Component.R[m[1]]) { e.preventDefault(); this.go(m[1]); }
+      else if (/\.dc\.html$/.test(href)) e.preventDefault();
+    };
+    return v;
+  }
+}
+</script>
+</body>
+</html>

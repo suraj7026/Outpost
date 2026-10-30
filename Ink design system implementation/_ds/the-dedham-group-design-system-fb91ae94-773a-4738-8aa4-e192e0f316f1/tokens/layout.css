@@ -1,0 +1,10 @@
+/* The Dedham Group — Layout Tokens (16:9 slide canvas) */
+:root {
+  --tdg-slide-width:  1280px;
+  --tdg-slide-height: 720px;
+  --tdg-aspect:       16 / 9; /* @kind other */
+  --tdg-margin:       48px;   /* 0.5 in safe margin (at 96 dpi) */
+  --tdg-footer-h:     36px;
+  --tdg-footer-rule:  2px solid var(--tdg-accent-blue);
+  --tdg-title-rule:   2px solid var(--tdg-accent-blue);
+}

@@ -39,7 +39,7 @@ const ReviewSchema = z.strictObject({ actionDigest: z.string(), policyVersion: z
 export class Gate {
   private tools = new Map<string,Tool>();
   private running = new Map<string,AbortController>();
-  constructor(readonly db: Ledger, private reviewer?: Reviewer) {}
+  constructor(readonly db: Ledger, private reviewer?: Reviewer, private allowHostAdministration = false) {}
   register(name: string, tool: Tool) { requireThat(!this.tools.has(name),'duplicate_tool'); this.tools.set(name,tool); }
   catalogue() { return [...this.tools].map(([name,tool]) => ({ name, version: tool.version, effects: tool.effects })); }
   policy(taskId: string) { return this.db.need<Policy>('policy',taskId); }
@@ -52,7 +52,7 @@ export class Gate {
     const tool = this.tools.get(action.tool);
     requireThat(tool && tool.version === action.toolVersion,'tool_changed');
     requireThat(action.identityRef === 'agent-local','identity_not_delegated');
-    requireThat(!action.effects.some(effect => /^(trust|payment|owner|host)\./.test(effect)),'protected_effect');
+    requireThat(!action.effects.some(effect => /^(trust|payment|owner)\./.test(effect) || (effect.startsWith('host.') && !this.allowHostAdministration)),'protected_effect');
     return tool;
   }
   async propose(taskId: string, name: string, input: unknown, operationId: string = id()) {
@@ -100,8 +100,8 @@ export class Gate {
     try {
       const result = await claim.tool.execute(claim.record.data.arguments,controller.signal);
       return this.db.transaction(() => this.db.put('action',actionId,claim.record.revision,{ ...claim.record.data,state: 'succeeded',result },'action.observed'));
-    } catch {
-      return this.db.transaction(() => this.db.put('action',actionId,claim.record.revision,{ ...claim.record.data,state: 'unknown',result: { error: 'Execution interrupted or failed; inspect evidence before retrying' } },'action.reconciliation_required'));
+    } catch (error) {
+      return this.db.transaction(() => this.db.put('action',actionId,claim.record.revision,{ ...claim.record.data,state: 'unknown',result: { error: 'Execution interrupted or failed; inspect evidence before retrying',detail: error instanceof Error ? error.message.slice(0,2000) : 'Unknown execution failure' } },'action.reconciliation_required'));
     } finally { this.running.delete(actionId); }
   }
   stop(taskId: string) {

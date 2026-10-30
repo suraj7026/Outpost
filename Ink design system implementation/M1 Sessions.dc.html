@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="stylesheet" href="outpost.css"><script src="outpost.js"></script><title>M1 · Sessions</title></helmet>
+<div data-fit="608" style="width:560px;margin:0 auto;padding:8px 0 32px;display:flex;flex-direction:column;align-items:center;gap:8px">
+  <div style="align-self:stretch"><dc-import name="ViewerBar" code="M1" label="Sessions" prev="D8 Connect.dc.html" next="M2 Live Session.dc.html" hint-size="100%,44px"></dc-import></div>
+  <div style="position:relative;width:390px;height:844px;display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--border-strong);border-radius:48px;overflow:hidden;font-size:16px">
+    <div style="display:flex;align-items:center;height:54px;flex:none;padding:0 28px 0 36px;font-size:16px;font-weight:600"><span style="flex:1">9:41</span><span style="display:flex;gap:6px;align-items:center"><o-icon name="signal"></o-icon><o-icon name="wifi"></o-icon><o-icon name="battery-full" size="20"></o-icon></span></div>
+    <div style="display:flex;align-items:center;gap:8px;height:52px;flex:none;padding:0 12px 0 20px">
+      <span style="display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 12px;border:1px solid var(--border);border-radius:999px;font-size:13px;color:var(--text-2);white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:var(--ink)"></span><span style="font-family:'Geist Mono',monospace;color:var(--text)">outpost-01</span><span style="font-family:'Geist Mono',monospace;color:var(--text-3)">41 ms</span></span>
+      <div style="flex:1"></div>
+      <button title="Search" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:0;background:transparent;color:var(--text-2);border-radius:10px"><o-icon name="search" size="20"></o-icon></button>
+      <button title="New session" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:0;background:var(--ink);color:var(--on-ink);border-radius:10px"><o-icon name="plus" size="20"></o-icon></button>
+    </div>
+    <div style="padding:8px 20px 4px"><h1 style="margin:0;font-size:28px;line-height:36px;font-weight:600;letter-spacing:-0.01em">Sessions</h1></div>
+    <div style="flex:1;overflow:auto;padding:4px 0 96px;display:flex;flex-direction:column;gap:16px">
+      <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+        <div style="display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:8px;height:36px;padding:0 20px;font-size:13px;color:var(--text-2)"><span style="font-weight:500;color:var(--text)">{{ g.name }}</span><span style="color:var(--text-3)">{{ g.count }}</span></div>
+          <sc-for list="{{ g.items }}" as="s" hint-placeholder-count="2">
+            <a href="{{ s.href }}" style="display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:12px;align-items:start;padding:12px 20px;border-top:1px solid var(--border);color:var(--text)" style-active="background:var(--ink-subtle)">
+              <o-icon name="{{ s.icon }}" size="20" style="color:var(--text-3);margin-top:1px"></o-icon>
+              <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                <span style="font-size:16px;font-weight:500;line-height:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.title }}</span>
+                <span style="display:flex;gap:6px;font-size:13px;color:var(--text-3);white-space:nowrap;overflow:hidden"><span style="font-family:'Geist Mono',monospace">{{ s.ws }}</span>·<span>{{ s.time }}</span>·<span style="font-family:'Geist Mono',monospace;overflow:hidden;text-overflow:ellipsis">{{ s.model }}</span></span>
+              </div>
+              <div style="padding-top:2px"><o-status kind="{{ s.status }}"></o-status></div>
+            </a>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+    <nav style="position:absolute;left:0;right:0;bottom:0;display:flex;padding:6px 12px 28px;background:var(--bg);border-top:1px solid var(--border)">
+      <a href="M1 Sessions.dc.html" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:48px;justify-content:center;font-size:12px;color:var(--text);font-weight:500"><o-icon name="layers" size="20"></o-icon>Sessions</a>
+      <a href="M6 Pair Device.dc.html" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:48px;justify-content:center;font-size:12px;color:var(--text-3)"><o-icon name="server" size="20"></o-icon>Server</a>
+      <a href="#" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:48px;justify-content:center;font-size:12px;color:var(--text-3)"><o-icon name="settings" size="20"></o-icon>Settings</a>
+    </nav>
+    <div style="position:absolute;left:50%;bottom:8px;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:var(--text)"></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const row = ([icon, title, ws, time, model, status, href]) => ({ icon, title, ws, time, model, status, href });
+    return {
+      groups: [
+        { name: 'Needs you', items: [['code-xml', 'Fix filter chip sync on /products', 'storefront-web', '12m', 'claude-sonnet-4-5', 'needs', 'M3 Approval Sheet.dc.html']] },
+        { name: 'Running', items: [
+          ['file-text', 'Draft Q3 board report', 'finance-ops', '34m', 'gpt-5', 'running', 'M2 Live Session.dc.html'],
+          ['code-xml', 'Nightly dependency updates', 'storefront-web', '6m', 'qwen2.5-coder:32b', 'running', 'M2 Live Session.dc.html']] },
+        { name: 'Recent', items: [
+          ['code-xml', 'Add Playwright smoke tests for checkout', 'storefront-web', '2h ago', 'claude-sonnet-4-5', 'failed', 'M4 Diff Viewer.dc.html'],
+          ['file-text', 'Reconcile September pipeline', 'finance-ops', 'Yesterday', 'gpt-5', 'done', 'M2 Live Session.dc.html'],
+          ['message-square', 'Postgres vs Redis for job queues', 'chat', 'Yesterday', 'gemini-2.5-pro', 'done', 'M2 Live Session.dc.html'],
+          ['code-xml', 'Rotate TLS certs on edge nodes', 'infra', '3d ago', 'qwen2.5-coder:32b', 'interrupted', 'M2 Live Session.dc.html']] }
+      ].map(g => ({ name: g.name, count: g.items.length, items: g.items.map(row) }))
+    };
+  }
+}
+</script>
+</body>
+</html>
