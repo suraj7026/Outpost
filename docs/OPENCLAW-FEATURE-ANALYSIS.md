@@ -1,10 +1,12 @@
-# OpenClaw → Outpost: feature adoption analysis
+# OpenClaw, T3 Code, Hermes, and Pi extensions → Outpost: feature adoption analysis
 
-**Analysis date:** 29 October 2026
+**Initial analysis date:** 29 October 2026 · **Remote/networking rescan:** 30 October 2026
 
 **Deliverable:** detailed product and engineering recommendations, not an implementation or an approved replacement specification.
 
-**Recommendation:** borrow OpenClaw's operational patterns selectively; extend Outpost's existing server-owned architecture rather than embedding or forking the entire OpenClaw runtime.
+**Recommendation:** selectively borrow OpenClaw's operator patterns, T3 Code's coding and synchronization workflows, and Hermes' memory, skill, and automation practices. Extend Outpost's server-owned architecture; do not embed any of these runtimes.
+
+**Actionable backlog:** [40 detailed adoption tickets](tickets/README.md), with dependencies, acceptance criteria, upstream source files, and Outpost integration seams. All tickets are proposed, not implementation commitments. Sections 1–10 preserve the original OpenClaw analysis; sections 11–13 add T3/Hermes findings; section 14 adds Pi extension features; section 15 and the [remote-connectivity rescan](T3-REMOTE-CONNECTIVITY-ANALYSIS.md) cover the newer T3 snapshot's Connect, Tailscale, routing, host placement, peer delegation, and provider hubs. The filename is retained for existing links.
 
 ## Contents
 
@@ -18,6 +20,11 @@
 8. [What not to copy](#8-what-not-to-copy)
 9. [Reuse, licensing, and maintenance](#9-reuse-licensing-and-maintenance)
 10. [Source register](#10-source-register)
+11. [T3 Code findings](#11-t3-code-findings)
+12. [Hermes findings](#12-hermes-findings)
+13. [Combined adoption plan](#13-combined-adoption-plan)
+14. [Pi subagent and Ollama Cloud extensions](#14-pi-subagent-and-ollama-cloud-extensions)
+15. [T3 remote access and load-balancing rescan](#15-t3-remote-access-and-load-balancing-rescan)
 
 ---
 
@@ -58,9 +65,12 @@ The key product distinction should remain: **Outpost is an evidence-oriented per
 | Repository | Inspected baseline | Working-tree qualification |
 |---|---|---|
 | OpenClaw | `12c7926d2502b621f30297ac4f176aa5b6fa2fb8` | Working tree reported clean during inspection |
-| Outpost | `28014e12166fdd1fb5e667901015c13005759b92` | Contains existing modified and untracked work, including the Tauri desktop, deployment files, live streaming, host execution, and Browser-Use integration |
+| Outpost | `e9af7395c8358dbac6e5d3bd28d598b55204c8d3` | Clean before this documentation update; contains the previously inspected working-tree changes |
+| T3 Code — initial analysis | `cfafb4bb54d244e4612f5681aad3832ea64cb0fb` (16 October 2026) | Historical baseline for section 11; then 2,585 commits behind recorded `origin/main` |
+| T3 Code — remote/networking rescan | `2c119bd975deb06f49505a0af3ec8d272806b923` (29 October 2026) | Clean on 30 October; zero commits behind recorded `origin/main`; checkout had changed between reviews, not fetched/updated by this rescan |
+| Hermes | `088f657ecf77674c7b8e2ededf4e3576d82e042c` (29 October 2026) | Clean local checkout; not fetched or updated |
 
-**Outpost findings describe the local working tree, not just the recorded commit.** The commit alone cannot reproduce all functionality discussed here.
+The original Outpost inspection used `28014e1` plus uncommitted work; that work is now captured in `e9af739`. Upstream findings apply to these local snapshots, **not necessarily current upstream releases**. Relative sibling-repository links require the checkouts alongside Outpost; commit hashes above identify the evidence revision. T3 links now open the newer local checkout; use the older commit to reproduce initial findings. The focused rescan does not imply every earlier T3 claim was requalified.
 
 ### Method
 
@@ -68,6 +78,8 @@ The key product distinction should remain: **Outpost is an evidence-oriented per
 - Inspect current coordinator/runtime wiring and concrete implementations of tasks, policy, scheduling, memory, workers, recipes, capabilities, browser leases, hosts, and backups.
 - Read OpenClaw's feature documentation and inspect representative implementation contracts: cron schedules and outcomes, queue options, hybrid search merging, and the Lobster tool adapter.
 - Locate relevant upstream owners and tests as implementation starting points.
+- Inspect T3's current orchestration-v2 implementation, Pi adapter, checkpoints, stream budgets, connection design, and coding-workflow documentation. Older proposal documents are not treated as the implementation baseline.
+- Review Hermes' memory/skills, context accounting, scheduling receipts, tool search/validation, checkpointing, profiles, worker lanes, and representative implementation files. Where source and documentation disagree, retain the qualification rather than infer full correctness.
 
 This is a **static comparative analysis**. No live providers, remote hosts, messaging accounts, payment systems, or application flows were exercised for this document. Existing test results quoted by repository documents remain historical evidence, not tests rerun here. Located tests are references, not a claim that they pass at this checkout.
 
@@ -901,8 +913,217 @@ Paths below refer to the inspected sibling checkouts. OpenClaw links are local r
 
 ---
 
+## 11. T3 Code findings
+
+T3 is the strongest of these references for **making coding work reviewable and keeping long-lived clients synchronized**. Its broader harness catalogue is less immediately valuable than making Outpost's existing Pi integration dependable. Keep Tauri/React/AppKit and Outpost's ledger; neither Electron nor Effect is a prerequisite for these behaviors.
+
+### Durable commands, ordered inputs, and honest completion
+
+[EventSink.ts](../../t3code/apps/server/src/orchestration-v2/EventSink.ts) implements transactional command receipts, events, projections, and effect requests before publication/execution. This is implemented orchestration-v2 code, not merely an architectural proposal. Outpost already has transactions, an outbox, and idempotent commands in [ledger.ts](../server/core/ledger.ts); the opportunity is to complete the boundary between durable acceptance and Pi execution, not replace SQLite or add a second event store.
+
+[QueuedRunOrder.ts](../../t3code/apps/server/src/orchestration-v2/QueuedRunOrder.ts) makes delivery order explicit. [RunFinalizationService.ts](../../t3code/apps/server/src/orchestration-v2/RunFinalizationService.ts) is a useful reference for separating run outcomes from task projections. Outpost should distinguish an input being accepted, delivered, executed, and verified; interrupted external effects can remain unknown. See [OP-001](tickets/OP-001.md) and [OP-022](tickets/OP-022.md).
+
+### Bounded streams and scoped client state
+
+[ThreadStream.ts](../../t3code/apps/server/src/orchestration-v2/ThreadStream.ts) bounds replay to 128 events and 1 MiB encoded/raw-payload budgets before snapshot fallback. [LiveStreamBudget.ts](../../t3code/apps/server/src/orchestration-v2/LiveStreamBudget.ts) separately bounds live buffering. These numbers are upstream choices, **not proposed universal Outpost defaults**.
+
+Outpost's [live.ts](../server/gateway/live.ts) starts with a full public-record snapshot and rotates streams after 60 seconds; [useConnection.ts](../desktop/src/useConnection.ts) maintains broad state. This suggests growing transfer/reducer costs, but no benchmark was performed. Adopt compact workspace summaries, task-scoped subscriptions, paged historical messages, explicit reset semantics, and bounded queues. Follow T3's [connection runtime](../../t3code/docs/internals/connection-runtime.md) principle of one retry owner per environment; sleep/resume should not start competing reconnect loops. Its [performance regression guidance](../../t3code/docs/internals/performance-regressions.md) supplies test invariants rather than proof that Outpost is already slow. See [OP-018](tickets/OP-018.md).
+
+### Managed worktrees, checkpoints, and review
+
+T3's [source-control workflow](../../t3code/docs/user/source-control.md), [checkpoint store](../../t3code/apps/server/src/checkpointing/CheckpointStore.ts), and [restore isolation guard](../../t3code/apps/server/src/orchestration-v2/CheckpointRestoreSafety.ts) fill a substantial Outpost product gap. Outpost can inspect a repository, apply precise patches, and bind checks to revisions in [repository.ts](../server/code/repository.ts), but does not expose an equivalent end-to-end workspace/checkpoint/review flow.
+
+The crucial safety behavior is **refusing whole-workspace file restoration when another thread may share or overlap that workspace**. Conversation rewind and filesystem restore must be separate operations. Neither reverses a deployment, message, or other external side effect. Add task-owned worktrees before enabling destructive whole-tree restore; show base revision, tracked/untracked exclusions, a restore preview, and stale-revision conflicts. Build a changed-files/diff/checks surface before automatic PR publishing. See [OP-019](tickets/OP-019.md), [OP-020](tickets/OP-020.md), and [OP-021](tickets/OP-021.md).
+
+### Pi capabilities and portable continuation
+
+The [Pi adapter](../../t3code/packages/provider-pi/src/server/adapter.ts) exposes capabilities such as steering, queued input, compaction, rollback/forking, extensions, and streaming. Outpost should negotiate the subset it can actually support and expose unsupported states honestly. Enabling native extensions wholesale would violate Outpost's current single-gate tool model: a permission hook is not an OS sandbox, and extensions can execute code outside tool calls.
+
+[Portable handoffs](../../t3code/docs/user/portable-handoffs.md) and [ContextHandoffService.ts](../../t3code/apps/server/src/orchestration-v2/ContextHandoffService.ts) provide a bounded context-selection reference. A handoff is not byte-identical provider session state. Preserve unresolved decisions, source artifacts, workspace revision, and omissions, but revalidate authority in the destination session. Do not import approval tokens through a summary. See [OP-002](tickets/OP-002.md), [OP-007](tickets/OP-007.md), and [OP-023](tickets/OP-023.md).
+
+## 12. Hermes findings
+
+Hermes is especially useful for **memory that survives sessions, reusable procedural knowledge, and automation that can explain why it did not run**. It also demonstrates the operational complexity introduced by many plugins, profiles, providers, and background execution paths. Borrow bounded product behaviors, not its entire Python agent/messaging/desktop stack.
+
+### Bounded memory and explicit session boundaries
+
+The [memory guide](../../hermes-agent/website/docs/user-guide/features/memory.md) describes bounded MEMORY.md and USER.md stores, injected as a frozen session-start snapshot. Writes persist immediately but the system-prompt prefix stays stable until a new session. Tool responses can expose live state. This is a useful complement to Outpost's scoped FTS/provenance implementation: use a small curated startup packet plus on-demand historical retrieval rather than injecting every remembered fact.
+
+The documented 2,200/1,375-character defaults are Hermes choices, not Outpost requirements. Outpost should set token budgets based on its models and keep memories identity/project scoped with source provenance, correction history, and deletion propagation. A conversational claim of remembering is not a saved-memory receipt. Memory mutation should use the existing action gate, not assume Hermes' optional write-approval defaults are sufficient. See [OP-006](tickets/OP-006.md) and the [memory provider manager](../../hermes-agent/agent/memory_manager.py).
+
+### Skills as discoverable, versioned procedures
+
+Hermes' [skills documentation](../../hermes-agent/website/docs/user-guide/features/skills.md) covers progressive disclosure, explicit invocation, bundles, and learning procedures from sources. [skill_bundles.py](../../hermes-agent/agent/skill_bundles.py) and [skill_commands.py](../../hermes-agent/agent/skill_commands.py) are implementation entry points. Outpost should first make approved skills loadable through Pi, pin their versions per run, and display which instructions were used. A bundle selects procedures; it must not silently grant tools, credentials, or greater authority.
+
+Later, offer “save this successful procedure” as a reviewed draft with source artifacts, evaluation evidence, a version diff, and rollback. Do not let an agent silently rewrite its own active instructions. Knowledge-base skills can use a compact index and separately loaded references rather than one giant prompt. See [OP-007](tickets/OP-007.md) and [OP-016](tickets/OP-016.md).
+
+### Context pressure and cache integrity
+
+[Context compression and caching](../../hermes-agent/website/docs/developer-guide/context-compression-and-caching.md) distinguishes provider-reported usage anchors, estimates of appended content, gateway hygiene, in-loop compression, and reactive overflow recovery. It explicitly acknowledges heuristic fallbacks and limited replay evidence. Outpost should similarly distinguish measured tokens from estimates and invalidate usage anchors on model/context changes.
+
+Use Pi's supported compaction path where possible, with ledger-visible checkpoints and a bounded recovery budget; do not build a competing compressor first. Keep the normal instruction/memory prefix stable within a run, with explicit exceptions for revocation and safety updates. Compression cannot convert untrusted retrieved content into system instructions or preserve stale approvals. See [OP-002](tickets/OP-002.md), [context_engine.py](../../hermes-agent/agent/context_engine.py), and [usage_anchor.py](../../hermes-agent/agent/usage_anchor.py).
+
+### Scheduling: preflight, durable receipts, and uncertain delivery
+
+Hermes' [cron guide](../../hermes-agent/website/docs/user-guide/features/cron.md) goes beyond schedule syntax: prerequisite checks can block a run before spending model tokens, job-specific skills/model configuration are explicit, and scheduled execution is distinct from result delivery. [scheduler_authority.py](../../hermes-agent/cron/scheduler_authority.py), [executions.py](../../hermes-agent/cron/executions.py), and [delivery_queue.py](../../hermes-agent/cron/delivery_queue.py) provide implementation entry points for admission identity and recovery.
+
+Adopt preflight with a visible blocked-config state, one alert per failure episode, bounded catch-up, timezone/DST rules, recurrence budgets, and separate execution/delivery receipts. A known completed result should be deliverable without rerunning the agent. An ambiguous send must remain unknown rather than automatically duplicating the message. Pause ownership/recovery rules need explicit Outpost tests; do not inherit subtle upstream pause/resume behavior by assumption. Script-only jobs are useful later but must be reviewed recipes with pinned content, not arbitrary shell text accepted from a webhook. See [OP-004](tickets/OP-004.md), [OP-010](tickets/OP-010.md), and [OP-011](tickets/OP-011.md).
+
+### Progressive tool discovery without authority expansion
+
+The [tool-search guide](../../hermes-agent/website/docs/user-guide/features/tool-search.md), [tool_search.py](../../hermes-agent/tools/tool_search.py), and [catalog implementation](../../hermes-agent/tools/tool_search_catalog.py) show search/describe/call bridges scoped to the session's enabled tools. Compact listings keep capabilities discoverable while schemas load on demand. This becomes valuable when Outpost gains MCP/connectors; its current small `outpost_action` surface does not justify the complexity yet.
+
+Important caveat: [tool_search_validation.py](../../hermes-agent/tools/tool_search_validation.py) documents fail-open cases for unsupported/missing schemas and external references. Outpost must validate supported schemas locally and reject or quarantine unvalidated executable tools. The bridge must unwrap to the actual action before digesting arguments and requesting approval; approval of a generic `tool_call` is not enough. See [OP-024](tickets/OP-024.md).
+
+### Worker lanes and reviewed completion
+
+The [worker-lane contract](../../hermes-agent/website/docs/user-guide/features/kanban-worker-lanes.md) separates board lifecycle ownership, executors, and reviewers. It distinguishes review from blocked work and treats a worker exiting without a lifecycle result as a failure rather than completion. Useful implementation seams include [kanban_db_dispatch.py](../../hermes-agent/hermes_cli/kanban_db_dispatch.py) and [kanban_workflow.py](../../hermes-agent/hermes_cli/kanban_workflow.py).
+
+Two cautions matter. First, the lane document explicitly calls descendant scoping cooperative runtime behavior, **not OS confinement**. Second, [iteration_budget.py](../../hermes-agent/agent/iteration_budget.py) says each parent/child has its own cap, so aggregate iterations may exceed the parent's limit; this conflicts with older instruction-file descriptions of a shared budget. Outpost should retain explicit aggregate budget reservation/accounting across descendants and one writer per workspace, not copy either an inaccurate description or weaker defaults. See [OP-009](tickets/OP-009.md), [OP-014](tickets/OP-014.md), and [OP-022](tickets/OP-022.md).
+
+### Checkpoint storage, profiles, and execution isolation
+
+Hermes' [checkpoint guide](../../hermes-agent/website/docs/user-guide/checkpoints-and-rollback.md) and [checkpoint_manager.py](../../hermes-agent/tools/checkpoint_manager.py) add useful storage/retention lessons: snapshots are opt-in, use a shadow Git store, and need size limits and cleanup. This complements T3's isolation-first restore rule; it is not permission to snapshot secrets or promise rollback of remote effects. See [OP-020](tickets/OP-020.md).
+
+[Profiles](../../hermes-agent/website/docs/user-guide/profiles.md) isolate config, credentials, sessions, skills, and memory. Outpost should initially use project/identity-scoped **task configuration profiles**, not create multiple competing operator homes or clone secrets/schedules. A full multi-profile product is deferred.
+
+[Programmatic execution](../../hermes-agent/website/docs/user-guide/features/code-execution.md) and [code_execution_tool.py](../../hermes-agent/tools/code_execution_tool.py) reduce context by processing intermediate tool results in code. Do not equate a child process, private RPC socket, or temporary working directory with an OS security boundary. Any Outpost version needs constrained execution and per-action authorization, or must remain disabled. Similarly, evaluate execution backends by real filesystem/network/credential boundaries, not the word “sandbox.” This is an explicitly gated research/implementation ticket, [OP-025](tickets/OP-025.md).
+
+## 13. Combined adoption plan
+
+### Complementary references
+
+| Reference | Highest-value contribution | Do not transplant |
+|---|---|---|
+| OpenClaw | Persistent operator queues, monitors, integrations, browser/session continuity | Gateway/runtime ownership, broad permissions, ecosystem breadth as an initial milestone |
+| T3 Code | Durable run semantics, scoped streams, managed worktrees, checkpoints, diffs/checks, portable context | Electron/Effect architecture, all provider adapters, extension execution outside Outpost policy |
+| Hermes | Curated memory, skill reuse, cache-aware context, scheduling recovery, scoped tool discovery, review lanes | Autonomous instruction mutation, per-child-only budgets, host execution mislabeled as isolation |
+
+### Ticket organization and revised sequence
+
+The [ticket index](tickets/README.md) is the actionable cross-project backlog. OP-001 through OP-017 preserve the original F01–F17 mapping and incorporate relevant T3/Hermes evidence. OP-018 through OP-025 add missing coding/synchronization, verified completion, portable handoff, tool-discovery, and isolated-execution work. OP-026 through OP-033 add explicit subagent and Ollama extension features; section 14 advances the requested delegation core into the next product tranche. Each ticket links concrete upstream files and existing Outpost owners; these are integration starting points, not claims that missing code already exists.
+
+1. **Dependable runtime:** OP-001, OP-002, OP-013, OP-018, and OP-022. Measure with OP-017 and add bounded model recovery through OP-003. Exit only when acceptance, execution, interruption, reconnect, and completion states survive restarts honestly.
+2. **Useful daily coding and knowledge:** OP-007, OP-019, OP-020, OP-021, OP-006, OP-014, and OP-023. Worktrees and verified review now precede broad connector/channel adoption. No whole-workspace restore before isolation; no stale check results presented as current evidence.
+3. **Bounded recurring and reusable work:** OP-004, OP-012, OP-010, and OP-009, followed by OP-005. Require admission/delivery recovery tests and aggregate budgets before unattended expansion.
+4. **Optional ecosystem expansion:** OP-008, OP-024, OP-011, OP-016, OP-015, and OP-025. Tool discovery depends on an actual tool catalogue; programmatic execution depends on demonstrated confinement. Defer rather than weaken the common gate.
+
+This refines section 7's original OpenClaw-first sequence. Priority labels express risk/value, not that every P0 ticket must finish before any independent read-only work starts. No release dates or implementation effort estimates have been validated.
+
+### Common definition of done
+
+- Persist commands/results through the existing ledger and outbox. No second task or approval authority.
+- Authenticate commands, bind approval to the concrete action/revision, and recheck revocation at dispatch.
+- Exercise restart, duplicate input, stale revision, cancellation, capacity exhaustion, and unknown-side-effect paths—not only the happy path.
+- Expose honest states in the current desktop, with API/event contracts suitable for other clients. Do not assume legacy Swift screens have new-feature parity.
+- Bound history, buffers, context, artifacts, schedules, retries, and child work; provide retention/deletion rules.
+- Provide migrations, rollback/disable behavior, redacted diagnostics, and feature-level tests. Referenced upstream tests are examples, not validation runs performed here.
+
+### Licensing addendum
+
+T3's [MIT licence](../../t3code/LICENSE) identifies copyright 2026 T3 Tools Inc.; Hermes' [MIT licence](../../hermes-agent/LICENSE) identifies copyright 2025 Nous Research. OpenClaw's licence discussion in section 9 still applies. Preserve required notices for substantial copied source or documentation, review transitive dependencies and asset licences separately, and record the imported commit. Behavioral inspiration does not require adopting upstream dependencies. This update contains recommendations and references, not imported runtime code.
+
+## 14. Pi subagent and Ollama Cloud extensions
+
+### Confirmed installed packages and evidence boundary
+
+These are the two extensions present in the operator's Pi installation:
+
+| Package | Inspected version | Local evidence | Upstream |
+|---|---|---|---|
+| `pi-subagents` | **0.83.0** | [package manifest](../../../.pi/agent/npm/node_modules/pi-subagents/package.json), [README](../../../.pi/agent/npm/node_modules/pi-subagents/README.md) | [nicobailon/pi-subagents](https://github.com/nicobailon/pi-subagents) |
+| `pi-ollama-cloud` | **0.13.1** | [package manifest](../../../.pi/agent/npm/node_modules/pi-ollama-cloud/package.json), [README](../../../.pi/agent/npm/node_modules/pi-ollama-cloud/README.md) | [fgrehm/pi-ollama-cloud](https://github.com/fgrehm/pi-ollama-cloud) |
+
+This addition reviews installed package documentation, public API declarations, and representative Ollama TypeScript implementation. The subagent distribution contains bundled runtime code and declarations; this is not a full audit of its internal runtime. Versions identify installed npm artifacts, not an assumed upstream Git commit. No child agents, live probes, account requests, or provider benchmarks were run for this review. Local extension links resolve under the operator's `.pi/agent/npm/node_modules/`, outside Outpost, and may change after an extension upgrade.
+
+Outpost's [package manifest](../package.json) pins Pi SDK 1.4.0, and its [runtime](../server/pi-adapter/runtime.ts) uses a custom resource loader with empty extension/skill collections and only `outpost_action`. **Installed in the developer's Pi does not mean installed or integrated in Outpost.** Even if package minimum versions appear compatible, qualify the actual APIs, settlement events, headless behavior, and child-loading path before enabling either package.
+
+### Subagent features to adopt explicitly
+
+The earlier OP-009 worker ticket was too broad to capture this extension's user-facing functionality. Keep it as the lifecycle/budget umbrella and add these concrete slices:
+
+| Ticket | Requested capability | Outpost adaptation |
+|---|---|---|
+| [OP-026](tickets/OP-026.md) | Builtin/custom roles, per-role models/thinking, fresh/fork context, preflight and capability ceilings | Versioned role registry and an exact resolved launch contract; disable ambient extension/tool inheritance |
+| [OP-027](tickets/OP-027.md) | Sequential/parallel workflows, independent lanes, structured results, review loops, councils | Reviewed workflow templates, bounded fan-out, isolated writers, explicit verdicts and pass caps |
+| [OP-028](tickets/OP-028.md) | Async runs, retained children, resume/steer/interrupt/stop, fleet inspector, mission evidence | Durable ledger-owned child tree, scoped desktop inspection, correlated control receipts and completion delivery |
+| [OP-029](tickets/OP-029.md) | Child questions, structured interviews, progress updates, nested supervisor routing | Durable decision inbox with exact request correlation; distinguish guidance from action approval |
+| [OP-030](tickets/OP-030.md) | Opt-in watchdog, scope-drift/test-gap checks, launch diagnostics | Bounded independent review and delegation doctor, never a replacement permission arbiter |
+
+**Roles and context.** The package supplies scout, researcher, evidence-auditor, worker, reviewer, oracle, and delegate roles. Outpost should expose reviewed equivalents and custom profiles, not silently load project-local agents. Fresh-context review reduces inherited assumptions; forked context preserves useful background but needs scope filtering and provenance. Research roles require actual research tools: supplying a role name is not proof those tools loaded. Use [model resolution guidance](../../../.pi/agent/npm/node_modules/pi-subagents/docs/models.md) and the [launch-contract declaration](../../../.pi/agent/npm/node_modules/pi-subagents/src/api/preflight.d.ts) to design a preview showing effective model, thinking, skills, tools, extensions, workspace, and context. Upstream's optional/warn-only model restrictions are not a suitable default for Outpost's enforced authority.
+
+**Workflows and councils.** [Workflow documentation](../../../.pi/agent/npm/node_modules/pi-subagents/docs/workflows.md) supports stable keyed children, parallel fan-out, sequential lanes, structured output, gates, steering receipts, worktree isolation, and retained-session reuse. A normal child exit or `ok` receipt does not prove the requested work was done. Make verification explicit through OP-022. The [council protocol](../../../.pi/agent/npm/node_modules/pi-subagents/skills/council-mode/SKILL.md) adds independent reports, curated cross-examination, and an owner-facing memo; it is read-only advice, not unrestricted peer chat or authorization to implement. Adopt the behavior without copying terminal slash commands or requiring arbitrary JavaScript workflows in the first release.
+
+**Background ownership and visibility.** [Observability](../../../.pi/agent/npm/node_modules/pi-subagents/docs/observability.md) distinguishes in-process foreground children, detached runners, live hints, status snapshots, completion replay, and process-terminal proof. Translate the fleet into Outpost's desktop/task UI, with paged transcripts and artifact links. Keep launch acceptance, execution success, task verification, notification delivery, resumability, and safe cleanup as separate facts. Some upstream completion records are temporary and best-effort; they cannot replace the ledger. Async child usage also does not automatically appear in Pi's ordinary session footer, so capture it explicitly.
+
+**Missions and schedules.** The [mission guide](../../../.pi/agent/npm/node_modules/pi-subagents/docs/missions.md) contributes objective/run/decision/receipt linkage, bounded persistent workflow state, quiet recurring outcomes, and recovery navigation. Map these to Outpost tasks, recipes, scheduler occurrences, and delivery receipts rather than introduce another lifecycle owner. Upstream goal missions provide attention notices, not autonomous replanning; closing a mission does not itself pause its schedule, and goal notice budgets do not gate schedule admission. Outpost must explicitly couple revocation/closure and schedule policy where intended, and retain aggregate admission limits.
+
+**Permissions and budgets: deliberately do not copy defaults.** The [watchdog guide](../../../.pi/agent/npm/node_modules/pi-subagents/docs/watchdog.md) documents optional child permissions whose unspecified tools default to allow, whose bash calls pass through, and whose `ask` is answered by a model arbiter. None is equivalent to Outpost's exact-action owner approval. The workflow guide also says usage budgets account for completed children and reject later launches without stopping already-running ones. Outpost needs admission reservation and active aggregate limits from OP-009. External CLI runners remain a separate later adapter/security decision; failed native delegation must not silently fall back to them.
+
+### Ollama extension features beyond existing inference
+
+`pi-ollama-cloud` connects directly to `https://ollama.com`; it is not the local `ollama` provider and does not require a local daemon. Outpost already has compatible inference, so adopt the missing provider/research/visibility features instead of duplicating its transport blindly.
+
+| Ticket | Requested capability | Outpost adaptation |
+|---|---|---|
+| [OP-031](tickets/OP-031.md) | Live model discovery, cached catalogue, modality/context/thinking metadata | Capability-aware picker and role-model selection; exact provider identity and last-good snapshot |
+| [OP-032](tickets/OP-032.md) | Web search/fetch, cached expansion, pagination, refresh and toggles | Gate-controlled research tools, cited artifacts, identity-scoped bounded cache and explicit Cloud egress |
+| [OP-033](tickets/OP-033.md) | Quota/balance, renewal, request history, cost estimates | Desktop/provider diagnostics and durable parent/child totals with explicit accuracy/completeness labels |
+
+**Catalogue details.** [models.ts](../../../.pi/agent/npm/node_modules/pi-ollama-cloud/models.ts) queries `/v1/models` and `/api/show`, filters chat/tool-suitable models, sets explicit OpenAI-compatible transport flags, and keeps a generated or persisted fallback. On partial metadata failure the implementation retains its last-good baseline and reports an incomplete refresh; do not infer complete fresh coverage from README shorthand. [thinking-levels.ts](../../../.pi/agent/npm/node_modules/pi-ollama-cloud/thinking-levels.ts) uses generated metadata and probe-derived overrides: supported levels and a true off switch are not established by a boolean `thinking` flag alone. Outpost's existing [thinking probe](../server/models/thinking.ts) is therefore a starting point, not full parity.
+
+**Research tools.** [Web-tool behavior](../../../.pi/agent/npm/node_modules/pi-ollama-cloud/docs/web-tools.md) includes snippets, free cached expansion, chunked text fetch, explicit refresh, success/selected-failure caching, and size/entry caps. The extension's cache stores raw URLs/content and uses last-writer-wins across processes. Outpost should instead own concurrent cache writes, enforce identity/credential scope, reject secret-bearing URLs, retain source timestamps, and expose deletion. Even with a local model, using these web APIs sends queries/URLs to Ollama Cloud; the UI and policy must make that boundary visible.
+
+**Usage truthfulness.** [usage.ts](../../../.pi/agent/npm/node_modules/pi-ollama-cloud/usage.ts) and the [usage guide](../../../.pi/agent/npm/node_modules/pi-ollama-cloud/docs/usage.md) expose account balance and request histograms. The footer integration in [index.ts](../../../.pi/agent/npm/node_modules/pi-ollama-cloud/index.ts) is TUI-only and guards against stale refresh generations. Reuse the data contract, not the terminal widget. Published per-token equivalents are not subscription charges; missing price entries return zero upstream and cache-token usage is unavailable. Outpost should label unknown prices as unknown, retain measured usage separately, and avoid double-counting child receipts.
+
+### Revised priority and first milestone
+
+The operator explicitly requested these features. **Advance OP-009 from P2 to P1** and deliver a bounded delegation core alongside daily coding/knowledge work, rather than leaving all subagents behind general connectors. Section 13's prior sequence is refined as follows:
+
+1. Complete the admission, policy, scoped-stream, and verified-completion foundations in group A.
+2. Add one read-only scout/reviewer role, one worker role, preflight, a durable background run, fleet inspection, and supervisor decisions: OP-009, OP-026, OP-028, OP-029. Require managed worktrees before concurrent writers.
+3. Add Ollama catalogue/selection, research tools, and quota visibility through OP-031–OP-033. Search/fetch and quota can ship independently of general MCP support and need not wait for writable multi-agent workflows.
+4. Add bounded parallel reviews, review loops, and councils through OP-027; then opt-in watchdog behavior through OP-030. Integrate recurring delegated recipes through existing OP-004/OP-010 rather than another scheduler.
+
+Do not promise safe plug-and-play loading: Pi extensions execute trusted code with host process privileges. Either bind explicitly approved APIs with mandatory child gate propagation or reproduce the relevant behavior inside Outpost. Acceptance tests must prove the gate is active in every child, including resumes and nested launches. The package being MIT or having a permission hook is not evidence of confinement.
+
+### Extension licensing
+
+Both inspected packages are MIT: [pi-subagents licence](../../../.pi/agent/npm/node_modules/pi-subagents/LICENSE), copyright 2026 Nico Bailon; [pi-ollama-cloud licence](../../../.pi/agent/npm/node_modules/pi-ollama-cloud/LICENSE), copyright 2026 Fabio. Preserve notices for substantial copied source/documentation and review dependencies/assets separately. Record exact package versions and integrity hashes if code is imported; this update imports no runtime code.
+
+## 15. T3 remote access and load-balancing rescan
+
+The requested rescan found implemented functionality that the earlier coding-focused review did not cover adequately. Read the [detailed rescan](T3-REMOTE-CONNECTIVITY-ANALYSIS.md) for concrete source links, algorithm thresholds, trust boundaries, and qualification limits. This uses the newer `2c119bd9` checkout, not the original `cfafb4bb5` snapshot. T3 Connect lives within T3's `infra/relay`; Tailscale was reviewed through T3's integration, not a standalone VPN audit.
+
+### What is implemented, and what it means
+
+- **T3 Connect:** account-linked environments, proof-bound bootstrap, environment-issued sessions, managed Cloudflare tunnels, generation-fenced provisioning/cleanup, connector recovery, and optional held webhook delivery. Normal application traffic goes through the environment's tunnel hostname rather than an application proxy in the relay Worker; the tunnel provider still participates in transport. Cloud login is not blanket execution authority.
+- **Tailscale:** MagicDNS/tailnet discovery, private HTTPS Serve setup/removal, bounded CLI probes, and typed diagnostics. Tailscale reachability does not replace pairing/authentication; a shared-address-space IP alone does not prove Tailscale membership. Outpost already uses Tailscale for administration, so the gap is product integration and safe lifecycle management.
+- **Multiple routes:** one stable environment can have LAN, Tailscale/VPN, HTTPS, SSH, and Connect routes. Preflight, route ordering, credential-aware learned addresses, cooldowns, and permission refresh improve reconnect behavior. This is failover to the same server, not migration of work between servers.
+- **Host load balancing:** opt-in web/desktop placement of new threads, scoring `weight × CPU count × idle CPU fraction × available memory fraction`. Missing/stale/saturated candidates are excluded, and the draft's selection is pinned. It is not a distributed reservation system, live thread migration, GPU scheduler, or fixed traffic split. Mobile retains manual selection in the inspected docs.
+- **Linked environments:** explicit remote delegation with narrowed mode grants, namespaced idempotency, origin tracking, restartable result followers, and cancellation. Links are not OS isolation, and the inspected remote delegate path does not support the local `worktree` isolation flag unchanged.
+- **Provider hubs:** pooled quota visibility through CLIProxyAPI integration is separate from configuring model traffic through that proxy. Monitoring a pool does not mean T3 itself balances inference across it.
+
+### New tickets and integration ownership
+
+| Ticket | Feature | Priority |
+|---|---|---|
+| [OP-034](tickets/OP-034.md) | Stable server identity and multi-route failover | P1 |
+| [OP-035](tickets/OP-035.md) | Tailscale private HTTPS setup/status/removal | P1 |
+| [OP-036](tickets/OP-036.md) | Optional managed Connect-style broker | P2 |
+| [OP-037](tickets/OP-037.md) | Resource-aware worker placement with durable admission | P1 |
+| [OP-038](tickets/OP-038.md) | Peer links and remote subagent delegation | P2 |
+| [OP-039](tickets/OP-039.md) | Ownership-safe SSH/services and resource protection | P1 |
+| [OP-040](tickets/OP-040.md) | Provider hubs, pooled quota, approved endpoint routing | P2 |
+
+Keep **one Outpost coordinator/ledger** and place new worker jobs across the existing approved hosts first. Revalidate workspace, model, credentials, scope, and capacity, then reserve capacity atomically before dispatch. Host CPU/memory is only one input; queued work, model/browser slots, GPU limits where measured, and data locality matter. A network partition does not prove a worker stopped. Do not create multiple active SQLite coordinators behind a round-robin proxy as a shortcut to HA.
+
+Remote access should initially build on private Tailscale/SSH and preserve Outpost's HTTPS-or-loopback transport rule. The managed broker and independent-environment federation are later opt-in operational expansions. No requirement to adopt Cloudflare, Clerk, T3 subscription plans, or external inference proxies follows from this analysis.
+
+These tickets extend existing ownership rather than duplicate it: OP-018 owns scoped synchronization, OP-001/OP-009 own admission/budgets, OP-026–OP-029 own subagents, OP-004 owns webhook occurrences/deduplication, OP-012 owns browser takeover, and OP-017/OP-033 own diagnostics and usage. OP-015 remains optional generic execution-node expansion; the two-host placement slice need not wait for it.
+
 ## Final recommendation
 
-The strongest next milestone is **a dependable Outpost operator**, not maximum OpenClaw feature parity: durable inputs, bounded context, clear health diagnostics, richer schedules, usable memory/skills, and an attention board over real server facts. Complete browser continuity alongside that work. Then add reusable recipes, managed connectors, and bounded workers.
+The strongest next milestone is **a dependable Outpost operator**, not maximum feature parity with any reference project: durable inputs, bounded context and synchronization, clear diagnostics, and verified completion. Then add usable skills/memory and task-owned worktrees with safe checkpoints and revision-bound code review. Expand scheduling, browser continuity, recipes, and bounded workers only on those foundations.
 
-This sequence extracts OpenClaw's most useful operational lessons while preserving Outpost's existing investment, evidence model, clients, and explicit authority boundaries.
+Use T3 primarily for coding and synchronization, Hermes for bounded knowledge and automation recovery, OpenClaw for persistent-operator patterns, pi-subagents for explicitly managed delegation, and pi-ollama-cloud for model discovery, research tools, and quota visibility. The [40-ticket backlog](tickets/README.md) includes the requested extension and remote/load-balancing features while preserving Outpost's ledger, Pi runtime, clients, evidence model, and explicit authority boundaries. Start remote work with private access and server-owned worker placement; managed brokers and full environment federation remain explicit later choices.
