@@ -4,12 +4,12 @@ This supersedes the original sandbox-only workspace description for the Outpost 
 
 ## Current layout
 
-The initial provider-worker release `providers-20261030T200757Z` is now deployed. See [deployment verification, backups and limitations](../../docs/implementation/SERVER-PI-PROVIDERS-STATUS.md). Provider packages and OAuth callback relay remain disabled.
+Current release: `ollama-cloud-20261030T204743Z-r2`. See [Ollama Cloud setup, verification and backups](../../docs/implementation/OLLAMA-CLOUD.md) and [provider status](../../docs/implementation/SERVER-PI-PROVIDERS-STATUS.md). The pinned Ollama provider is explicitly loaded for worker and CLI; general package management remains disabled. OpenAI has a narrow desktop callback-capture path, not a general callback proxy.
 
 - `surajhomeserver`: K3s control plane, existing Ollama daemon, existing Docker applications/runners, authenticated `host-main` root executor.
 - `surajhomeserver2`: K3s worker, persistent `pi-workspace` pod with **three containers** (`workspace`, `coordinator`, and restricted `pi-worker`), local Browser-Use/Chromium, authenticated `host-worker` executor.
 - Home volume: `/srv/remotejobs/pi-workspace` on worker → `/home/node` in workspace/coordinator. The Pi worker mounts only profile, sessions, task workspaces and read-only runtime subsets, not the full home or ledger. Projects: `/workspace`. Outpost data: `/home/node/.outpost`.
-- Selected runtime: `/home/node/.outpost/releases/providers-20261030T200757Z`, mounted read-only at `/opt/outpost`. Both worker and managed CLI use this release and `/home/node/.pi/agent`. Run `pi --outpost-runtime` for identity. `/home/node/outpost-runtime` is retained as the previous runtime, not the active source.
+- Selected runtime: `/home/node/.outpost/releases/ollama-cloud-20261030T204743Z-r2`, mounted read-only at `/opt/outpost`. Both worker and managed CLI use this release and `/home/node/.pi/agent`. Run `pi --outpost-runtime` for identity. `/home/node/outpost-runtime` is retained as the previous runtime, not the active source.
 - Browser-Use 0.13.14: `/home/node/server/browser-use/.venv`, managed with `uv` and the committed lockfile. Only `ChatOllama`; `use_cloud=False` browser configuration.
 - Pi 1.4.0 routes through the registered `outpost_action` tool. `tools: ['outpost_action']` is intentional: an empty array also disables custom tools in this SDK version. Startup verifies activation.
 - Ollama: `http://192.168.1.37:11434/v1`, default `glm-5.3-flash:cloud`. Exact per-task model names are preserved. No substitute models downloaded.

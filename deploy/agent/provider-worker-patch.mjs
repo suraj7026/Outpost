@@ -21,6 +21,7 @@ export function providerWorkerPatch(release) {
           { name: 'OUTPOST_PI_WORKSPACES', value: '/home/node/.outpost/workspaces' }, { name: 'OUTPOST_PI_SESSIONS', value: '/home/node/.outpost/pi' },
           { name: 'OUTPOST_PI_RELEASE_FILE', value: '/opt/outpost/release.json' }, { name: 'OUTPOST_PI_WORKER_TOKEN_FILE', value: '/run/outpost-worker/token' },
           { name: 'PI_TELEMETRY', value: '0' }, { name: 'PI_SKIP_VERSION_CHECK', value: '1' },
+          { name: 'PI_OLLAMA_WEB_TOOLS', value: '0' },
         ],
         resources: { requests: { cpu: '250m', memory: '512Mi' }, limits: { cpu: '2', memory: '2Gi' } },
         readinessProbe: { exec: { command: ['node','-e', "const fs=require('fs'); fetch('http://127.0.0.1:4320/v1',{method:'POST',headers:{authorization:'Bearer '+fs.readFileSync('/run/outpost-worker/token','utf8').trim(),'content-type':'application/json'},body:JSON.stringify({type:'management',owner:'00000000-0000-4000-8000-000000000000',request:{type:'catalogue'}})}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"] }, initialDelaySeconds: 3, periodSeconds: 10, timeoutSeconds: 15 },

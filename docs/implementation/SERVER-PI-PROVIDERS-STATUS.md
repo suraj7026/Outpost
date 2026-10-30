@@ -1,8 +1,8 @@
 # Server Pi providers — deployed limited release
 
-Release **`providers-20261030T200757Z`** is deployed on Server 2. The owner authorized implementation and deployment. The desktop bundle is installed and opened. This is the initial built-in/compatible-provider release, **not completion of the full provider-package/terminal roadmap**.
+Current Server-2 release: **`ollama-cloud-20261030T204743Z-r2`**. The owner-approved `pi-ollama-cloud@0.13.1` provider is active in the shared worker/CLI runtime, displayed as **Ollama**; the old conversational proxy is removed. See [Ollama Cloud deployment and setup](OLLAMA-CLOUD.md). This is **not completion of the general provider-package/terminal roadmap**. The initial built-in/compatible-provider rollout below remains historical verification.
 
-## Live deployment verification
+## Initial deployment verification
 
 - `pi-workspace-6c9d64bf7d-ht86z` on `surajhomeserver2`: **3/3 Ready**, zero restarts at verification (`workspace`, `coordinator`, `pi-worker`).
 - Private coordinator health endpoint ready; Mac loopback tunnel health check passed.

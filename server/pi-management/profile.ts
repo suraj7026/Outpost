@@ -5,6 +5,7 @@ import type { Credential } from '@earendil-works/pi-ai';
 import { ModelRuntime, SettingsManager, VERSION } from '@earendil-works/pi-coding-agent';
 import { z } from 'zod';
 import { CompatibleProvider, ModelRef, managementError } from './contracts.js';
+import { registerOllamaCloud } from './ollama-cloud.js';
 
 const object = z.record(z.string(), z.json());
 export class PiProfile {
@@ -68,6 +69,8 @@ export class PiProfile {
       modelsPath: join(this.directory, 'models.json'), modelsStorePath: join(this.directory, 'models-store.json'),
       allowModelNetwork: false, refreshOnCreate: false });
     if (runtime.getError()) throw managementError('pi_provider_configuration_invalid');
+    await registerOllamaCloud(runtime);
+    if (runtime.getError()) throw managementError('pi_provider_configuration_invalid');
     return runtime;
   }
   private async mutate<T>(expected: string, operation: () => Promise<T>): Promise<T> {
@@ -85,6 +88,7 @@ export class PiProfile {
   }
   async configure(input: unknown, expected: string) {
     const configuration = CompatibleProvider.parse(input);
+    if (['ollama-cloud', 'outpost-ollama'].includes(configuration.providerId)) throw managementError('managed_provider_configuration');
     return this.mutate(expected, async () => {
       const original = this.read('models.json');
       const config = object.parse(JSON.parse(original));
@@ -133,6 +137,34 @@ export class PiProfile {
     if (settings.drainErrors().length) throw managementError('pi_settings_invalid');
     if (!settings.getDefaultModel() && !settings.getDefaultProvider()) await this.setDefault({ providerId: 'outpost-ollama', modelId: defaultModel }, this.generation());
     return { generation: this.generation() };
+  }
+  async retireLegacyOllama(expected: string) {
+    return this.mutate(expected, async () => {
+      const config = object.parse(JSON.parse(this.read('models.json')));
+      const providers = object.parse(config.providers ?? {});
+      if (providers['ollama-cloud']) throw managementError('ollama_cloud_configuration_conflict');
+      if (providers['outpost-ollama']) {
+        delete providers['outpost-ollama'];
+        const staging = join(this.directory, `.models-${randomUUID()}.json`);
+        try {
+          writeFileSync(staging, JSON.stringify({ ...config, providers }, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+          renameSync(staging, join(this.directory, 'models.json'));
+        } finally { rmSync(staging, { force: true }); }
+      }
+      const original = this.read('settings.json');
+      const settings = object.parse(JSON.parse(original));
+      if (settings.defaultProvider === 'outpost-ollama') {
+        delete settings.defaultProvider; delete settings.defaultModel;
+        const staging = join(this.directory, `.settings-${randomUUID()}.json`);
+        try {
+          writeFileSync(staging, JSON.stringify(settings, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+          if (this.read('settings.json') !== original) throw managementError('pi_configuration_changed');
+          renameSync(staging, join(this.directory, 'settings.json'));
+        } finally { rmSync(staging, { force: true }); }
+      }
+      // Old credentials and task/session records are deliberately not rewritten or reused for cloud.
+      return { generation: this.generation() };
+    });
   }
   async setDefault(input: unknown, expected: string) {
     const model = ModelRef.parse(input);

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { agentRequest, call, nativeApp, recordedPreview } from '../api';
 import type { Connection } from '../useConnection';
 import type { Login, Provider, ModelRef } from './types';
+import { providerLabel } from './types';
 import ModelPicker from './ModelPicker';
 import BrowserSignIn from './BrowserSignIn';
 import './agent.css';
@@ -14,7 +15,7 @@ function LoginPanel({ flow, busy, answer, cancel }: { flow: Login; busy: boolean
   const webLink = (url: string, label: string) => /^https?:\/\//i.test(url) ?
     <button type="button" onClick={() => void call('open_url', { url }).catch(() => {})}>{label}</button> : null;
   return <section className="provider-login" aria-label="Provider sign-in">
-    <h3>{flow.providerId} · {flow.state}</h3>
+    <h3>{providerLabel(flow.providerId)} · {flow.state}</h3>
     <p>Sign-in runs on your server. Expires at {new Date(flow.expiresAt).toLocaleTimeString()}.</p>
     {flow.events.map((event, index) => <div key={index}>
       {event.type === 'auth_url' ? <><p>{event.instructions}</p><BrowserSignIn url={event.url} expiresAt={flow.expiresAt} manualPrompt={input?.type === 'manual_code'} disabled={busy || !activeLogin(flow)} answer={answer} /></> :
@@ -154,7 +155,7 @@ export default function ProviderSettings({ connection }: { connection: Connectio
           <CompatibleForm disabled={blocked || busy || activeLogin(flow)} save={configuration => void operate(async () => {
             await agentRequest({ type: 'provider.configure', operationId: crypto.randomUUID(), expectedGeneration: catalogue.generation, configuration }); await connection.refreshAgent();
           })} />
-          <p>OpenAI browser sign-in supports automatic return through this Mac. Other providers use their supplied device-code or manual-return steps. Provider package installation is not enabled. Browser automation keeps its own model configuration.</p>
+          <p>OpenAI browser sign-in supports automatic return through this Mac. Other providers use their supplied device-code or manual-return steps. Ollama uses the managed pi-ollama-cloud provider; enter its Cloud API key here, then refresh models. General package installation is not enabled. Browser automation keeps its own model configuration.</p>
         </>}
       </>}
     </div>

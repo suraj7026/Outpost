@@ -30,8 +30,8 @@ async function open(width = 1440, legacy = false, colorScheme = 'dark') {
     const model = { modelId: 'org/model:v1', name: 'Shared model', reasoning: false };
     const catalogue = { protocolVersion: 1, piVersion: '1.4.0', profilePath: '/synthetic/server/.pi/agent', generation: 'a'.repeat(64),
       providers: ['alpha', 'beta'].map(id => ({ id, name: id === 'alpha' ? 'Alpha API' : 'Beta subscription', storedMethod: id === 'alpha' ? 'api_key' : null, configured: id === 'alpha',
-        methods: [{ type: id === 'alpha' ? 'api_key' : 'oauth', label: id === 'alpha' ? 'API key' : 'Sign in', subscription: id === 'beta', interactive: true }] })),
-      models: [{ ...model, providerId: 'alpha' }, { ...model, providerId: 'beta' }], defaultModel: { providerId: 'alpha', modelId: model.modelId },
+        methods: [{ type: id === 'alpha' ? 'api_key' : 'oauth', label: id === 'alpha' ? 'API key' : 'Sign in', subscription: id === 'beta', interactive: true }] })).concat([{ id: 'ollama-cloud', name: 'Ollama', configured: true, storedMethod: 'api_key', methods: [{ type: 'api_key', label: 'API key', subscription: false, interactive: true }] }]),
+      models: [{ ...model, providerId: 'alpha' }, { ...model, providerId: 'beta' }, { ...model, providerId: 'ollama-cloud' }], defaultModel: { providerId: 'alpha', modelId: model.modelId },
       refreshErrors: [], refreshedAt: null, capabilities: { providerPackages: false, callbackRelay: false } };
     let flow = null, pointerX = -1, pointerY = -1;
     const rows = [], row = (kind, id, data) => ({ kind, id, data, revision: 1, updatedAt: new Date().toISOString() });
@@ -185,6 +185,20 @@ try {
   check(await page.getByRole('button', { name: 'Start task' }).isDisabled(), 'Failed catalogue blocks submission instead of legacy fallback');
   await page.close();
 
+  const cloud = await open();
+  await cloud.getByRole('button', { name: 'alpha · org/model:v1', exact: true }).click();
+  await cloud.getByRole('textbox', { name: 'Search models' }).fill('ollama');
+  check(await cloud.locator('.model-results button').count() === 1, 'Only direct-cloud Ollama is offered');
+  await cloud.locator('.model-results button').click();
+  check(await cloud.getByRole('button', { name: 'Ollama · org/model:v1', exact: true }).isVisible(), 'Simple Ollama display label');
+  await cloud.getByRole('textbox', { name: 'Task goal' }).fill('Synthetic cloud instruction');
+  await cloud.getByRole('button', { name: 'Start task' }).click();
+  await cloud.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
+  check(await cloud.evaluate(() => __commands[0].payload.modelRef.providerId === 'ollama-cloud'), 'Display name does not rewrite exact provider identity');
+  await cloud.getByRole('button', { name: 'Connection settings', exact: true }).click();
+  await cloud.getByRole('searchbox', { name: 'Add or manage a provider' }).fill('ollama');
+  check(await cloud.locator('.provider-row strong').textContent() === 'Ollama', 'Settings names the provider Ollama');
+  await cloud.close();
   mkdirSync('/tmp/outpost-providers', { recursive: true });
   for (const [width, scheme] of [[1440, 'dark'], [900, 'light'], [390, 'dark']]) {
     const page = await open(width, false, scheme);

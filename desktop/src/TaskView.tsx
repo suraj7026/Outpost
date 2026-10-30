@@ -19,6 +19,7 @@ import {
 import { call, recordedPreview, upload } from "./api";
 import type { Connection } from "./useConnection";
 import type { ServerRecord } from "./types";
+import { providerLabel } from './agent/types';
 import { Thinking, LiveTool } from "./LiveContent";
 import OutpostMark from "./OutpostMark";
 import EvidencePanel, { type EvidenceTab } from "./EvidencePanel";
@@ -323,7 +324,7 @@ export default function TaskView({
                   <span>
                     {text(message, "author") === "owner" ? "You" : "Outpost"}
                   </span>
-                  {text(message, 'author') !== 'owner' && text(message, 'provider') && text(message, 'model') && <span className="message-model" title={`Response from ${text(message, 'provider')} · ${text(message, 'model')}`}>{text(message, 'provider')} · {text(message, 'model')}</span>}
+                  {text(message, 'author') !== 'owner' && text(message, 'provider') && text(message, 'model') && <span className="message-model" title={`Response from ${providerLabel(text(message, 'provider'))} · ${text(message, 'model')}`}>{providerLabel(text(message, 'provider'))} · {text(message, 'model')}</span>}
                   {message.data.streaming === true && connection.streaming && (
                     <span className="stream-label">Streaming</span>
                   )}
