@@ -238,8 +238,8 @@ Ticket acceptance clauses remain normative. The table is an index, not a substit
 - Parent owns architecture, dependency graph, scope decisions, integration, final acceptance and publication.
 - Builders implement one bounded ticket slice end-to-end, including tests, client wiring and migration/disable documentation.
 - Fresh independent reviewers inspect requirements, actual diff and actual test evidence. They do not simply accept builder summaries.
-- Start with at most two independent writer lanes, each in its own worktree, and up to two read-only reviewers. Reduce concurrency when local resource use or shared-contract conflicts warrant it.
-- The PostgreSQL-wide conversion is an exclusive writer tranche: parallelize read-only investigation/review, not competing edits to ledger and transaction call sites.
+- Owner expanded concurrency on 2026-10-30: start six independent builder lanes in separate worktrees (Swift Mac retirement, Tauri administration, model catalogue, web research, calendar recurrence and approved skills), plus PostgreSQL investigation and fresh reviewers. Start PostgreSQL conversion as its investigation resolves. Reduce concurrency if measured resource use or shared-contract conflicts warrant it.
+- PostgreSQL conversion has exclusive write ownership of the ledger, existing domain transaction call sites and core coordinator/runtime wiring. Other builders may implement independently testable additive modules and desktop controls under explicit file boundaries. New service modules use asynchronous storage contracts where persistence is needed; parent-owned integration follows the database/runtime dependency gates. A reviewed additive slice is not completion of its full ticket.
 - No writer shares a cwd/worktree. Cross-cutting schema, contracts, coordinator, policy and client-connection changes serialize unless interfaces and integration bases have already been fixed.
 - Children cannot recursively spawn agents, change model/provider, push branches, deploy, use live secrets or expand scope without explicit parent authorization.
 
