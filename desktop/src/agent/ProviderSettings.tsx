@@ -118,7 +118,7 @@ export default function ProviderSettings({ connection }: { connection: Connectio
       {!available ? <p>Server update required: provider management is not enabled on this connection. Existing Ollama tasks remain available.</p> : <>
         <div className="button-row"><button disabled={blocked || busy} onClick={() => void operate(async () => { await connection.refreshAgent(true); })}>Refresh models</button></div>
         {error && <p role="alert">{error}</p>}
-        {catalogue?.refreshErrors.length ? <p role="status">Some providers could not refresh: {catalogue.refreshErrors.join(', ')}</p> : null}
+        {catalogue?.refreshErrors.length ? <p role="status">Some providers could not refresh: {catalogue.refreshErrors.join(', ')}{catalogue.refreshErrors.includes('openai') ? '. ChatGPT models are unavailable until account verification succeeds.' : ''}</p> : null}
         {!catalogue && <p>Provider catalogue unavailable. Refresh to load the server’s supported sign-in methods.</p>}
         {startRequest.current && <button disabled={blocked || busy} onClick={() => void operate(() => start(startRequest.current!))}>Recover sign-in status</button>}
         {flow && <LoginPanel key={`${flow.id}:${flow.prompt?.id ?? flow.state}`} flow={flow} busy={busy || blocked}

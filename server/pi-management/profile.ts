@@ -6,6 +6,7 @@ import { ModelRuntime, SettingsManager, VERSION } from '@earendil-works/pi-codin
 import { z } from 'zod';
 import { CompatibleProvider, ModelRef, managementError } from './contracts.js';
 import { registerOllamaCloud } from './ollama-cloud.js';
+import { registerSubscriptionPolicy, refreshSubscriptionModels } from './subscription-models.js';
 
 const object = z.record(z.string(), z.json());
 export class PiProfile {
@@ -70,6 +71,7 @@ export class PiProfile {
       allowModelNetwork: false, refreshOnCreate: false });
     if (runtime.getError()) throw managementError('pi_provider_configuration_invalid');
     await registerOllamaCloud(runtime);
+    await registerSubscriptionPolicy(runtime);
     if (runtime.getError()) throw managementError('pi_provider_configuration_invalid');
     return runtime;
   }
@@ -170,6 +172,7 @@ export class PiProfile {
     const model = ModelRef.parse(input);
     return this.mutate(expected, async () => {
       const runtime = await this.runtime();
+      if (model.providerId === 'openai') await refreshSubscriptionModels(runtime);
       if (!(await runtime.getAvailable()).some(value => value.provider === model.providerId && value.id === model.modelId))
         throw managementError('model_not_available');
       if (this.generation() !== expected) throw managementError('pi_configuration_changed');

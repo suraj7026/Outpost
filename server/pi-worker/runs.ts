@@ -8,6 +8,7 @@ import { liveEvents, type LiveSink } from '../pi-adapter/live-events.js';
 import type { RecordValue } from '../core/contracts.js';
 import { managementError } from '../pi-management/contracts.js';
 import { PiProfile } from '../pi-management/profile.js';
+import { refreshSubscriptionModels } from '../pi-management/subscription-models.js';
 import { Projection, RunStart, type RunPoll, type ActionRequest } from './contracts.js';
 
 interface PendingAction { input: ActionRequest; resolve: (value: unknown) => void; reject: (error: Error) => void }
@@ -73,6 +74,7 @@ export class WorkerRuns {
     mkdirSync(sessions, { recursive: true, mode: 0o700 });
     if (lstatSync(sessions).isSymbolicLink()) throw managementError('worker_path_denied');
     const modelRuntime = await this.profile.runtime();
+    if (selection.providerId === 'openai') await refreshSubscriptionModels(modelRuntime);
     const model = (await modelRuntime.getAvailable(selection.providerId, { signal: AbortSignal.timeout(10000) }))
       .find(candidate => candidate.id === selection.modelId);
     if (!model) throw managementError('model_not_available');

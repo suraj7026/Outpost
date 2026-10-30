@@ -58,6 +58,7 @@ async function open(width = 1440, legacy = false, colorScheme = 'dark') {
         window.__management.push({ type: request.type, providerId: request.providerId });
         if (request.type === 'catalogue' || request.type === 'refresh') {
           if (window.__failCatalogue) throw new Error('Synthetic failure');
+          if (window.__failOpenAI) return { ...structuredClone(catalogue), models: [], refreshErrors: ['openai'] };
           return structuredClone(catalogue);
         }
         if (request.type === 'login.start') {
@@ -177,6 +178,10 @@ try {
   check(await page.evaluate(() => __callbackEvents.filter(e => e === 'open').length) === opensBeforeFailure, 'Occupied port never opens a broken automatic callback flow');
   check(await page.getByText(/copy the full address from its address bar/).isVisible(), 'Connection-refused page has explicit private manual-return guidance');
   await page.getByRole('button', { name: 'Cancel sign-in', exact: true }).click();
+  await page.evaluate(() => window.__failOpenAI = true);
+  await page.getByRole('button', { name: 'Refresh models' }).click();
+  await page.getByText(/ChatGPT models are unavailable until account verification succeeds/).waitFor();
+  check(await page.getByText(/ChatGPT models are unavailable until account verification succeeds/).isVisible(), 'Account discovery failure is explained without claiming subscription access');
   await page.evaluate(() => window.__failCatalogue = true);
   await page.getByRole('button', { name: 'Refresh models' }).click();
   await page.getByText('Provider catalogue unavailable.', { exact: false }).waitFor();

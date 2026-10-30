@@ -1,6 +1,6 @@
 # Server Pi providers — deployed limited release
 
-Current Server-2 release: **`ollama-cloud-20261030T204743Z-r2`**. The owner-approved `pi-ollama-cloud@0.13.1` provider is active in the shared worker/CLI runtime, displayed as **Ollama**; the old conversational proxy is removed. See [Ollama Cloud deployment and setup](OLLAMA-CLOUD.md). This is **not completion of the general provider-package/terminal roadmap**. The initial built-in/compatible-provider rollout below remains historical verification.
+Current Server-2 release: **`openai-models-20261030T210815Z`**. ChatGPT model choices now require authenticated account discovery in the picker, saved-default validation, worker admission and shared CLI; discovery failure blocks unverified choices. See [OpenAI account-model verification](OPENAI-ACCOUNT-MODELS.md). The owner-approved `pi-ollama-cloud@0.13.1` provider is active in the shared worker/CLI runtime, displayed as **Ollama**; the old conversational proxy is removed. See [Ollama Cloud deployment and setup](OLLAMA-CLOUD.md). This is **not completion of the general provider-package/terminal roadmap**. The initial built-in/compatible-provider rollout below remains historical verification.
 
 ## Initial deployment verification
 
@@ -100,5 +100,5 @@ node --test deploy/agent/provider-worker-patch.test.mjs
 - Trusted provider-package installation, package activation/rollback, and general resource editors.
 - General Mac-to-server callback forwarding. OpenAI has a narrowly scoped Mac capture-to-manual-prompt path; other providers use their supplied device/manual-code methods, and callback-only methods may still require server-side interaction.
 - General embedded remote terminal and live browser takeover.
-- Live ChatGPT/subscription entitlement, new provider credentials and paid inference qualification. The owner performs sign-in; no billing or entitlement is inferred from a stored credential.
+- New provider credentials, Ollama account entitlement and paid inference qualification. OpenAI ChatGPT discovery now filters choices using the saved account's authenticated response; this does not establish quota/capacity or guarantee inference success. The owner performs sign-in; no billing or entitlement is inferred from a stored credential alone.
 - A single automated native-Mac UI-to-live-provider inference test. Browser UI uses synthetic IPC; real SDK routing is tested with local synthetic endpoints. Live deployment validation used metadata, mount and history checks only.

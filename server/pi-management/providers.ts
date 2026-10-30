@@ -4,6 +4,7 @@ import { AuthFlows } from './auth-flows.js';
 import { ManagementRequest, managementProtocol, managementError, type Catalogue } from './contracts.js';
 import { PiProfile } from './profile.js';
 import { ManagementReceipts } from './receipts.js';
+import { refreshSubscriptionModels } from './subscription-models.js';
 
 /** Construct only in the Pi worker; never import provider packages into the coordinator. */
 export class ProviderManagement {
@@ -40,6 +41,7 @@ export class ProviderManagement {
   async catalogue(): Promise<Catalogue> {
     const generation = this.profile.generation();
     const runtime = await this.runtime();
+    const subscriptionUnavailable = await refreshSubscriptionModels(runtime);
     const credentials = new Map((await runtime.listCredentials()).map(value => [value.providerId, value.type]));
     const available = await runtime.getAvailable(undefined, { signal: AbortSignal.timeout(10000) });
     const configured = new Set(available.map(model => model.provider));
@@ -61,7 +63,7 @@ export class ProviderManagement {
       providers, models: available.map(model => ({ providerId: model.provider, modelId: model.id, name: model.name,
         reasoning: model.reasoning, input: model.input, contextWindow: model.contextWindow, maxTokens: model.maxTokens })),
       defaultModel: providerId && modelId ? { providerId, modelId } : null,
-      refreshedAt: this.refreshedAt, refreshErrors: this.refreshErrors,
+      refreshedAt: this.refreshedAt, refreshErrors: [...new Set([...this.refreshErrors.filter(id => id !== 'openai'), ...(subscriptionUnavailable ? ['openai'] : [])])],
       capabilities: { providerPackages: false, callbackRelay: false } };
   }
   private async refresh(providerId?: string) {

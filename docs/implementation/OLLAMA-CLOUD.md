@@ -24,7 +24,7 @@ Pi restores the persisted model catalogue when creating each runtime. Revision r
 
 No Cloud key was present at rollout; no real key was copied from another provider or from chat. The live catalogue therefore showed **zero selectable Ollama models**, not a fabricated working account. Existing credentials were byte-for-byte unchanged.
 
-The package's model-discovery endpoints are public. Their catalogue is **not proof of per-account subscription entitlement**. A stored key alone is also not such proof. Live authentication, account limits and inference remain owner-assisted qualification after key entry; this rollout made no paid requests. The separate requested OpenAI account-model filtering is not implemented by this Ollama change.
+The package's model-discovery endpoints are public. Their catalogue is **not proof of per-account subscription entitlement**. A stored key alone is also not such proof. Live authentication, account limits and inference remain owner-assisted qualification after key entry; this rollout made no paid requests. This Ollama change did not implement OpenAI filtering. The subsequent `openai-models-20261030T210815Z` release adds [authenticated OpenAI account-model filtering](OPENAI-ACCOUNT-MODELS.md), while leaving Ollama's entitlement limits unchanged.
 
 ## Retiring the old connection
 
