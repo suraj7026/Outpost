@@ -15,7 +15,8 @@
 - T0b essential administration passed independent Astra review and integrated parent validation: 44 backend tests, frontend build, synthetic IPC browser scenarios and 7 Rust tests passed; 1 live Rust test ignored. Active documentation no longer describes these controls as missing. Qualified Auto remains pending.
 - Calendar (cron/timezone validation), skills (caller-selection mutation), PostgreSQL (isolation/configuration boundary), and research (bounded cancellation/dependency waits) received REQUEST_CHANGES. Parent independently reproduced calendar and skills defects. Catalogue passed with a nonblocking body-error classification note; it will also be corrected before integration.
 - Corrective workflow `a9f34da6-0eb3-4b6f-9bf8-3c43041bb4fe` completed. Fresh reviews PASS for PostgreSQL, catalogue, research and skills; these four additive slices are integrated. Parent independently reproduced focused checks and integrated `npm run check`: TypeScript and **180 tests passed**, none skipped. PostgreSQL remains dormant; no live services/providers or cutover were touched.
-- Calendar remains blocked: the corrective review found out-of-range stepped endpoints still accepted by Croner. Parent reproduced minute 60/month 13/weekday 8 acceptance; another bounded validation correction and fresh review are required. No automatic retry or alternate model/runner is authorized on infrastructure failure.
+- Calendar remains blocked: the corrective review found out-of-range stepped endpoints still accepted by Croner. Parent reproduced minute 60/month 13/weekday 8 acceptance. No automatic retry or alternate model/runner is authorized on infrastructure failure.
+- Next dependency wave `443863c1-f5f3-4c5f-bb6e-89256088cb8d` launched from integrated base `2b289c03877ac1a2af4188ecf8b0ac02ef7ba47b`: one exclusive coherent PostgreSQL caller-conversion writer; isolated catalogue/skills PostgreSQL adapter writers; read-only import/recovery and research cache/publication scouts; and a fresh bounded calendar endpoint fix on its original worktree. Each builder has a fresh review stage. No launch counts as completion or authorization for live activation.
 
 ## Acceptance tracking
 
@@ -25,11 +26,11 @@
 | T0a Swift Mac retirement | Integrated; independent review PASS | Integrated local checks passed | Not release qualification |
 | T0b essential Tauri controls | Integrated; independent review PASS | Parent backend/frontend/browser/Rust checks passed | Live/native/recovery gates remain |
 | T0b qualified Auto default | Core integration pending | Not run | Not assessed |
-| T1 PostgreSQL foundation/import/recovery | Reviewed dormant foundation integrated; caller conversion/import pending | Fresh review PASS; parent 23-test fixture suite and integrated check passed | Live cutover gated; PostgreSQL 18.6 unqualified |
-| OP-031 catalogue service slice | Reviewed module integrated; durable/runtime/UI wiring pending | Fresh review PASS; parent focused/integrated checks passed | Not assessed |
-| OP-032 research service slice | Reviewed module integrated; durable/runtime/UI wiring pending | Fresh review PASS; parent focused/integrated checks passed | Not assessed |
+| T1 PostgreSQL foundation/import/recovery | Reviewed dormant foundation integrated; isolated caller conversion underway; import design underway | Fresh review PASS; parent 23-test fixture suite and integrated check passed | Live cutover gated; PostgreSQL 18.6 unqualified |
+| OP-031 catalogue service slice | Reviewed module integrated; isolated durable adapter underway; runtime/UI pending | Fresh review PASS; parent focused/integrated checks passed | Not assessed |
+| OP-032 research service slice | Reviewed module integrated; durable cache/publication design underway; runtime/UI pending | Fresh review PASS; parent focused/integrated checks passed | Not assessed |
 | OP-004 calendar evaluator slice | Built; residual stepped-range endpoint defect blocks integration | Corrective review REQUEST_CHANGES; parent reproduction confirmed | Not assessed |
-| OP-007 approved-skill service slice | Reviewed module integrated; durable/runtime/UI wiring pending | Fresh review PASS; parent focused/integrated checks passed | Not assessed |
+| OP-007 approved-skill service slice | Reviewed module integrated; isolated durable registry underway; runtime/UI pending | Fresh review PASS; parent focused/integrated checks passed | Not assessed |
 | OP-001–OP-040 full tickets | No end-to-end acceptance yet; partial slices above | Integration/verification pending | Not assessed |
 
 A launch is not completion. Update individual tickets only after actual integration and evidence. Keep implementation, local/live verification and release acceptance distinct.
