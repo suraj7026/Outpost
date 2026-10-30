@@ -63,14 +63,14 @@ JS
 
 Restore validates archive authentication, ledger/artifact hashes and SQLite integrity. It records a durable **Recovery Hold**: the coordinator's scheduler, action outbox and notification drain remain stopped on startup. Reads, pairing with already trusted devices, revocation and review are still available.
 
-**Client limitation (T0a):** the management controls in steps 3 and 6 below currently exist only in the retained Swift iPhone client, not Tauri. Use an already trusted iPhone. A Mac-only owner must leave Recovery Hold enabled until the T0b desktop controls are available; do not delete identities/server data or bypass the hold. The retired Swift Mac app is not a supported recovery path.
+Use an already trusted Tauri Mac or retained iPhone for steps 3 and 6. Tauri exposes **Connection → Trusted devices / Recovery Hold**; it requires current device authority, a connected server and no unknown pending command. Its controls use signed requests, not per-operation biometric confirmation. Do not delete identities/server data or bypass the hold. The retired Swift Mac app is not a supported recovery path. Local synthetic UI/transport tests are not a live restored-server rehearsal.
 
 1. Start against the restored directory using `OUTPOST_DATA`.
 2. Reconnect a trusted device and review the recovered history/artifacts.
 3. Revoke lost devices in **Connection → Trusted Devices**. Revocations already in the backup remain effective. Revocations made *after* the backup must be re-applied.
 4. Restore/verify separately retained workspace/session files and keys where needed. If absent, leave affected tasks blocked rather than fabricate continuity.
 5. Inspect queued schedules, approved actions and unknown external effects against authoritative providers. A local receipt is not proof that a provider never charged/sent/deployed.
-6. Only when reviewed, use **Connection → Recovery Hold → Authenticate & Enable Dispatch**. This signed, revision-checked action can start previously accepted work. It does not automatically reconcile unknown effects.
+6. Only when reviewed, use **Connection → Recovery Hold**, acknowledge the displayed held revision, then choose **Confirm and resume dispatch** in Tauri (**Authenticate & Enable Dispatch** on iPhone). This signed, revision-checked action can start previously accepted work. A conflict requires reviewing the refreshed state and confirming again; an unknown pending outcome requires **Retry same command**, not a new command. This does not automatically reconcile unknown effects.
 7. Reopen the other client to rebuild its server projection. Cache history is a convenience, not a source of truth.
 
 This was tested in temporary directories on the development Mac. Replacement-Ubuntu-server recovery, destroyed-host scenarios and complete operational RTO/RPO remain unqualified.

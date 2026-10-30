@@ -40,6 +40,7 @@ This uses public AppKit APIs, not the experimental third-party split-view plugin
 - Uploads with content hashes, integrity-checked artifact downloads, browser captures and JSON evidence.
 - Read-only server inspection as an explicit agent task; host cards show recorded command results, **not** invented live metrics.
 - Connection settings, first-device pairing and model discovery.
+- Additional-device enrollment using the trusted Mac's signed request, trusted-device revocation with confirmation, and revision-bound Recovery Hold acknowledgment. Unknown enrollment outcomes require refreshing and verifying the device ID/key; enrollment is never automatically retried.
 
 Full control is the new-task default because this deployment is intentionally an unrestricted private administrative agent. Root access is not a sandbox. Cloud-selected models send context to Ollama Cloud; Chromium and Browser-Use still run on your own worker.
 
@@ -48,7 +49,7 @@ See [live streaming behavior and verification](../docs/implementation/LIVE-STREA
 ## Migration limits
 
 - Automations and Memory currently display existing server records. Desktop editing is not implemented; retained iPhone forms are not new-feature parity.
-- **Pending T0b:** additional-device enrollment/revocation and Recovery Hold release controls are not implemented in Tauri. The retained iPhone has these controls for already trusted devices; a Mac-only owner has no supported desktop UI for them yet. Do not delete identity or server data or reopen bootstrap as a workaround. The app uses its Keychain signing identity, but does not claim biometric confirmation for every operation.
+- Administration is available under **Connection → Trusted devices / Enroll another device / Recovery Hold**, only with confirmed current device authority and no unknown pending command. Offline and recorded previews are read-only. These controls reuse the Keychain signer but do not claim biometric confirmation for every operation. Live cross-device, identity-continuity, pending-command restart and recovery rehearsals remain unqualified; do not delete identity/server data or reopen bootstrap as a workaround.
 - No live interactive browser takeover/video view yet: current outputs are screenshots and structured results.
 - iPhone still uses the retained Swift client. Linux/Windows secure identity storage and native navigation are not implemented.
 - Closing the app does not cancel server-owned tasks. Pausing/cancelling a task does not undo completed commands.
@@ -57,8 +58,9 @@ See [live streaming behavior and verification](../docs/implementation/LIVE-STREA
 
 ```sh
 npm run build
+node test-connection-administration.mjs # local synthetic IPC; no Keychain or live server
 cd src-tauri
-cargo test
+cargo test --locked
 # Explicit opt-in: uses the real paired Keychain identity and private server.
 # Creates a small isolated verification task, tests retry and a second Pi turn.
 OUTPOST_LIVE_CLIENT=1 cargo test live_signed_client_roundtrip -- --ignored --nocapture

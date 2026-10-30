@@ -6,7 +6,7 @@
 
 Removed the legacy Mac application entry point, build script, Swift executable product/target, XcodeGen/generated Xcode Mac app and UI-test targets, Mac-only bootstrap fallback and Mac native-test path. Retained the iPhone app, shared library/tests/resources/font licences, homelab guide consumers, Tauri Rust/Keychain implementation and Objective-C/AppKit sidebar. No identities, user data or installed applications were deleted.
 
-Active documentation now describes Tauri as the only Mac application and accurately identifies still-pending T0b management controls. Historical reports retain their original evidence under explicit supersession notices. Four automated regression tests guard retirement and retained resources.
+At the T0a checkpoint, active documentation described Tauri as the only Mac application and identified still-pending T0b management controls. Those controls have since been integrated; see [T0b administration evidence](t0b-administration.md). Historical reports retain their original evidence under explicit supersession notices. Four automated regression tests guard retirement and retained resources.
 
 ## Independent review
 
@@ -15,7 +15,7 @@ Active documentation now describes Tauri as the only Mac application and accurat
 - Reviewer inspected source and parent-provided complete diff/new test. Its file-search tool reported `spawn Unknown system error -86`; it did not have command-execution tools. Parent supplied independent test reproduction; the reviewer explicitly did not claim to have executed tests.
 - Parent preserved newer programme/status updates instead of applying the worker's older status-file diff.
 
-The temporary literal `T0b` documentation assertion must evolve when that gap is closed; it must not force obsolete documentation to remain.
+The temporary literal `T0b` documentation assertion was replaced during T0b integration with assertions for Tauri/Recovery Hold documentation and against obsolete gap notices.
 
 ## Integrated-branch reproduction
 

@@ -95,6 +95,7 @@ fn main() {
             transport::send_command,
             transport::retry_command,
             transport::pair,
+            transport::enroll_device,
             transport::artifact,
             transport::save_artifact,
             transport::open_url

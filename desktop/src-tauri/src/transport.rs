@@ -211,6 +211,51 @@ impl State {
             .await
             .map_err(|e| format!("Cannot reach your server. Check the private SSH tunnel. {e}"))
     }
+    async fn enroll_device(
+        &self,
+        device_id: String,
+        name: String,
+        public_key: String,
+    ) -> Result<Value, String> {
+        Uuid::parse_str(&device_id).map_err(|_| "Enter the other device's UUID")?;
+        if name.trim().is_empty() || name.chars().count() > 80 {
+            return Err("Device name must contain 1–80 characters".into());
+        }
+        let key = STANDARD
+            .decode(&public_key)
+            .map_err(|_| "Enter a base64 public pairing key")?;
+        if key.len() != 32 {
+            return Err("Public pairing key must contain 32 bytes".into());
+        }
+        {
+            let mut client = self.client.lock().map_err(|_| "Connection lock failed")?;
+            self.identity(&mut client)?;
+            if client.pending.is_some() {
+                return Err(
+                    "Resolve the unknown pending command before enrolling another device".into(),
+                );
+            }
+        }
+        // The outer deviceId is the Keychain signer; the payload is the new device.
+        // This endpoint has no command receipt: never automatically retry enrollment.
+        let response = self.request("v1/pair-device", json!({ "type": "pair", "payload": {
+            "deviceId": device_id, "name": name.trim(), "publicKey": public_key
+        }}), true).await.map_err(|_| "Enrollment outcome unknown. Refresh trusted devices and verify the ID and key before trying again.")?;
+        let status = response.status();
+        let body: Value = response.json().await.map_err(|_| {
+            "Enrollment response incomplete. Refresh trusted devices before trying again."
+        })?;
+        if !status.is_success() {
+            return Err(format!(
+                "Enrollment not confirmed: {}. Refresh trusted devices before trying again.",
+                body["message"]
+                    .as_str()
+                    .unwrap_or("Server rejected enrollment")
+            ));
+        }
+        Ok(body)
+    }
+
     async fn submit(&self, command: Value) -> Result<Value, String> {
         let response = self.request("v1/commands", command, true).await?;
         let status = response.status();
@@ -353,6 +398,16 @@ pub async fn retry_command(state: tauri::State<'_, State>) -> Result<Value, Stri
 }
 
 #[tauri::command]
+pub async fn enroll_device(
+    state: tauri::State<'_, State>,
+    device_id: String,
+    name: String,
+    public_key: String,
+) -> Result<Value, String> {
+    state.enroll_device(device_id, name, public_key).await
+}
+
+#[tauri::command]
 pub async fn pair(state: tauri::State<'_, State>, token: String) -> Result<(), String> {
     let body = {
         let mut client = state.client.lock().map_err(|_| "Connection lock failed")?;
@@ -452,6 +507,162 @@ pub fn open_url(url: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Loopback-only fixtures use a fixed ephemeral identity, never macOS Keychain.
+    fn fixture(status: &str, reply: Value) -> (State, std::thread::JoinHandle<(String, Value)>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+        let status = status.to_string();
+        let handle = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0; 4096];
+            let (header_end, length) = loop {
+                let count = socket.read(&mut buffer).unwrap();
+                assert!(count > 0);
+                bytes.extend_from_slice(&buffer[..count]);
+                if let Some(end) = bytes.windows(4).position(|part| part == b"\r\n\r\n") {
+                    let headers = String::from_utf8_lossy(&bytes[..end]);
+                    let length: usize = headers
+                        .lines()
+                        .find_map(|line| {
+                            line.to_lowercase()
+                                .strip_prefix("content-length: ")
+                                .map(str::to_owned)
+                        })
+                        .unwrap()
+                        .parse()
+                        .unwrap();
+                    break (end + 4, length);
+                }
+            };
+            while bytes.len() < header_end + length {
+                let count = socket.read(&mut buffer).unwrap();
+                assert!(count > 0);
+                bytes.extend_from_slice(&buffer[..count]);
+            }
+            let headers = String::from_utf8(bytes[..header_end].to_vec()).unwrap();
+            let body = &bytes[header_end..header_end + length];
+            let signature = headers
+                .lines()
+                .find_map(|line| line.strip_prefix("x-outpost-signature: "))
+                .unwrap();
+            let signature =
+                ed25519_dalek::Signature::from_slice(&STANDARD.decode(signature).unwrap()).unwrap();
+            SigningKey::from_bytes(&[7; 32])
+                .verifying_key()
+                .verify_strict(body, &signature)
+                .unwrap();
+            let value = serde_json::from_slice(body).unwrap();
+            let reply = reply.to_string();
+            write!(socket, "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{reply}", reply.len()).unwrap();
+            (headers, value)
+        });
+        let directory =
+            std::env::temp_dir().join(format!("outpost-administration-test-{}", Uuid::new_v4()));
+        fs::create_dir(&directory).unwrap();
+        let state = State::new(directory).unwrap();
+        {
+            let mut client = state.client.lock().unwrap();
+            client.endpoint = endpoint;
+            client.identity = Some(Identity {
+                id: "11111111-1111-4111-8111-111111111111".into(),
+                key: SigningKey::from_bytes(&[7; 32]),
+            });
+        }
+        (state, handle)
+    }
+
+    #[test]
+    fn enrollment_uses_authenticated_pair_device_route_and_distinct_target() {
+        tauri::async_runtime::block_on(async {
+            let target = "22222222-2222-4222-8222-222222222222";
+            let (state, request) = fixture(
+                "200 OK",
+                json!({ "id": target, "kind": "device", "revision": 1 }),
+            );
+            let result = state
+                .enroll_device(target.into(), "Other Mac".into(), STANDARD.encode([9; 32]))
+                .await
+                .unwrap();
+            assert_eq!(result["id"], target);
+            let (headers, body) = request.join().unwrap();
+            assert!(headers.starts_with("POST /v1/pair-device HTTP/1.1"));
+            assert_eq!(body["deviceId"], "11111111-1111-4111-8111-111111111111");
+            assert_eq!(body["type"], "pair");
+            assert_eq!(
+                body["payload"],
+                json!({ "deviceId": target, "name": "Other Mac", "publicKey": STANDARD.encode([9; 32]) })
+            );
+            assert!(body["issuedAt"].as_u64().is_some());
+            fs::remove_dir_all(state.directory).unwrap();
+        });
+    }
+
+    #[test]
+    fn enrollment_rejection_does_not_report_success() {
+        tauri::async_runtime::block_on(async {
+            for message in ["revoked_device", "revision_conflict"] {
+                let (state, request) = fixture("409 Conflict", json!({ "message": message }));
+                let error = state
+                    .enroll_device(
+                        Uuid::new_v4().to_string(),
+                        "Other Mac".into(),
+                        STANDARD.encode([9; 32]),
+                    )
+                    .await
+                    .unwrap_err();
+                assert!(error.contains(message));
+                request.join().unwrap();
+                fs::remove_dir_all(state.directory).unwrap();
+            }
+        });
+    }
+
+    #[test]
+    fn administration_commands_sign_expected_revision_and_preserve_unknown_pending() {
+        tauri::async_runtime::block_on(async {
+            for (kind, payload, status) in [
+                ("device.revoke", json!({}), "409 Conflict"),
+                (
+                    "recovery.resume",
+                    json!({"acknowledged": true}),
+                    "500 Internal Server Error",
+                ),
+            ] {
+                let (state, request) = fixture(status, json!({"message": "revision_conflict"}));
+                let command = json!({ "protocolVersion": 1, "commandId": Uuid::new_v4(), "idempotencyKey": Uuid::new_v4(), "type": kind, "aggregateId": if kind == "recovery.resume" { "server" } else { "22222222-2222-4222-8222-222222222222" }, "expectedRevision": 7, "payload": payload });
+                state.client.lock().unwrap().pending = Some(command.clone());
+                assert!(state.submit(command.clone()).await.is_err());
+                let (headers, body) = request.join().unwrap();
+                assert!(headers.starts_with("POST /v1/commands HTTP/1.1"));
+                assert_eq!(body["type"], kind);
+                assert_eq!(body["aggregateId"], command["aggregateId"]);
+                assert_eq!(body["expectedRevision"], 7);
+                assert_eq!(body["payload"], payload);
+                assert_eq!(body["idempotencyKey"], command["idempotencyKey"]);
+                if status.starts_with("500") {
+                    assert_eq!(state.client.lock().unwrap().pending, Some(command));
+                    let error = state
+                        .enroll_device(
+                            Uuid::new_v4().to_string(),
+                            "Other Mac".into(),
+                            STANDARD.encode([9; 32]),
+                        )
+                        .await
+                        .unwrap_err();
+                    assert!(error.contains("pending command"));
+                } else {
+                    assert!(state.client.lock().unwrap().pending.is_none());
+                }
+                fs::remove_dir_all(state.directory).unwrap();
+            }
+        });
+    }
+
     #[test]
     fn private_endpoint_validation() {
         assert!(validate_endpoint("http://127.0.0.1:4318").is_ok());

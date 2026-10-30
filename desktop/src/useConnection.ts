@@ -28,7 +28,10 @@ export function useConnection() {
     syncing = useRef(false),
     executing = useRef(false);
   const refresh = useCallback(async () => {
-    const snapshot = await query<Snapshot>("snapshot");
+    const snapshot = await query<Snapshot>("snapshot").catch((error) => {
+      setConnected(false);
+      throw error;
+    });
     cursor.current = snapshot.cursor;
     setRecords((previous) =>
       streamActive.current

@@ -47,9 +47,9 @@ Select the **OutpostPhone** scheme and a simulator; run with normal/ad-hoc signi
 
 For an unpaired server, open **Connection** on the first device, enter the bootstrap token and choose **Pair First Device**. Bootstrap closes after the first device.
 
-Additional-device enrollment and revocation are currently available only from an **already trusted iPhone** via **Connection → Enroll Another Device / Trusted Devices**. Copy the new device's ID and public pairing key, enroll it from the trusted iPhone, then reconnect the new device to the same server. The local-authentication flow still needs a physical-device rehearsal.
+From an **already trusted Tauri Mac**, open **Connection → Enroll another device / Trusted devices**. Verify the new device's ID and public pairing key, enroll it, then reconnect it to the same server. Revocation requires confirmation against the displayed revision. The retained iPhone also has enrollment/revocation controls; its local-authentication flow still needs physical-device rehearsal.
 
-**T0b gap:** Tauri does not yet expose additional-device enrollment, revocation or Recovery Hold release controls. If the retired Mac app was your only trusted management client, these desktop flows are blocked pending T0b; do not reset pairing, delete Keychain identities or clear server data to work around this. T0a retires source/build paths only, not user data. No new iPhone feature parity is promised.
+Tauri now exposes **Connection → Recovery Hold** with revision-bound acknowledgment before resuming dispatch. Offline, revoked, unconfirmed and recorded-preview clients cannot administer the server; unknown pending commands must be resolved first. Enrollment has no automatic retry: refresh and verify the device ID/key after an uncertain outcome. These controls do not imply per-operation biometric confirmation or live recovery qualification. Do not reset pairing, delete Keychain identities or clear server data as a workaround. No new iPhone feature parity is promised.
 
 ## Verification
 
@@ -57,6 +57,7 @@ Additional-device enrollment and revocation are currently available only from an
 npm run check                         # backend and client-retirement regression tests
 swift test --package-path clients     # 3 projection/catalogue tests
 npm --prefix desktop run build        # Tauri frontend type-check and bundle
+node desktop/test-connection-administration.mjs # synthetic IPC administration checks
 npm --prefix desktop run desktop:build # packaged Tauri app
 npm run qualify                       # local pins/probes; never a live provider qualification
 

@@ -61,7 +61,9 @@ test('native UI runner rejects the retired Mac path before starting any fixture'
 test('active setup uses Tauri while historical Swift Mac evidence stays labelled', () => {
   for (const path of ['README.md', 'desktop/README.md', 'docs/implementation/RUNBOOK.md']) {
     assert.doesNotMatch(read(path), /clients\/build-mac\.sh|clients\/build\/Outpost\.app|clients\/macOS\/|OutpostMac|test-native-ui\.sh mac/);
-    assert.match(read(path), /T0b/);
+    assert.match(read(path), /Tauri/);
+    assert.match(read(path), /Recovery Hold/);
+    assert.doesNotMatch(read(path), /T0b gap|Pending T0b|controls are not implemented in Tauri|Client limitation \(T0a\)/);
   }
   assert.ok(existsSync(new URL('desktop/build-mac.sh', root)));
   assert.ok(existsSync(new URL('desktop/src-tauri/native/sidebar.m', root)));
