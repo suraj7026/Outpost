@@ -24,6 +24,9 @@ async function open(width = 1440, legacy = false, colorScheme = 'dark') {
   await page.addInitScript(({ legacy }) => {
     window.isTauri = true;
     window.__commands = []; window.__management = []; window.__secretSeen = false; window.__failCatalogue = false;
+    window.__callbackEvents = []; window.__callbackAnswerMatches = false; window.__busyPort = false;
+    const callbackURL = 'http://127.0.0.1:1455/auth/callback?code=synthetic-callback-private&state=synthetic-state-123456789&client_id=issued-client';
+    const authorizationURL = 'https://auth.openai.com/api/accounts/authorize?redirect_uri=http%3A%2F%2F127.0.0.1%3A1455%2Fauth%2Fcallback&state=synthetic-state-123456789';
     const model = { modelId: 'org/model:v1', name: 'Shared model', reasoning: false };
     const catalogue = { protocolVersion: 1, piVersion: '1.4.0', profilePath: '/synthetic/server/.pi/agent', generation: 'a'.repeat(64),
       providers: ['alpha', 'beta'].map(id => ({ id, name: id === 'alpha' ? 'Alpha API' : 'Beta subscription', storedMethod: id === 'alpha' ? 'api_key' : null, configured: id === 'alpha',
@@ -45,6 +48,10 @@ async function open(width = 1440, legacy = false, colorScheme = 'dark') {
       }
       if (command === 'stream_events') return new Promise(() => {});
       if (command.startsWith('plugin:')) return;
+      if (command === 'oauth_callback_start') { window.__callbackEvents.push('bind'); if (window.__busyPort) throw new Error('Synthetic occupied port'); return; }
+      if (command === 'oauth_callback_wait') { window.__callbackEvents.push('wait'); return new Promise((resolve, reject) => { window.__finishCallback = () => resolve(callbackURL); window.__cancelCallback = () => reject(new Error('Synthetic cancellation')); }); }
+      if (command === 'oauth_callback_cancel') { window.__callbackEvents.push('cancel'); window.__cancelCallback?.(); return; }
+      if (command === 'open_url') { window.__callbackEvents.push('open'); return; }
       if (command === 'agent_request') {
         const request = args.payload;
         // Record only nonsecret request metadata, exactly as product diagnostics should.
@@ -56,11 +63,20 @@ async function open(width = 1440, legacy = false, colorScheme = 'dark') {
         if (request.type === 'login.start') {
           flow = { id: 'flow', providerId: request.providerId, method: request.method, state: 'waiting', expiresAt: Date.now() + 60000,
             prompt: { id: 'secret', input: { type: 'secret', message: 'Synthetic API credential' } }, events: [], error: null };
+          if (request.method === 'oauth') {
+            flow.prompt = { id: 'manual', input: { type: 'manual_code', message: 'Paste the final redirect URL', placeholder: 'http://127.0.0.1:1455/auth/callback' } };
+            flow.events = [{ type: 'auth_url', url: authorizationURL }];
+          }
           return structuredClone(flow);
         }
         if (request.type === 'login.status') return structuredClone(flow);
         if (request.type === 'login.cancel') { flow.state = 'cancelled'; flow.prompt = null; return structuredClone(flow); }
         if (request.type === 'login.answer') {
+          if (flow.prompt?.id === 'manual') {
+            window.__callbackAnswerMatches = request.value === callbackURL;
+            flow.prompt = { id: 'save', input: { type: 'select', message: 'Save this credential to the shared server Pi profile?', options: [{ id: 'save', label: 'Save server credential' }] } };
+            return structuredClone(flow);
+          }
           window.__secretSeen = request.value === 'synthetic-secret-never-persist';
           flow.state = 'succeeded'; flow.prompt = null;
           catalogue.providers.find(p => p.id === flow.providerId).storedMethod = 'api_key';
@@ -128,6 +144,39 @@ try {
   check(await page.evaluate(() => __configuration.models[0].id === 'namespace/model:cloud' && __configuration.allowInsecureHttp), 'Compatible endpoint preserves exact ID and HTTP consent');
   await page.getByRole('searchbox', { name: 'Add or manage a provider' }).fill('beta');
   check(await page.getByRole('button', { name: 'Sign in · Subscription' }).isVisible(), 'Runtime subscription method is not presented as an API key');
+  await page.getByRole('button', { name: 'Sign in · Subscription' }).click();
+  await page.getByRole('button', { name: 'Open provider sign-in', exact: true }).click();
+  await page.waitForFunction(() => __callbackEvents.includes('open'));
+  check(await page.evaluate(() => __callbackEvents.slice(0, 3).join(',') === 'bind,wait,open'), 'Bind the Mac listener before opening the provider browser');
+  await page.evaluate(() => __finishCallback());
+  await page.getByLabel('Save this credential to the shared server Pi profile?').waitFor();
+  check(await page.evaluate(() => __callbackAnswerMatches), 'Complete callback including issued client ID reaches secret management IPC');
+  check(!(await page.content()).includes('synthetic-callback-private'), 'Captured callback is never rendered');
+  check(await page.evaluate(() => !JSON.stringify([localStorage, sessionStorage, __commands, __management, __callbackEvents]).includes('synthetic-callback-private')), 'Callback excluded from browser storage, task retries and metadata');
+  await page.getByLabel('Save this credential to the shared server Pi profile?').selectOption('save');
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByText('Credential saved.', { exact: false }).waitFor();
+
+  await page.getByRole('button', { name: 'Sign in · Subscription' }).click();
+  await page.getByRole('button', { name: 'Confirm', exact: true }).click();
+  await page.getByRole('button', { name: 'Open provider sign-in', exact: true }).click();
+  await page.getByRole('button', { name: 'Waiting for browser sign-in…' }).waitFor();
+  const answersBeforeCancel = await page.evaluate(() => __management.filter(r => r.type === 'login.answer').length);
+  await page.getByRole('button', { name: 'Cancel sign-in', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('.provider-login h3')?.textContent.includes('cancelled'));
+  await page.evaluate(() => __finishCallback());
+  await page.waitForTimeout(100);
+  check(await page.evaluate(() => __management.filter(r => r.type === 'login.answer').length) === answersBeforeCancel, 'Cancelled flow cannot submit a late callback');
+
+  await page.getByRole('button', { name: 'Sign in · Subscription' }).click();
+  await page.getByRole('button', { name: 'Confirm', exact: true }).click();
+  await page.evaluate(() => window.__busyPort = true);
+  const opensBeforeFailure = await page.evaluate(() => __callbackEvents.filter(e => e === 'open').length);
+  await page.getByRole('button', { name: 'Open provider sign-in', exact: true }).click();
+  await page.getByRole('button', { name: 'Open sign-in manually' }).waitFor();
+  check(await page.evaluate(() => __callbackEvents.filter(e => e === 'open').length) === opensBeforeFailure, 'Occupied port never opens a broken automatic callback flow');
+  check(await page.getByText(/copy the full address from its address bar/).isVisible(), 'Connection-refused page has explicit private manual-return guidance');
+  await page.getByRole('button', { name: 'Cancel sign-in', exact: true }).click();
   await page.evaluate(() => window.__failCatalogue = true);
   await page.getByRole('button', { name: 'Refresh models' }).click();
   await page.getByText('Provider catalogue unavailable.', { exact: false }).waitFor();

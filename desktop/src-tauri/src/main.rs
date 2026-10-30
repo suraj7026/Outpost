@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod oauth_callback;
 mod sse;
 mod transport;
 mod window_controls;
@@ -21,6 +22,7 @@ fn main() {
                 std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700))?;
             }
             app.manage(transport::State::new(directory)?);
+            app.manage(oauth_callback::State::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -30,6 +32,9 @@ fn main() {
             transport::set_endpoint,
             transport::query,
             transport::agent_request,
+            oauth_callback::oauth_callback_start,
+            oauth_callback::oauth_callback_wait,
+            oauth_callback::oauth_callback_cancel,
             transport::stream_events,
             transport::send_command,
             transport::retry_command,

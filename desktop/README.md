@@ -33,7 +33,7 @@ The task workbench has a compact header, centered conversation/composer, and an 
 
 ## Wired workflows
 
-- Task creation with exact Ollama Cloud model names and per-task control mode. The picker and settings show only cloud-tagged entries advertised by the connected Ollama server, never local-only models. Empty/failed catalogues block new task submission rather than falling back to a local default; existing tasks retain their recorded models.
+- Task creation and follow-up instructions with exact provider/model identities and per-task control mode. Managed servers supply the Pi provider catalogue; older servers retain the advertised Ollama Cloud-only picker. Empty/failed catalogues or unavailable selections block submission rather than silently changing providers. A selection applies to the next instruction, not the response already in progress.
 - Live text, model-exposed thinking and tool-call lifecycle over an authenticated SSE/IPC stream, with reconnect snapshots and durable partial checkpoints.
 - Server-owned history, conversation rendering, follow-up instructions, pause/resume/cancel.
 - Exact-action approvals and dispatch, with action arguments and observed results.
@@ -46,6 +46,10 @@ The task workbench has a compact header, centered conversation/composer, and an 
 Full control is the new-task default because this deployment is intentionally an unrestricted private administrative agent. Root access is not a sandbox. Cloud-selected models send context to Ollama Cloud; Chromium and Browser-Use still run on your own worker.
 
 See [live streaming behavior and verification](../docs/implementation/LIVE-STREAMING.md). Thinking expands during generation; models without exposed reasoning do not get fabricated thinking. Tool lifecycle is live, but subprocess stdout and nested Browser-Use steps are not yet streamed individually.
+
+## Server provider sign-in
+
+Use **Settings → Server Pi providers**. Pi and credential storage remain on Server 2. For OpenAI browser sign-in, Outpost starts a flow-bound loopback listener on this Mac before opening the browser, then sends the full callback URL through the private signed login prompt. Keep Settings open until the separate **Save server credential** confirmation. An occupied port or interrupted return offers explicit manual-paste guidance; never paste a callback URL into task chat. Start a fresh login after an expired attempt. See [OpenAI remote sign-in](../docs/implementation/OPENAI-REMOTE-SIGN-IN.md) for restrictions and verification. General callback forwarding and provider packages remain disabled.
 
 ## Migration limits
 

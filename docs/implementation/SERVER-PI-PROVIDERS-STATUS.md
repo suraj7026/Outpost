@@ -15,7 +15,7 @@ Release **`providers-20261030T200757Z`** is deployed on Server 2. The owner auth
 - Planned-maintenance checkpoint was restored and completed; prior dispatch state was restored to enabled.
 - No real provider login, paid inference, synthetic task in the live ledger, or unrelated workload change was performed.
 
-## Desktop
+## Desktop — initial release installation
 
 Installed `/Users/sudarshanrajagopalan/Applications/Outpost Desktop.app`.
 
@@ -28,6 +28,12 @@ Installed `/Users/sudarshanrajagopalan/Applications/Outpost Desktop.app`.
 - Build log: `/tmp/outpost-provider-desktop-build.log`.
 
 Open **Settings → Server Pi providers** to select a sign-in method or configure a compatible endpoint. Model selection is available in both composers and applies to the next instruction. A completed provider login now asks for a separate **Save server credential** confirmation.
+
+## OpenAI browser-return follow-up
+
+The desktop now captures OpenAI's loopback callback on the Mac and submits the complete URL through the existing private server login prompt. Previously the browser returned to a Mac port with no listener. Pi and token exchange remain on Server 2; no server redeployment is needed for this fix. Explicit save confirmation is unchanged. See [OpenAI remote sign-in](OPENAI-REMOTE-SIGN-IN.md) for restrictions, fallback and tests. General callback forwarding remains disabled.
+
+Follow-up checks: provider UI **26 checks each** in Chromium/WebKit, real native loopback/cancellation/ownership tests, and the pinned Pi OpenAI adapter against a mocked token endpoint. These do not claim a live account login.
 
 ## Release blockers resolved for this rollout
 
@@ -75,7 +81,7 @@ The original `/home/node/outpost-runtime` source and dependencies remain intact.
 - Final full backend suite: **297 passed, 1 skipped, 0 failed**, including additive migration, authentication recovery and maintenance checkpoint tests.
 - Deployment-manifest isolation contract test passed; Kubernetes server-side dry-run and actual live mount checks passed.
 - Rust: **8 passed, 1 intentionally ignored** owner-Keychain/live-server test.
-- Latest provider UI: **19 checks each** in Chromium and WebKit; Studio **179 checks each**.
+- Initial-release provider UI: **19 checks each** in Chromium and WebKit; Studio **179 checks each**.
 - Earlier unchanged-shell regressions: sidebar **135**, appearance **129**, scrolling **207**, image viewer **89**, each engine.
 - Synthetic real SDK tests cover two providers, exact IDs, actual coordinator action execution, queued model switching, signed credential isolation, revoked-device save refusal, generation fencing, receipt restart behavior and task-preserving checkpoints.
 - `git diff --check` passed before installation.
@@ -92,7 +98,7 @@ node --test deploy/agent/provider-worker-patch.test.mjs
 ## Still disabled / not claimed
 
 - Trusted provider-package installation, package activation/rollback, and general resource editors.
-- Mac-to-server localhost OAuth callback relay. Device/manual-code methods work when supplied by Pi; callback-only methods may require server-side interaction.
+- General Mac-to-server callback forwarding. OpenAI has a narrowly scoped Mac capture-to-manual-prompt path; other providers use their supplied device/manual-code methods, and callback-only methods may still require server-side interaction.
 - General embedded remote terminal and live browser takeover.
 - Live ChatGPT/subscription entitlement, new provider credentials and paid inference qualification. The owner performs sign-in; no billing or entitlement is inferred from a stored credential.
 - A single automated native-Mac UI-to-live-provider inference test. Browser UI uses synthetic IPC; real SDK routing is tested with local synthetic endpoints. Live deployment validation used metadata, mount and history checks only.

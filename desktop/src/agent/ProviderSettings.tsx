@@ -3,6 +3,7 @@ import { agentRequest, call, nativeApp, recordedPreview } from '../api';
 import type { Connection } from '../useConnection';
 import type { Login, Provider, ModelRef } from './types';
 import ModelPicker from './ModelPicker';
+import BrowserSignIn from './BrowserSignIn';
 import './agent.css';
 
 const activeLogin = (flow: Login | null) => !!flow && ['running', 'waiting'].includes(flow.state);
@@ -16,11 +17,12 @@ function LoginPanel({ flow, busy, answer, cancel }: { flow: Login; busy: boolean
     <h3>{flow.providerId} · {flow.state}</h3>
     <p>Sign-in runs on your server. Expires at {new Date(flow.expiresAt).toLocaleTimeString()}.</p>
     {flow.events.map((event, index) => <div key={index}>
-      {event.type === 'auth_url' ? <><p>{event.instructions}</p>{webLink(event.url, 'Open provider sign-in')}</> :
+      {event.type === 'auth_url' ? <><p>{event.instructions}</p><BrowserSignIn url={event.url} expiresAt={flow.expiresAt} manualPrompt={input?.type === 'manual_code'} disabled={busy || !activeLogin(flow)} answer={answer} /></> :
         event.type === 'device_code' ? <><p>Enter code <code>{event.userCode}</code></p>{webLink(event.verificationUri, 'Open device verification')}</> :
           'message' in event ? <><p>{event.message}</p>{event.type === 'info' && event.links?.map(link => <span key={link.url}>{webLink(link.url, link.label || 'Open provider instructions')}</span>)}</> : null}
     </div>)}
     {activeLogin(flow) && input && <form autoComplete="off" onSubmit={event => { event.preventDefault(); if (!value || busy) return; const response = value; setValue(''); answer(response); }}>
+      {input.type === 'manual_code' && <p>If the browser shows “can’t connect” for localhost, copy the full address from its address bar and paste it here—not into the conversation. The URL is sent privately to the active server sign-in.</p>}
       <label htmlFor="provider-answer">{input.message}</label>
       {input.type === 'select' ? <select id="provider-answer" autoFocus value={value} onChange={event => setValue(event.target.value)} disabled={busy}>
         <option value="">Choose an option</option>{input.options?.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
@@ -152,7 +154,7 @@ export default function ProviderSettings({ connection }: { connection: Connectio
           <CompatibleForm disabled={blocked || busy || activeLogin(flow)} save={configuration => void operate(async () => {
             await agentRequest({ type: 'provider.configure', operationId: crypto.randomUUID(), expectedGeneration: catalogue.generation, configuration }); await connection.refreshAgent();
           })} />
-          <p>Provider package installation and localhost OAuth callback relay are not enabled in this build. Browser automation keeps its own model configuration.</p>
+          <p>OpenAI browser sign-in supports automatic return through this Mac. Other providers use their supplied device-code or manual-return steps. Provider package installation is not enabled. Browser automation keeps its own model configuration.</p>
         </>}
       </>}
     </div>
