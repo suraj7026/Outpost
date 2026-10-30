@@ -2,19 +2,14 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 platform="${1:-phone}"
+[[ "$platform" == phone ]] || { echo 'Usage: test-native-ui.sh [phone] (iPhone simulator only)' >&2; exit 1; }
 if lsof -tiTCP:4318 -sTCP:LISTEN >/dev/null; then
   echo 'Port 4318 is occupied. Stop your development coordinator before running the isolated UI fixture.' >&2
   exit 1
 fi
-if [[ "$platform" == phone ]]; then
-  : "${OUTPOST_SIMULATOR_ID:?Set OUTPOST_SIMULATOR_ID from xcrun simctl list devices available}"
-  scheme=OutpostPhone
-  destination="platform=iOS Simulator,id=$OUTPOST_SIMULATOR_ID"
-else
-  [[ "$platform" == mac ]] || { echo 'Usage: test-native-ui.sh phone|mac' >&2; exit 1; }
-  scheme=OutpostMac
-  destination='platform=macOS'
-fi
+: "${OUTPOST_SIMULATOR_ID:?Set OUTPOST_SIMULATOR_ID from xcrun simctl list devices available}"
+scheme=OutpostPhone
+destination="platform=iOS Simulator,id=$OUTPOST_SIMULATOR_ID"
 root=$(mktemp -d /tmp/outpost-native-fixture.XXXXXX)
 OUTPOST_DATA="$root" OUTPOST_PAIRING_TOKEN=outpost-ui-fixture-token-0123456789 node --import tsx server/main.ts >"$root/server.log" 2>&1 &
 server_pid=$!

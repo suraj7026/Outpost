@@ -1,5 +1,7 @@
 # Spec 29 — implementation acceptance record
 
+> **Historical record — superseded for current desktop setup.** Swift Mac application/build/UI-test references below describe the earlier implementation, not a supported build path. T0a retires that app while retaining iPhone/shared code and data. Use the [Tauri desktop guide](../../desktop/README.md) and [adoption status](ADOPTION-STATUS.md) for current direction and open T0b management/recovery gaps. Evidence and original decisions below are preserved.
+
 **Assessment: working development slices, not a complete product or release candidate.**
 
 The request covers all 31 specifications and 270 requirements. This implementation does **not** satisfy every requirement. Every module has an initial implementation or delivery/qualification record, but several are independently tested libraries rather than integrated product features. The searchable catalogue is requirements navigation, not evidence that 270 features shipped.

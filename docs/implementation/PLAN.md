@@ -1,5 +1,7 @@
 # Implementation programme
 
+> **Historical record — superseded for current desktop setup.** Swift Mac application/build/UI-test references below describe the earlier implementation, not a supported build path. T0a retires that app while retaining iPhone/shared code and data. Use the [Tauri desktop guide](../../desktop/README.md) and [adoption status](ADOPTION-STATUS.md) for current direction and open T0b management/recovery gaps. Evidence and original decisions below are preserved.
+
 The owner requested all specifications, Soft Studio, autonomous decisions, and a commit/push after each spec increment. All 31 numbered specifications and the 270-feature map were read before implementation. The pre-existing plan, design exports, specs and mock are preserved.
 
 ## Design and decisions

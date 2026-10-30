@@ -1,5 +1,7 @@
 # Spec 30 — implementation decisions and qualification register
 
+> **Historical record — superseded for current desktop setup.** Swift Mac application/build/UI-test references below describe the earlier implementation, not a supported build path. T0a retires that app while retaining iPhone/shared code and data. Use the [Tauri desktop guide](../../desktop/README.md) and [adoption status](ADOPTION-STATUS.md) for current direction and open T0b management/recovery gaps. Evidence and original decisions below are preserved.
+
 Recorded 28 October 2026 (local time). This supplements, rather than rewrites, the owner's [source specifications](../../spec/30-decisions-and-sources.md). It records actual implementation choices and their limits.
 
 ## Decisions made autonomously for this development implementation

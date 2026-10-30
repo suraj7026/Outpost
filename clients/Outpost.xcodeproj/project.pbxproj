@@ -9,10 +9,7 @@
 /* Begin PBXBuildFile section */
 		30FF1495FE2748A55B78239E /* OutpostUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4071E73333F184F322E16411 /* OutpostUITests.swift */; };
 		4E75D0E1FB07BDCFBF880078 /* OutpostApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B06478EF718AB62164CE286 /* OutpostApp.swift */; };
-		60394F2F092EEAAB2A1EE09B /* OutpostKit in Frameworks */ = {isa = PBXBuildFile; productRef = 28DC984E07A5F9B4F6F74F0A /* OutpostKit */; };
 		A4ED88460103F01905671688 /* OutpostKit in Frameworks */ = {isa = PBXBuildFile; productRef = 6DE4252E1A714D4B721C6313 /* OutpostKit */; };
-		AE35A33FC0C9F9F77B61F4DE /* OutpostApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6655107432CC10C97CF71D8 /* OutpostApp.swift */; };
-		F56A0EAF93222C709DBEC9E2 /* OutpostUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4071E73333F184F322E16411 /* OutpostUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -23,13 +20,6 @@
 			remoteGlobalIDString = F00C4232857C533155DBED42;
 			remoteInfo = OutpostPhone;
 		};
-		50CFC9A508CDF50ABAAF5E91 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 849E883A9D4C88B8AC7996C2 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = D8DF1FC324CA179AECA88FB9;
-			remoteInfo = OutpostMac;
-		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
@@ -37,10 +27,7 @@
 		4071E73333F184F322E16411 /* OutpostUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutpostUITests.swift; sourceTree = "<group>"; };
 		462C2CEFC82708706DF2362E /* OutpostPhone.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = OutpostPhone.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7B06478EF718AB62164CE286 /* OutpostApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutpostApp.swift; sourceTree = "<group>"; };
-		A6655107432CC10C97CF71D8 /* OutpostApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutpostApp.swift; sourceTree = "<group>"; };
 		AC1FC0DB9552A7357F678095 /* OutpostPhoneUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = OutpostPhoneUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		B8F4081F767968BA1F202D5A /* OutpostMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OutpostMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		D281D8F12D879FA372305896 /* OutpostMacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OutpostMacUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E94BFAFDAFA449D5D649FA98 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -50,14 +37,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				A4ED88460103F01905671688 /* OutpostKit in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		DE01F3E3FFC2F932FCEB392A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				60394F2F092EEAAB2A1EE09B /* OutpostKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -73,19 +52,10 @@
 			path = iOS;
 			sourceTree = "<group>";
 		};
-		060E0C9FA5847E0D63B0E5D1 /* macOS */ = {
-			isa = PBXGroup;
-			children = (
-				A6655107432CC10C97CF71D8 /* OutpostApp.swift */,
-			);
-			path = macOS;
-			sourceTree = "<group>";
-		};
 		40969DB3EB333D4CCC64FCC4 = {
 			isa = PBXGroup;
 			children = (
 				040E31FB411E3BE603439191 /* iOS */,
-				060E0C9FA5847E0D63B0E5D1 /* macOS */,
 				5F53CA0C1C45259E1028A83D /* Packages */,
 				8CBA0832ED030E93A60AFCDD /* UITests */,
 				420B2A6310B9D85EFC726D31 /* Products */,
@@ -95,8 +65,6 @@
 		420B2A6310B9D85EFC726D31 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				B8F4081F767968BA1F202D5A /* OutpostMac.app */,
-				D281D8F12D879FA372305896 /* OutpostMacUITests.xctest */,
 				462C2CEFC82708706DF2362E /* OutpostPhone.app */,
 				AC1FC0DB9552A7357F678095 /* OutpostPhoneUITests.xctest */,
 			);
@@ -140,43 +108,6 @@
 			productReference = AC1FC0DB9552A7357F678095 /* OutpostPhoneUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
-		4160A67C210A81641655683F /* OutpostMacUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = B6801F8347CFE07669BBD1AF /* Build configuration list for PBXNativeTarget "OutpostMacUITests" */;
-			buildPhases = (
-				39859C156B40C9BD96FDECF3 /* Sources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				B8747344EFBF6FE4A83C8BF0 /* PBXTargetDependency */,
-			);
-			name = OutpostMacUITests;
-			packageProductDependencies = (
-			);
-			productName = OutpostMacUITests;
-			productReference = D281D8F12D879FA372305896 /* OutpostMacUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
-		};
-		D8DF1FC324CA179AECA88FB9 /* OutpostMac */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 91E782627AB57E16441AD92F /* Build configuration list for PBXNativeTarget "OutpostMac" */;
-			buildPhases = (
-				201554741B8EF5DE57BC3CA6 /* Sources */,
-				DE01F3E3FFC2F932FCEB392A /* Frameworks */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = OutpostMac;
-			packageProductDependencies = (
-				28DC984E07A5F9B4F6F74F0A /* OutpostKit */,
-			);
-			productName = OutpostMac;
-			productReference = B8F4081F767968BA1F202D5A /* OutpostMac.app */;
-			productType = "com.apple.product-type.application";
-		};
 		F00C4232857C533155DBED42 /* OutpostPhone */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2ED0ADF7EF34C4354A69F523 /* Build configuration list for PBXNativeTarget "OutpostPhone" */;
@@ -209,13 +140,6 @@
 						ProvisioningStyle = Automatic;
 						TestTargetID = F00C4232857C533155DBED42;
 					};
-					4160A67C210A81641655683F = {
-						ProvisioningStyle = Automatic;
-						TestTargetID = D8DF1FC324CA179AECA88FB9;
-					};
-					D8DF1FC324CA179AECA88FB9 = {
-						ProvisioningStyle = Automatic;
-					};
 					F00C4232857C533155DBED42 = {
 						ProvisioningStyle = Automatic;
 					};
@@ -240,8 +164,6 @@
 			targets = (
 				F00C4232857C533155DBED42 /* OutpostPhone */,
 				19519ADC721690FA08A7ADD5 /* OutpostPhoneUITests */,
-				4160A67C210A81641655683F /* OutpostMacUITests */,
-				D8DF1FC324CA179AECA88FB9 /* OutpostMac */,
 			);
 		};
 /* End PBXProject section */
@@ -255,27 +177,11 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		201554741B8EF5DE57BC3CA6 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				AE35A33FC0C9F9F77B61F4DE /* OutpostApp.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		22F2493E8E1BE2AEE95ED11F /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				4E75D0E1FB07BDCFBF880078 /* OutpostApp.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		39859C156B40C9BD96FDECF3 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				F56A0EAF93222C709DBEC9E2 /* OutpostUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -286,11 +192,6 @@
 			isa = PBXTargetDependency;
 			target = F00C4232857C533155DBED42 /* OutpostPhone */;
 			targetProxy = 1FA2148741A9C21F8C655C3B /* PBXContainerItemProxy */;
-		};
-		B8747344EFBF6FE4A83C8BF0 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = D8DF1FC324CA179AECA88FB9 /* OutpostMac */;
-			targetProxy = 50CFC9A508CDF50ABAAF5E91 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -343,64 +244,14 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
-		2372A9E9F432DFC4A197DD8D /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				COMBINE_HIDPI_IMAGES = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = dev.outpost.OutpostMacUITests;
-				SDKROOT = macosx;
-				TEST_TARGET_NAME = OutpostMac;
-			};
-			name = Debug;
-		};
-		266D6A521F614C7CF8AC3CC8 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				COMBINE_HIDPI_IMAGES = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "Authenticate exact Outpost decisions.";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = dev.outpost.mac;
-				SDKROOT = macosx;
-			};
-			name = Debug;
-		};
-		33002C8AD9A20AD093538E5D /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				COMBINE_HIDPI_IMAGES = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = dev.outpost.OutpostMacUITests;
-				SDKROOT = macosx;
-				TEST_TARGET_NAME = OutpostMac;
 			};
 			name = Release;
 		};
@@ -422,22 +273,6 @@
 				PRODUCT_BUNDLE_IDENTIFIER = dev.outpost.ios;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
-		851E4E0197D2341F194B0479 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				COMBINE_HIDPI_IMAGES = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "Authenticate exact Outpost decisions.";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = dev.outpost.mac;
-				SDKROOT = macosx;
 			};
 			name = Release;
 		};
@@ -512,12 +347,12 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -583,24 +418,6 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
-		91E782627AB57E16441AD92F /* Build configuration list for PBXNativeTarget "OutpostMac" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				266D6A521F614C7CF8AC3CC8 /* Debug */,
-				851E4E0197D2341F194B0479 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
-		};
-		B6801F8347CFE07669BBD1AF /* Build configuration list for PBXNativeTarget "OutpostMacUITests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				2372A9E9F432DFC4A197DD8D /* Debug */,
-				33002C8AD9A20AD093538E5D /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
-		};
 		C8446B0F90EAD148434FAFA4 /* Build configuration list for PBXNativeTarget "OutpostPhoneUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -620,10 +437,6 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		28DC984E07A5F9B4F6F74F0A /* OutpostKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = OutpostKit;
-		};
 		6DE4252E1A714D4B721C6313 /* OutpostKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = OutpostKit;

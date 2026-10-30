@@ -63,6 +63,8 @@ JS
 
 Restore validates archive authentication, ledger/artifact hashes and SQLite integrity. It records a durable **Recovery Hold**: the coordinator's scheduler, action outbox and notification drain remain stopped on startup. Reads, pairing with already trusted devices, revocation and review are still available.
 
+**Client limitation (T0a):** the management controls in steps 3 and 6 below currently exist only in the retained Swift iPhone client, not Tauri. Use an already trusted iPhone. A Mac-only owner must leave Recovery Hold enabled until the T0b desktop controls are available; do not delete identities/server data or bypass the hold. The retired Swift Mac app is not a supported recovery path.
+
 1. Start against the restored directory using `OUTPOST_DATA`.
 2. Reconnect a trusted device and review the recovered history/artifacts.
 3. Revoke lost devices in **Connection → Trusted Devices**. Revocations already in the backup remain effective. Revocations made *after* the backup must be re-applied.
@@ -76,7 +78,7 @@ This was tested in temporary directories on the development Mac. Replacement-Ubu
 ## Upgrade/requalification
 
 - Preserve `package-lock.json`, exact pins and a recovery copy before updating dependencies.
-- Stage upgrades separately. Run `npm ci`, browser installation, `npm run check`, native projection/build/UI tests and `npm run qualify`.
+- Stage upgrades separately. Run `npm ci`, browser installation, `npm run check`, shared Swift tests, Tauri builds and isolated iPhone UI tests and `npm run qualify`.
 - Rerun Cloud conformance and held-out reviewer evaluation whenever provider model IDs/versions or transport behavior change. Pinning an ID is not proof its weights stayed unchanged.
 - Do not reuse a qualification report from another account, model, browser or security topology.
 - Keep the prior compatible binary/source and data snapshot. Database migrations currently have only the initial schema; forward/backward migration rehearsal is still required before a schema-changing release.

@@ -3,7 +3,6 @@ options:
   bundleIdPrefix: dev.outpost
   deploymentTarget:
     iOS: '17.0'
-    macOS: '14.0'
 packages:
   OutpostClients:
     path: .
@@ -46,24 +45,3 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-  OutpostMacUITests:
-    type: bundle.ui-testing
-    platform: macOS
-    sources: [UITests]
-    dependencies:
-      - target: OutpostMac
-    settings:
-      base:
-        GENERATE_INFOPLIST_FILE: YES
-  OutpostMac:
-    type: application
-    platform: macOS
-    sources: [macOS]
-    dependencies:
-      - package: OutpostClients
-        product: OutpostKit
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.outpost.mac
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_NSFaceIDUsageDescription: Authenticate exact Outpost decisions.

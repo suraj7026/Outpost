@@ -4,7 +4,7 @@
 
 Pi `message_start/update/end` and `tool_execution_start/update/end` → bounded live projections → authenticated POST `/v1/stream` (SSE) → Rust incremental UTF-8 decoder → Tauri IPC Channel → React conversation/evidence.
 
-This replaces the two-second polling path while a live connection is healthy. Polling remains a fallback. UI changes require reopening the newly built desktop application; the earlier Swift client can see durable message checkpoints but has no new thinking panel.
+This replaces the two-second polling path while a live connection is healthy. Polling remains a fallback. UI changes require reopening the newly built desktop application; the retained Swift iPhone client can see durable message checkpoints but has no new thinking panel.
 
 ## Behavior
 

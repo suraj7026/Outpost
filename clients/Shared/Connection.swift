@@ -113,22 +113,7 @@ private struct CachedConnection: Codable {
         }
     }
     public func connect() async {
-        await perform {
-            do { try await self.refreshSnapshot() }
-            catch {
-                #if os(macOS)
-                guard self.serverURL == "http://127.0.0.1:4318" else { throw error }
-                let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
-                let bootstrap = support.appendingPathComponent("Outpost/bootstrap-token")
-                guard let token = try? String(contentsOf: bootstrap, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines), token.count >= 32 else { throw error }
-                _ = try await self.request("v1/pair", ["deviceId": .string(self.deviceID), "name": .string("Outpost Mac"), "publicKey": .string(self.publicKey), "token": .string(token)], signed: false)
-                try FileManager.default.removeItem(at: bootstrap)
-                try await self.refreshSnapshot()
-                #else
-                throw error
-                #endif
-            }
-        }
+        await perform { try await self.refreshSnapshot() }
     }
     private func refreshSnapshot() async throws {
         let data = try await request("v1/query", envelope("snapshot")); try projection.replace(JSONDecoder().decode(Snapshot.self, from: data))

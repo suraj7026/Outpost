@@ -1,6 +1,6 @@
 # Outpost Desktop — Tauri
 
-The new macOS interface uses **React/TypeScript for content, Rust for transport and identity, and AppKit for the sidebar**. No SwiftUI is used in this client. The earlier `clients/` applications and their data are retained.
+The new macOS interface uses **React/TypeScript for content, Rust for transport and identity, and AppKit for the sidebar**. No SwiftUI is used in this client. Tauri is the only macOS application and new-feature client. The Swift Mac app has been retired; the iPhone app, shared code/resources and all existing user data are retained.
 
 ## Build and open
 
@@ -47,8 +47,8 @@ See [live streaming behavior and verification](../docs/implementation/LIVE-STREA
 
 ## Migration limits
 
-- Automations and Memory currently display existing server records; their editing forms remain in the legacy client.
-- Additional-device enrollment/revocation and local biometric prompts remain in the legacy client. The new app is authenticated by its Keychain signing identity, but does not claim biometric confirmation for every operation.
+- Automations and Memory currently display existing server records. Desktop editing is not implemented; retained iPhone forms are not new-feature parity.
+- **Pending T0b:** additional-device enrollment/revocation and Recovery Hold release controls are not implemented in Tauri. The retained iPhone has these controls for already trusted devices; a Mac-only owner has no supported desktop UI for them yet. Do not delete identity or server data or reopen bootstrap as a workaround. The app uses its Keychain signing identity, but does not claim biometric confirmation for every operation.
 - No live interactive browser takeover/video view yet: current outputs are screenshots and structured results.
 - iPhone still uses the retained Swift client. Linux/Windows secure identity storage and native navigation are not implemented.
 - Closing the app does not cancel server-owned tasks. Pausing/cancelling a task does not undo completed commands.

@@ -1,6 +1,6 @@
 # Outpost
 
-A server-owned agent workspace. The new macOS client uses **Tauri, TypeScript/React and Rust**, with a genuine AppKit sidebar and Ink-styled conversation/evidence views. The earlier SwiftUI Mac/iPhone clients remain available during migration.
+A server-owned agent workspace. The new macOS client uses **Tauri, TypeScript/React and Rust**, with a genuine AppKit sidebar and Ink-styled conversation/evidence views. Tauri is the only macOS application and the only new-feature client. The Swift iPhone app and its shared library/resources are retained; the legacy Swift Mac app has been retired.
 
 **Start here:** [Tauri desktop](desktop/README.md) · [Private two-server agent deployment](deploy/agent/README.md). The live deployment uses the Pi SDK, the existing Ollama daemon, self-hosted Browser-Use, and explicitly enabled root executors on both servers.
 
@@ -16,7 +16,7 @@ npx playwright install chromium
 npm run check
 npm run contracts
 
-# Keep this token private; paste its value into the first client's Connection screen.
+# Keep this token private; use it for first-device bootstrap in Connection.
 export OUTPOST_PAIRING_TOKEN="$(openssl rand -hex 32)"
 printf '%s\n' "$OUTPOST_PAIRING_TOKEN"
 npm start
@@ -35,17 +35,6 @@ open "src-tauri/target/release/bundle/macos/Outpost Desktop.app"
 
 The client reuses the existing macOS Keychain device identity. For the deployed homelab, the private SSH tunnel supplies `http://127.0.0.1:4318`; no new bootstrap token is needed. See [desktop setup and migration limits](desktop/README.md).
 
-### Legacy SwiftUI Mac client
-
-```sh
-./clients/build-mac.sh
-open clients/build/Outpost.app
-```
-
-Open **Connection**, leave the loopback server address, enter the bootstrap token and choose **Pair First Device**. The bootstrap route closes after the first device.
-
-Create a task. Without direct Ollama inference or qualified legacy Cloud configuration, its state intentionally becomes **waiting for capacity**, with an explanation. To exercise real local work, open **Evidence → Inspect Machine**, approve the exact read-only action using local authentication, then choose **Run Approved Action**. Approval and execution are separate recorded steps. You can also attach/download verified files, steer/pause/cancel tasks, create simple schedules, and manage scoped memory notes.
-
 ### iPhone simulator and additional devices
 
 ```sh
@@ -56,30 +45,27 @@ open Outpost.xcodeproj
 
 Select the **OutpostPhone** scheme and a simulator; run with normal/ad-hoc signing enabled. Unsigned simulator builds can compile while Keychain fails. A physical iPhone requires a real signing team and an authenticated HTTPS/private-network path to the server; `127.0.0.1` on the phone is the phone itself.
 
-If Mac is already paired:
+For an unpaired server, open **Connection** on the first device, enter the bootstrap token and choose **Pair First Device**. Bootstrap closes after the first device.
 
-1. On iPhone, open Connection and copy its **Device ID** and **Public Pairing Key**.
-2. On the trusted Mac, open **Connection → Enroll Another Device**, enter those values and a name, then authenticate and enroll.
-3. On iPhone, enter the same server URL and choose **Reconnect**. Do not reuse the bootstrap route.
+Additional-device enrollment and revocation are currently available only from an **already trusted iPhone** via **Connection → Enroll Another Device / Trusted Devices**. Copy the new device's ID and public pairing key, enroll it from the trusted iPhone, then reconnect the new device to the same server. The local-authentication flow still needs a physical-device rehearsal.
 
-The same enrollment flow is available on either platform. **Trusted Devices** permits revocation. A revoked device's future signed requests are rejected; already completed effects are not undone. Native enrollment/revocation compiles and shares tested backend endpoints, but its local-authentication flow still needs a physical-device rehearsal.
+**T0b gap:** Tauri does not yet expose additional-device enrollment, revocation or Recovery Hold release controls. If the retired Mac app was your only trusted management client, these desktop flows are blocked pending T0b; do not reset pairing, delete Keychain identities or clear server data to work around this. T0a retires source/build paths only, not user data. No new iPhone feature parity is promised.
 
 ## Verification
 
 ```sh
-npm run check                         # 40 backend tests at the recorded revision
+npm run check                         # backend and client-retirement regression tests
 swift test --package-path clients     # 3 projection/catalogue tests
-./clients/build-mac.sh
+npm --prefix desktop run build        # Tauri frontend type-check and bundle
+npm --prefix desktop run desktop:build # packaged Tauri app
 npm run qualify                       # local pins/probes; never a live provider qualification
 
 # Stop the dev coordinator first: this script owns a fresh loopback fixture.
 xcrun simctl list devices available
 OUTPOST_SIMULATOR_ID=<simulator-uuid> ./scripts/test-native-ui.sh phone
-# Requires macOS automation permissions; blocked in the recorded environment:
-./scripts/test-native-ui.sh mac
 ```
 
-The native fixture script pairs, creates a real task, proposes machine inspection and waits for the approval card without manually refreshing. It preserves an `.xcresult` and isolated fixture ledger. It does not approve a sensitive action or send real notifications/payments. See the [native screenshot](docs/implementation/evidence/iphone-pending-action.png).
+Use only a disposable simulator with no live account/server configuration. Do not run native UI tests against a live account. The iPhone fixture script pairs, creates a real task, proposes machine inspection and waits for the approval card without manually refreshing. It preserves an `.xcresult` and isolated fixture ledger. It does not approve a sensitive action or send real notifications/payments. See the [native screenshot](docs/implementation/evidence/iphone-pending-action.png).
 
 ## Optional integration configuration
 
@@ -106,7 +92,7 @@ Do not flip `qualified` to `true` merely to bypass the model gate. The flag is a
 - `desktop/`: Tauri client, React screens, Rust signing/transport, native AppKit sidebar.
 - `deploy/agent/`: two-host root executors and workspace coordinator deployment.
 - `clients/Shared/`: shared SwiftUI workspace, Keychain signing, encrypted cache and projections.
-- `clients/macOS/`, `clients/iOS/`: platform entry points.
+- `clients/iOS/`: retained iPhone entry point; `clients/Tests/` contains host-runnable shared library tests.
 - `spec/`: 31 specifications and ownership of all 270 requirements.
 - `docs/implementation/`: [plan](docs/implementation/PLAN.md), [acceptance/gaps](docs/implementation/ACCEPTANCE.md), [decisions](docs/implementation/DECISIONS.md), [operations](docs/implementation/RUNBOOK.md), [local qualification](docs/implementation/QUALIFICATION.json).
 - `mock/`: pre-existing design study, not the application backend.
