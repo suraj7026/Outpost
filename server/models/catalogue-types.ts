@@ -56,8 +56,10 @@ export type CatalogueSnapshot = z.infer<typeof CatalogueSnapshot>;
 /** Implement with awaited, atomic PostgreSQL operations; no network work inside a transaction.
  * beginRefresh increments the key's durable fence and reads its last-good snapshot atomically.
  * publish checks that fence, validates version = prior version + 1, and commits atomically.
- * Cancellation before the commit linearization point must prevent publication. A completed
- * commit is not undone by later cancellation. All methods must be bounded by the signal.
+ * Cancellation observed before COMMIT dispatch prevents publication. Once COMMIT is dispatched,
+ * cancellation cannot prove rollback: commit/acknowledgement may be uncertain. Methods await
+ * owned transaction settlement under finite database timeouts, not a detached signal race.
+ * A completed commit is not undone by later cancellation; re-read authoritative state on uncertainty.
  */
 export interface CatalogueRepository {
   load(key: string, signal: AbortSignal): Promise<unknown | null>;
