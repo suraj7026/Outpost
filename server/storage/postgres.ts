@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 import type { PoolClient, PoolConfig, QueryResultRow } from 'pg';
 import { Fault, digest, id, now, requireThat } from '../core/contracts.js';
 import type { Command, Data, Event, Json, RecordValue } from '../core/contracts.js';
-import type { CoordinatorOwnership, OutboxClaim, Repository, RepositoryTransaction, Snapshot } from './contracts.js';
+import type { CoordinatorOwnership, OutboxClaim, Repository, RepositoryTransaction, Snapshot, TransactionOptions } from './contracts.js';
 import { jsonText, parseJson, safeInteger, timestampText } from './conversion.js';
 import { migrate, schemaVersion } from './migrations.js';
 
@@ -39,6 +39,9 @@ function createPool(config: PostgresConfig): Pool {
 }
 // Never expose PostgreSQL detail, SQL, parameters, connection strings, or driver causes.
 function databaseError(): Fault { return new Fault('database_error', 'Database operation failed', 503); }
+function checkCancellation(signal?: AbortSignal): void {
+  requireThat(!signal?.aborted, 'transaction_cancelled');
+}
 async function query<Row extends QueryResultRow>(db: Pool | PoolClient, sql: string, values: unknown[] = []) {
   try { return await db.query<Row>(sql, values); } catch { throw databaseError(); }
 }
@@ -97,21 +100,26 @@ class Transaction extends Reader implements RepositoryTransaction {
   private operations = 0;
   private pendingQueries = 0;
   private sequence = 0;
-  constructor(client: PoolClient, private readonly owner: Ownership, private readonly parent?: Transaction) { super(client); }
+  constructor(client: PoolClient, private readonly owner: Ownership, private readonly signal?: AbortSignal, private readonly parent?: Transaction) { super(client); }
   protected override check(): void {
+    checkCancellation(this.signal);
     requireThat(this.live && this.owner.active && (!this.parent || this.parent.live), 'closed_transaction');
     requireThat(!this.childOpen, 'savepoint_active');
     requireThat(!this.failed, 'failed_transaction');
   }
   protected override async sql<Row extends QueryResultRow>(text: string, values: unknown[] = []) {
     this.check(); this.pendingQueries++;
-    try { return await query<Row>(this.connection, text, values); }
+    try {
+      const result = await query<Row>(this.connection, text, values);
+      this.check(); return result;
+    }
     catch (error) { this.failed = true; throw error; }
     finally { this.pendingQueries--; }
   }
   private async operation<T>(apply: () => Promise<T>): Promise<T> {
     this.check(); requireThat(this.operations === 0, 'concurrent_transaction_operation'); this.operations++;
-    try { return await apply(); } catch (error) { this.failed = true; throw error; } finally { this.operations--; }
+    try { const result = await apply(); this.check(); return result; }
+    catch (error) { this.failed = true; throw error; } finally { this.operations--; }
   }
   assertSettled(): void { this.check(); requireThat(this.operations === 0 && this.pendingQueries === 0, 'unawaited_transaction_operation'); }
   close(): void { this.live = false; }
@@ -146,6 +154,7 @@ class Transaction extends Reader implements RepositoryTransaction {
     // Suspend the parent handle while apply owns a savepoint-bound context.
     return this.savepoint(async tx => {
       const result = jsonText(await apply(tx));
+      checkCancellation(this.signal);
       await query(this.connection, 'INSERT INTO outpost_commands VALUES($1,$2,$3,$4)', [deviceId,idempotencyKey,hash,result]);
       return parseJson(result);
     });
@@ -153,11 +162,13 @@ class Transaction extends Reader implements RepositoryTransaction {
   async savepoint<T>(apply: (tx: RepositoryTransaction) => Promise<T>): Promise<T> {
     this.assertSettled(); this.childOpen = true;
     const name = `nested_${++this.sequence}`;
-    const child = new Transaction(this.connection as PoolClient, this.owner, this);
+    const child = new Transaction(this.connection as PoolClient, this.owner, this.signal, this);
     try {
       await query(this.connection, `SAVEPOINT ${name}`);
+      child.assertSettled();
       const result = await apply(child); child.assertSettled();
-      await query(this.connection, `RELEASE SAVEPOINT ${name}`); return result;
+      await query(this.connection, `RELEASE SAVEPOINT ${name}`);
+      child.assertSettled(); return result;
     } catch (error) {
       child.close();
       try {
@@ -223,18 +234,26 @@ export class PostgresRepository extends Reader implements Repository {
       const owner = new Ownership(safeInteger(state.rows[0].epoch, 1), client, this); this.owners.add(owner); return owner;
     } catch (error) { client.release(true); throw error; }
   }
-  async transaction<T>(owner: CoordinatorOwnership, apply: (tx: RepositoryTransaction) => Promise<T>): Promise<T> {
+  async transaction<T>(owner: CoordinatorOwnership, apply: (tx: RepositoryTransaction) => Promise<T>, options: TransactionOptions = {}): Promise<T> {
+    const signal = options.signal;
+    checkCancellation(signal);
     this.check(); requireThat(owner instanceof Ownership && owner.store === this && owner.active, 'ownership_lost');
     let client: PoolClient;
     try { client = await this.pool.connect(); } catch { throw databaseError(); }
-    const tx = new Transaction(client, owner);
+    const tx = new Transaction(client, owner, signal);
     try {
+      checkCancellation(signal);
       await query(client, 'BEGIN ISOLATION LEVEL READ COMMITTED READ WRITE');
+      checkCancellation(signal);
       // Fresh statement snapshots after lock waits are required, regardless of role/database defaults.
       // This lock precedes all mutable reads and survives until commit; sequence allocation is NOT sufficient.
       const state = await query<{ epoch: string }>(client, 'SELECT epoch FROM outpost_writer WHERE singleton FOR UPDATE');
       requireThat(owner.active && state.rows[0] && safeInteger(state.rows[0].epoch) === owner.epoch, 'ownership_lost');
+      tx.assertSettled();
       const result = await apply(tx); tx.assertSettled();
+      // No await between this guard and COMMIT dispatch. Once sent, await owned
+      // settlement: an abort cannot cancel a committed write or justify replay.
+      checkCancellation(signal);
       await query(client, 'COMMIT'); return result;
     } catch (error) {
       await query(client, 'ROLLBACK').catch(() => undefined);

@@ -26,8 +26,11 @@ export interface CoordinatorOwnership {
   readonly lost: Promise<void>;
   release(): Promise<void>;
 }
+/** Cancellation before COMMIT dispatch rolls back. Once dispatched, COMMIT is awaited
+ * under database timeouts; cancellation cannot promise rollback or authorize retry. */
+export interface TransactionOptions { signal?: AbortSignal }
 export interface Repository extends RepositoryReader {
-  transaction<T>(owner: CoordinatorOwnership, apply: (tx: RepositoryTransaction) => Promise<T>): Promise<T>;
+  transaction<T>(owner: CoordinatorOwnership, apply: (tx: RepositoryTransaction) => Promise<T>, options?: TransactionOptions): Promise<T>;
   snapshot(kinds: string[]): Promise<Snapshot>;
   acquireOwnership(): Promise<CoordinatorOwnership>;
   close(): Promise<void>;

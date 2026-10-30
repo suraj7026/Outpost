@@ -216,6 +216,86 @@ describe('PostgresRepository actual private PostgreSQL', { concurrency: false },
     await db.transaction(owner, tx => tx.put('task','fresh-connection',0,{}));
     assert.equal(await db.cursor(),1);
   });
+  test('pre-aborted transaction never checks out a client or invokes its callback', async t => {
+    const controller = new AbortController(); controller.abort('private cancellation reason');
+    const connect = t.mock.method(Pool.prototype,'connect',() => { assert.fail('cancelled transaction acquired a client'); });
+    await assert.rejects(db.transaction(owner,async () => { assert.fail('cancelled callback ran'); },{ signal: controller.signal }), /transaction_cancelled/);
+    assert.equal(connect.mock.callCount(),0);
+  });
+  test('cancellation during writer lock wait skips callback and leaves no writes', async () => {
+    const controller = new AbortController(), entered = barrier(), release = barrier();
+    const first = db.transaction(owner,async tx => { await tx.put('task','lock-owner',0,{}); entered.resolve(); await release.promise; });
+    await entered.promise;
+    let applied = false;
+    const cancelled = assert.rejects(db.transaction(owner,async tx => { applied = true; await tx.put('task','cancelled',0,{}); },{ signal: controller.signal }), /transaction_cancelled/);
+    try { await writerWaiting(); controller.abort(); } finally { release.resolve(); }
+    await first; await cancelled;
+    assert.equal(applied,false); assert.equal(await db.get('task','cancelled'),undefined); assert.equal(await db.cursor(),1);
+  });
+  test('callback cancellation rolls back records, receipt, events, outbox and watermark even if caught', async () => {
+    const controller = new AbortController();
+    await assert.rejects(db.transaction(owner,async tx => {
+      await tx.accept(command(),async child => {
+        await child.put('task','cancelled',0,{}); await child.enqueue('run',{},'cancelled'); return { accepted: true };
+      });
+      controller.abort('secret');
+      await assert.rejects(tx.get('task','cancelled'), /transaction_cancelled/);
+      return 'must not commit';
+    },{ signal: controller.signal }), error => String(error) === 'Error: transaction_cancelled');
+    for (const table of ['records','events','commands','outbox']) assert.equal((await admin.query(`SELECT count(*) FROM outpost_${table}`)).rows[0].count,'0');
+    assert.equal(await db.cursor(),0);
+    await db.transaction(owner,tx => tx.put('task','no-signal',0,{}));
+    assert.equal(await db.cursor(),1);
+  });
+  test('savepoints inherit cancellation and cannot commit after swallowing child rejection', async () => {
+    const controller = new AbortController();
+    await assert.rejects(db.transaction(owner,async tx => {
+      await tx.put('task','outer-cancelled',0,{});
+      await assert.rejects(tx.savepoint(async child => {
+        await child.put('task','child-cancelled',0,{}); controller.abort();
+        await child.list('task');
+      }), /transaction_cancelled/);
+    },{ signal: controller.signal }), /transaction_cancelled/);
+    assert.deepEqual(await db.list('task'),[]); assert.equal(await db.cursor(),0);
+  });
+  test('abort during actual SQL waits for query settlement then rolls back before returning rows', async () => {
+    const controller = new AbortController(), blocker = await admin.connect();
+    await blocker.query('BEGIN'); await blocker.query('LOCK TABLE outpost_records IN ACCESS EXCLUSIVE MODE');
+    let returned = false;
+    const cancelled = assert.rejects(db.transaction(owner,async tx => {
+      await tx.list('task'); returned = true;
+    },{ signal: controller.signal }), /transaction_cancelled/);
+    try {
+      await waitForStorageQuery('SELECT * FROM outpost_records%'); controller.abort();
+    } finally { await blocker.query('ROLLBACK'); blocker.release(); }
+    await cancelled; assert.equal(returned,false); assert.equal(await db.cursor(),0);
+  });
+  test('cancellation after COMMIT dispatch awaits and reports confirmed commit, not fictional rollback', async () => {
+    const controller = new AbortController(), blocker = await admin.connect();
+    await admin.query(`CREATE FUNCTION fixture_commit_wait() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock(174832,99); RETURN NEW; END $$;
+      CREATE CONSTRAINT TRIGGER fixture_commit_wait AFTER INSERT ON outpost_records DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION fixture_commit_wait()`);
+    await blocker.query('SELECT pg_advisory_lock(174832,99)');
+    let settled = false;
+    const mutation = db.transaction(owner,async tx => {
+      await tx.put('task','committed',0,{}); return 'confirmed';
+    },{ signal: controller.signal }).finally(() => { settled = true; });
+    try {
+      await waitForStorageQuery('COMMIT'); controller.abort();
+      assert.equal(settled,false);
+    } finally { await blocker.query('SELECT pg_advisory_unlock(174832,99)'); blocker.release(); }
+    try {
+      assert.equal(await mutation,'confirmed'); assert.equal((await db.need('task','committed')).revision,1);
+      assert.equal(await db.cursor(),1);
+    } finally { await admin.query('DROP TRIGGER fixture_commit_wait ON outpost_records; DROP FUNCTION fixture_commit_wait()'); }
+  });
+  async function waitForStorageQuery(pattern: string) {
+    for (let i = 0; i < 200; i++) {
+      const waiting = await admin.query("SELECT 1 FROM pg_stat_activity WHERE application_name='outpost-storage' AND wait_event_type='Lock' AND query LIKE $1",[pattern]);
+      if (waiting.rowCount) return;
+      await delay(5);
+    }
+    assert.fail(`expected actual PostgreSQL lock wait for ${pattern}`);
+  }
   test('outbox key conflict never silently changes durable intent', async () => {
     await db.transaction(owner, tx => tx.enqueue('run',{ value: 1 },'same'));
     await db.transaction(owner, tx => tx.enqueue('run',{ value: 1 },'same'));
