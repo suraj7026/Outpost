@@ -37,7 +37,7 @@ export function runBrowserWorker(python: string, request: Record<string,unknown>
 
 export function registerBrowserUse(gate: Gate, python: string, inference: InferenceConfiguration, workspace: Workspace, artifacts: Artifacts, taskId: string) {
   gate.register('browser.run',{
-    version: 1,effects: ['unknown'],parse: input => BrowserInput.parse(input),target: () => 'self-hosted Chromium',
+    version: 1,effects: ['unknown'],inputSchema: z.toJSONSchema(BrowserInput),description: 'Runs self-hosted Browser-Use. Requires a nonempty task describing the browser work. An empty object is invalid. Report success only from returned evidence.',parse: input => BrowserInput.parse(input),target: () => 'self-hosted Chromium',
     execute: async (args,signal) => {
       const input = BrowserInput.parse(args);
       const result = await runBrowserWorker(python,{ task: input.task,max_steps: input.maxSteps,model: inference.model,base_url: inference.baseUrl,directory: workspace.root,vision: inference.vision },signal);

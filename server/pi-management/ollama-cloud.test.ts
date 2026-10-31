@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { PiProfile } from './profile.js';
+import { VerifiedFixtureProfile as PiProfile } from '../testing/verified-profile.js';
 import { ollamaCloudConfiguration } from './ollama-cloud.js';
 import { ProviderManagement } from './providers.js';
 
@@ -63,7 +63,7 @@ test('cloud refresh persists exact tool-capable IDs and shares the same catalogu
       '--no-extensions', '--extension', resolve('server/pi-management/ollama-cloud-extension.ts'), '--no-skills', '--no-prompt-templates', '--no-themes', '--offline', '--list-models', 'ollama-cloud'],
       { encoding: 'utf8', timeout: 20000, env: { ...process.env, HOME: f.directory, PI_CODING_AGENT_DIR: f.directory, PI_TELEMETRY: '0', PI_SKIP_VERSION_CHECK: '1', PI_OLLAMA_WEB_TOOLS: '0' } });
     assert.equal(cli.status, 0, cli.stderr);
-    assert.match(cli.stdout, /namespace\/model:v1/);
+    assert.doesNotMatch(cli.stdout, /namespace\/model:v1/, 'The production CLI does not treat public discovery as account access');
     assert.doesNotMatch(cli.stdout + cli.stderr, /synthetic-cloud-key/);
   } finally { f.close(); }
 });

@@ -29,7 +29,7 @@ export async function execute(argv: string[], cwd: string, signal: AbortSignal, 
   });
 }
 export function registerCommands(gate: Gate, workspace: Workspace, executables: Set<string>, unrestricted = false) {
-  gate.register('command.run',{ version: 1,effects: ['unknown'],parse: value => CommandInput.parse(value),target: args => `workspace:${String(args.cwd)}`,
+  gate.register('command.run',{ version: 1,effects: ['unknown'],inputSchema: z.toJSONSchema(CommandInput),description: 'Runs argv in the task workspace as the non-root coordinator user. For shell syntax use argv ["/bin/bash", "-lc", "your shell command"] and cwd ".". This does not execute on a host; use host.execute for host operations.',parse: value => CommandInput.parse(value),target: args => `workspace:${String(args.cwd)}`,
     execute: async (args,signal) => {
       const input = CommandInput.parse(args); requireThat(unrestricted || executables.has(input.argv[0]!), 'executable_not_enrolled');
       const cwd = input.cwd === '.' ? workspace.root : workspace.path(input.cwd);

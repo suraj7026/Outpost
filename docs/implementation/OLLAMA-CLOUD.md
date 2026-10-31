@@ -1,5 +1,7 @@
 # Ollama Cloud — shared server provider
 
+**Current access restriction:** `access-tools-20261031T054634Z` enforces the owner's [strict verification policy](STRICT-MODEL-ACCESS-AND-ACTIONS.md). Ollama remains installed and credentials are retained, but its public catalogue is not account entitlement; **no Ollama models are selectable until an approved credential-scoped verifier is implemented**. The setup and rollout below describe the original integration, not proof of access under the new policy.
+
 ## Deployed
 
 Release `ollama-cloud-20261030T204743Z-r2` replaces the conversational local-daemon proxy with **`pi-ollama-cloud@0.13.1`** on Server 2. The displayed provider name is **Ollama**; its exact Pi identity is `ollama-cloud`. The endpoint is `https://ollama.com/v1`.

@@ -21,6 +21,15 @@ export const Projection = z.strictObject({
   id: z.string().regex(/^[a-f0-9]{64}$/), data: z.record(z.string(), z.json()),
 });
 export type Projection = z.infer<typeof Projection>;
+export const ActionFailure = z.strictObject({ code: z.enum(['invalid_tool_arguments','unavailable_tool','coordinator_action_failed']) });
+export function actionFailureMessage(result: unknown) {
+  const parsed = ActionFailure.safeParse(result);
+  switch (parsed.success ? parsed.data.code : 'coordinator_action_failed') {
+    case 'invalid_tool_arguments': return 'invalid_tool_arguments: No action was executed. Use the exact inputSchema in the available tools catalogue. command.run needs argv, browser.run needs task, artifact.read_text needs artifactId; workspace paths use file.read.';
+    case 'unavailable_tool': return 'unavailable_tool: No action was executed. Choose a tool from the available tools catalogue.';
+    default: return 'coordinator_action_failed: Inspect action evidence before retrying; do not assume execution was safe to repeat.';
+  }
+}
 export const ActionRequest = z.strictObject({ callId: z.uuid(), tool: z.string().min(1).max(128), arguments: z.record(z.string(), z.json()) });
 export type ActionRequest = z.infer<typeof ActionRequest>;
 export const RunPoll = z.strictObject({

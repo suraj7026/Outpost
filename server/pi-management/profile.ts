@@ -6,14 +6,15 @@ import { ModelRuntime, SettingsManager, VERSION } from '@earendil-works/pi-codin
 import { z } from 'zod';
 import { CompatibleProvider, ModelRef, managementError } from './contracts.js';
 import { registerOllamaCloud } from './ollama-cloud.js';
-import { registerSubscriptionPolicy, refreshSubscriptionModels } from './subscription-models.js';
+import { refreshSubscriptionModels } from './subscription-models.js';
+import { registerModelAccess, type AccessVerifiers } from './model-access.js';
 
 const object = z.record(z.string(), z.json());
 export class PiProfile {
   readonly directory: string;
   readonly version = VERSION;
   private writes: Promise<unknown> = Promise.resolve();
-  constructor(directory: string, readonly releaseId = 'unmanaged') {
+  constructor(directory: string, readonly releaseId = 'unmanaged', private accessVerifiers: AccessVerifiers = new Map()) {
     if (!isAbsolute(directory)) throw managementError('absolute_pi_profile_required');
     this.directory = resolve(directory);
     mkdirSync(this.directory, { recursive: true, mode: 0o700 });
@@ -71,7 +72,7 @@ export class PiProfile {
       allowModelNetwork: false, refreshOnCreate: false });
     if (runtime.getError()) throw managementError('pi_provider_configuration_invalid');
     await registerOllamaCloud(runtime);
-    await registerSubscriptionPolicy(runtime);
+    await registerModelAccess(runtime, this.accessVerifiers);
     if (runtime.getError()) throw managementError('pi_provider_configuration_invalid');
     return runtime;
   }

@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { Ledger } from '../core/ledger.js';
 import { Coordinator } from '../gateway/coordinator.js';
 import { RemotePiRuntime } from '../pi-adapter/remote-runtime.js';
-import { PiProfile } from '../pi-management/profile.js';
+import { VerifiedFixtureProfile as PiProfile } from '../testing/verified-profile.js';
 import { ProviderManagement } from '../pi-management/providers.js';
 import { CompatibleProvider, LoginState } from '../pi-management/contracts.js';
 import { WorkerRuns } from './runs.js';
@@ -28,15 +28,25 @@ test('authenticated worker: add providers, log in, select each model and execute
   const root = mkdtempSync(join(tmpdir(), 'outpost-worker-')), db = new Ledger(join(root, 'ledger.sqlite'));
   const received: { path: string; model: string; authorization: string | undefined }[] = [];
   let holdBeta: Promise<void> | undefined;
+  let injectInvalid = true, correctedValidation = false;
   const upstream = createServer(async (request, response) => {
     const chunks = []; for await (const bytes of request) chunks.push(Buffer.from(bytes));
     const body = z.object({ model: z.string(), messages: z.array(z.object({ role: z.string() }).passthrough()) }).parse(JSON.parse(Buffer.concat(chunks).toString()));
     received.push({ path: request.url ?? '', model: body.model, authorization: request.headers.authorization });
     if (request.url?.startsWith('/beta/') && holdBeta) await holdBeta;
-    const tool = !body.messages.some(message => message.role === 'tool') && request.url?.startsWith('/alpha/');
+    const toolMessages = body.messages.filter(message => message.role === 'tool');
+    const tool = toolMessages.length < (injectInvalid ? 2 : 1) && request.url?.startsWith('/alpha/');
+    if (injectInvalid) {
+      assert.match(JSON.stringify(body.messages.filter(m => m.role === 'system' || m.role === 'developer')), /inputSchema/);
+      if (toolMessages.length === 1) {
+        assert.match(JSON.stringify(toolMessages), /invalid_tool_arguments/);
+        assert.match(JSON.stringify(toolMessages), /command.run needs argv/);
+        correctedValidation = true;
+      }
+    }
     response.writeHead(200, { 'content-type': 'text/event-stream' });
     const delta = tool ? { role: 'assistant', tool_calls: [{ index: 0, id: 'write_proof', type: 'function', function: {
-      name: 'outpost_action', arguments: JSON.stringify({ tool: 'file.write', arguments: { path: 'proof.txt', text: 'ACTUAL_REMOTE_PI_TOOL', expectedHash: null } }) } }] }
+      name: 'outpost_action', arguments: JSON.stringify(injectInvalid && toolMessages.length === 0 ? { tool: 'command.run', arguments: { command: 'ls -la' } } : { tool: 'file.write', arguments: { path: 'proof.txt', text: 'ACTUAL_REMOTE_PI_TOOL', expectedHash: null } }) } }] }
       : { role: 'assistant', content: `Observed response from ${request.url?.startsWith('/beta/') ? 'beta' : 'alpha'}.` };
     response.write(`data: ${JSON.stringify({ id: randomUUID(), object: 'chat.completion.chunk', created: 1, model: body.model,
       choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`);
@@ -72,6 +82,8 @@ test('authenticated worker: add providers, log in, select each model and execute
     const task = coordinator.tasks.create(randomUUID(), { goal: 'Write proof', profile: 'code', mode: 'full_control' });
     const adapter = new RemotePiRuntime(db, coordinator.gate(task.id), client, coordinator.live);
     await adapter.run(task.id, task.data.goal, { providerId: 'alpha', modelId: 'same/model:identifier' });
+    injectInvalid = false;
+    assert.ok(correctedValidation, 'The real SDK receives safe actionable feedback and can correct invalid arguments');
     assert.equal(readFileSync(join(root, 'workspaces', task.id, 'proof.txt'), 'utf8'), 'ACTUAL_REMOTE_PI_TOOL');
     assert.equal(db.list('action')[0]?.data.state, 'succeeded');
     assert.equal(db.list('action').length, 1, 'Polling does not replay the proposed action');

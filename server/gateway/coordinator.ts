@@ -52,13 +52,15 @@ export class Coordinator {
     workspace.register(gate); registerInventory(gate); registerCommands(gate,workspace,new Set(this.options.executables ?? []),this.options.unrestrictedCommands);
     if (this.options.hosts) registerHosts(gate,this.options.hosts,taskId);
     if (this.options.browserPython && this.options.inference) registerBrowserUse(gate,this.options.browserPython,{ ...this.options.inference,model: !task.data.provider && task.data.model ? task.data.model : this.options.inference.model },workspace,this.artifacts,taskId);
-    gate.register('artifact.read_text',{ version: 1,effects: ['workspace.read'],parse: input => z.strictObject({ artifactId: z.uuid() }).parse(input),target: args => String(args.artifactId),execute: async args => {
+    const ArtifactRead = z.strictObject({ artifactId: z.uuid() });
+    gate.register('artifact.read_text',{ version: 1,effects: ['workspace.read'],inputSchema: z.toJSONSchema(ArtifactRead),description: 'Reads a published text artifact by its UUID artifactId. For workspace paths such as STATUS.md use file.read instead.',parse: input => ArtifactRead.parse(input),target: args => String(args.artifactId),execute: async args => {
       const artifact = this.db.need('artifact',String(args.artifactId)); requireThat(artifact.data.taskId === taskId,'artifact_scope_denied');
       const bytes = this.artifacts.read(artifact.id); requireThat(bytes.length <= 1024*1024 && !bytes.includes(0),'text_artifact_required');
       return { name: artifact.data.name ?? '',text: bytes.toString('utf8'),hash: artifact.data.hash ?? '' };
     } });
-    gate.register('data.profile',{ version: 1,effects: ['workspace.read'],parse: input => z.strictObject({ path: z.string() }).parse(input),target: args => String(args.path),execute: async args => profileCSV(workspace.read(String(args.path))) });
-    gate.register('document.report',{ version: 1,effects: ['workspace.write'],parse: input => z.record(z.string(),z.json()).parse(input),target: () => 'task artifacts',execute: async args => wire(this.artifacts.publish(taskId,'report.html','text/html',Buffer.from(renderHTML(args)))) });
+    const ProfileInput = z.strictObject({ path: z.string() }), ReportInput = z.record(z.string(), z.json());
+    gate.register('data.profile',{ version: 1,effects: ['workspace.read'],inputSchema: z.toJSONSchema(ProfileInput),description: 'Profiles a CSV file at a relative workspace path.',parse: input => ProfileInput.parse(input),target: args => String(args.path),execute: async args => profileCSV(workspace.read(String(args.path))) });
+    gate.register('document.report',{ version: 1,effects: ['workspace.write'],inputSchema: z.toJSONSchema(ReportInput),description: 'Publishes an HTML report from a JSON object.',parse: input => ReportInput.parse(input),target: () => 'task artifacts',execute: async args => wire(this.artifacts.publish(taskId,'report.html','text/html',Buffer.from(renderHTML(args)))) });
     this.gates.set(taskId,gate); return gate;
   }
   private queueOperation(taskId: string, topic: string, payload: Record<string,Json>) {

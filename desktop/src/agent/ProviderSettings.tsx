@@ -112,7 +112,7 @@ export default function ProviderSettings({ connection }: { connection: Connectio
   return <section className="settings-section provider-settings">
     <div><h2>Server Pi providers</h2><p>Credentials stay in the server Pi profile. Your Mac sends signed management requests, not chat messages.</p>
       {catalogue && <p>Pi {catalogue.piVersion}{catalogue.releaseId ? ` · ${catalogue.releaseId}` : ''}<br /><code>{catalogue.profilePath}</code><br />Configuration {catalogue.generation.slice(0, 12)}</p>}
-      <p>ChatGPT subscription sign-in and OpenAI API billing are separate. One stored credential per provider; configured does not mean verified access.</p>
+      <p>Only models with verified access for the current credential are selectable. Stored credentials and public catalogues are not proof of access. Providers or authentication methods without an approved verifier stay blocked—even after saving a key.</p>
     </div>
     <div className="agent-settings-body">
       {!available ? <p>Server update required: provider management is not enabled on this connection. Existing Ollama tasks remain available.</p> : <>
@@ -138,7 +138,7 @@ export default function ProviderSettings({ connection }: { connection: Connectio
           <label htmlFor="provider-search">Add or manage a provider</label><input id="provider-search" type="search" value={search} placeholder="Search supported providers" onChange={e => setSearch(e.target.value)} />
           <div className="provider-list">
             {catalogue.providers.filter(provider => `${provider.name} ${provider.id}`.toLowerCase().includes(search.toLowerCase())).map(provider => <div className="provider-row" key={provider.id}>
-              <div><strong>{provider.name}</strong><small>{provider.id} · {provider.storedMethod ? 'Credential stored' : provider.configured ? 'Configured on server' : 'Not configured'}</small></div>
+              <div><strong>{provider.name}</strong><small>{provider.id} · {provider.storedMethod ? 'Credential stored' : provider.configured ? 'Configured on server' : 'Not configured'}</small>{(provider.configured || provider.storedMethod) && !catalogue.models.some(model => model.providerId === provider.id) ? <small>No verified models · selection blocked</small> : null}</div>
               <div className="button-row">{provider.methods.map(method => <button key={method.type} disabled={blocked || busy || activeLogin(flow) || !!startRequest.current}
                 onClick={() => provider.storedMethod ? setConfirmation({ provider, method: method.type }) : begin(provider, method.type)}>
                 {method.label}{method.subscription ? ' · Subscription' : ''}</button>)}

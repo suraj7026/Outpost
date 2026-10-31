@@ -41,7 +41,7 @@ test('authenticated account catalogue, not baked-in metadata, controls ChatGPT a
   assert.equal(policy.filterAllModels!(base.getAllModels!(), credential()).length, 1);
   await refresh(policy); assert.equal(calls, 1, 'Short cache is tied to the same access token');
   assert.equal(policy.filterModels!(base.getModels(), credential('different-account')).length, 0);
-  assert.ok(policy.filterModels!(base.getModels(), { type: 'api_key', key: 'sk-fixture' }).some(m => m.id === denied), 'API-key billing remains separate');
+  assert.equal(policy.filterModels!(base.getModels(), { type: 'api_key', key: 'sk-fixture' }).length, 0, 'API keys are not verified by the ChatGPT verifier');
 });
 
 test('expiry, forced failure, malformed or oversized responses fail closed without reflected secrets', async () => {
@@ -114,6 +114,17 @@ test('managed CLI uses the same account policy and stays closed offline', () => 
       assert.ok(!cli.stdout.includes(denied));
       assert.ok(!(cli.stdout + cli.stderr).includes('fixture-oauth-access'));
     }
+    const guarded = (args: string[]) => spawnSync(process.execPath, ['--import', pathToFileURL(mock).href,
+      resolve('node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js'), '--no-extensions', '--extension',
+      resolve('server/pi-management/ollama-cloud-extension.ts'), '--no-skills', '--no-prompt-templates', '--no-themes', ...args],
+      { encoding: 'utf8', timeout: 20000, env: { ...process.env, HOME: directory, PI_CODING_AGENT_DIR: directory, PI_TELEMETRY: '0', PI_SKIP_VERSION_CHECK: '1' } });
+    writeFileSync(join(directory, 'settings.json'), JSON.stringify({ defaultProvider: 'ollama-cloud', defaultModel: 'fixture' }));
+    const unavailableDefault = guarded(['--print', '--no-session', 'Synthetic request must not execute']);
+    assert.equal(unavailableDefault.status, 1); assert.match(unavailableDefault.stderr, /no fallback was selected/);
+    writeFileSync(join(directory, 'models.json'), '{invalid');
+    const broken = guarded(['--offline', '--list-models']);
+    assert.equal(broken.status, 1); assert.match(broken.stderr, /startup blocked/);
+    assert.ok(!broken.stdout.includes(supported));
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

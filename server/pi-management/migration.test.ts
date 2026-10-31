@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { PiProfile } from './profile.js';
+import { VerifiedFixtureProfile as PiProfile } from '../testing/verified-profile.js';
 
 test('legacy Ollama migration is additive, exact, idempotent and refuses endpoint conflicts', async () => {
   const root = mkdtempSync(join(tmpdir(),'outpost-migration-')), profile = new PiProfile(root);

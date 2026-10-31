@@ -10,7 +10,7 @@ export function adminPlan(input: unknown) {
   return { ...plan,argv: ['/usr/bin/systemctl',plan.verb,'--',plan.unit],digest: digest(plan),impact: plan.verb === 'status' ? 'Read service state' : 'Changes task-owned service availability',rollback: 'Restart the prior verified service revision; a command exit is not a health check' };
 }
 export function registerInventory(gate: Gate) {
-  gate.register('system.inspect',{ version: 1,effects: ['machine.read'],parse: value => z.strictObject({}).parse(value),target: () => hostname(),execute: async () => inventory() });
+  gate.register('system.inspect',{ version: 1,effects: ['machine.read'],inputSchema: z.toJSONSchema(z.strictObject({})),description: 'Inspects the coordinator container, not the physical host. hostRootQualified false here does not disable an independently configured host.execute tool.',parse: value => z.strictObject({}).parse(value),target: () => hostname(),execute: async () => inventory() });
 }
 export async function inspectService(unit: string, signal: AbortSignal) {
   const plan = adminPlan({ unit,verb: 'status',machineId: hostname(),reason: 'Health inspection' });

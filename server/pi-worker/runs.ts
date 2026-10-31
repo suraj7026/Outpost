@@ -9,7 +9,7 @@ import type { RecordValue } from '../core/contracts.js';
 import { managementError } from '../pi-management/contracts.js';
 import { PiProfile } from '../pi-management/profile.js';
 import { refreshSubscriptionModels } from '../pi-management/subscription-models.js';
-import { Projection, RunStart, type RunPoll, type ActionRequest } from './contracts.js';
+import { actionFailureMessage, Projection, RunStart, type RunPoll, type ActionRequest } from './contracts.js';
 
 interface PendingAction { input: ActionRequest; resolve: (value: unknown) => void; reject: (error: Error) => void }
 interface Run {
@@ -90,7 +90,7 @@ export class WorkerRuns {
       getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
       getSkills: () => ({ skills: [], diagnostics: [] }), getPrompts: () => ({ prompts: [], diagnostics: [] }),
       getThemes: () => ({ themes: [], diagnostics: [] }), getAgentsFiles: () => ({ agentsFiles: [] }),
-      getSystemPrompt: () => run.input.systemPrompt, getSystemPromptSource: () => undefined,
+      getSystemPrompt: () => `${run.input.systemPrompt}\nThe actual task workspace is ${cwd}.`,  getSystemPromptSource: () => undefined,
       getAppendSystemPrompt: () => [], getAppendSystemPromptSources: () => [], extendResources: () => {}, reload: async () => {},
     };
     if (cancelled(run)) return;
@@ -162,7 +162,7 @@ export class WorkerRuns {
     const pending = run.actions.get(callId);
     if (!pending || finished(run)) throw managementError('worker_action_unavailable');
     run.actions.delete(callId); run.answered.add(callId);
-    if (failed) pending.reject(managementError('coordinator_action_failed'));
+    if (failed) pending.reject(new Error(actionFailureMessage(result)));
     else pending.resolve(result);
     return { accepted: true };
   }

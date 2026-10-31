@@ -182,6 +182,7 @@ try {
   await page.getByRole('button', { name: 'Refresh models' }).click();
   await page.getByText(/ChatGPT models are unavailable until account verification succeeds/).waitFor();
   check(await page.getByText(/ChatGPT models are unavailable until account verification succeeds/).isVisible(), 'Account discovery failure is explained without claiming subscription access');
+  check(await page.getByText('No verified models · selection blocked').first().isVisible(), 'Stored credentials without verified models are visibly blocked');
   await page.evaluate(() => window.__failCatalogue = true);
   await page.getByRole('button', { name: 'Refresh models' }).click();
   await page.getByText('Provider catalogue unavailable.', { exact: false }).waitFor();

@@ -1,14 +1,26 @@
-import { ModelRuntime, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { registerSubscriptionPolicy, refreshSubscriptionModels } from './subscription-models.js';
-import { ollamaCloudConfiguration } from './ollama-cloud.js';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { PiProfile } from './profile.js';
+import { refreshSubscriptionModels } from './subscription-models.js';
 
-/** The CLI uses the same pinned provider registration as the worker and Settings. */
-export default async function (pi: ExtensionAPI) {
-  pi.registerProvider('ollama-cloud', await ollamaCloudConfiguration());
-  const builtins = await ModelRuntime.create({ modelsPath: null, refreshOnCreate: false });
-  await registerSubscriptionPolicy(builtins);
-  if (!process.argv.includes('--offline')) await refreshSubscriptionModels(builtins);
-  const openai = builtins.getProvider('openai');
-  if (!openai) throw new Error('subscription_provider_invalid');
-  pi.registerProvider(openai);
+/** Managed CLI entry: the same provider and access policies as the worker, with no package tools. */
+export default async function managedProviders(pi: ExtensionAPI) {
+  try {
+    const profile = new PiProfile(process.env.PI_CODING_AGENT_DIR ?? join(homedir(), '.pi', 'agent'));
+    const runtime = await profile.runtime();
+    if (!process.argv.includes('--offline')) await refreshSubscriptionModels(runtime);
+    const settings = profile.settings(), provider = settings.getDefaultProvider(), model = settings.getDefaultModel();
+    const inspecting = process.argv.some(arg => ['--list-models','--help','-h'].includes(arg) || arg.startsWith('--list-models='));
+    const explicit = process.argv.some(arg => ['--model','--models','--provider'].includes(arg) || /^(--model|--models|--provider)=/.test(arg));
+    if (!inspecting && !explicit && (provider || model) && !(await runtime.getAvailable()).some(m => m.provider === provider && m.id === model)) {
+      console.error('Saved default model has no verified access. Choose a verified provider/model explicitly; no fallback was selected.');
+      process.exit(1);
+    }
+    for (const provider of runtime.getProviders()) pi.registerProvider(provider);
+  } catch {
+    // Pi normally skips failed extensions. That would expose its unfiltered built-ins here.
+    console.error('Managed model-access enforcement unavailable. CLI startup blocked.');
+    process.exit(1);
+  }
 }

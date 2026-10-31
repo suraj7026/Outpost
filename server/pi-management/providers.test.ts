@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { AuthFlows } from './auth-flows.js';
 import { CompatibleProvider, LoginState, ManagementRequest, ModelRef } from './contracts.js';
-import { PiProfile } from './profile.js';
+import { VerifiedFixtureProfile as PiProfile } from '../testing/verified-profile.js';
 import { ProviderManagement } from './providers.js';
 
 const configuration = { providerId: 'fixture', baseUrl: 'http://127.0.0.1:11434/v1', api: 'openai-completions',

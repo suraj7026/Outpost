@@ -17,7 +17,7 @@ The prior observed eight-model account list is a diagnostic snapshot, not a perm
 - Saved-default validation and each worker instruction recheck availability using a fresh runtime before starting inference. A queued/historical unsupported choice fails rather than switching models/providers. This is worker-side execution admission; accepting a task command into the durable queue is not proof of model access.
 - A provider stream guard also verifies the exact model before dispatch, covering direct SDK/CLI lookups and subsequent tool-loop requests. An expired check is renewed before another provider request. Selection itself is not changed mid-response.
 - The managed CLI loads the same first-party policy alongside the pinned Ollama registration. Online startup verifies the account; `--offline` exposes no unverified ChatGPT choices. Other providers retain their existing offline behavior.
-- OpenAI API-key credentials keep their distinct API-billing catalogue behavior. No API-key fallback is introduced for a ChatGPT login. Ollama and Browser-Use settings are unchanged.
+- The subsequent [strict model-access policy](STRICT-MODEL-ACCESS-AND-ACTIONS.md) blocks OpenAI API keys and other authentication methods until their own approved verifier is implemented. The ChatGPT verifier does not authorize API billing. Browser-Use settings remain independent.
 
 Discovery has an eight-second request budget, a two-MiB body limit, a bounded schema, and redirects disabled. Only the fixed HTTPS OpenAI endpoint receives the OAuth bearer token. Upstream failure bodies are not reflected. Pi's own token refresh remains under its credential-store lock; this does not replace the separate signed confirmation required to save a new login.
 
@@ -29,7 +29,7 @@ The CLI fixture pins its mocked `fetch` getter because Pi installs its own HTTP 
 
 ## Deployment
 
-Deployed release: **`openai-models-20261030T210815Z`**, Pi **1.4.0**, shared profile `/home/node/.pi/agent`. Pod `pi-workspace-584c77d68f-qtrth` was **3/3 Ready**, zero restarts at verification. Both the live worker catalogue and managed CLI showed exactly the eight account-approved models, including `gpt-6.1-terra`, and excluded `gpt-5.4-nano`. These were authenticated read-only discovery checks, not inference tests.
+Original deployment (superseded by `access-tools-20261031T054634Z`): **`openai-models-20261030T210815Z`**, Pi **1.4.0**, shared profile `/home/node/.pi/agent`. Pod `pi-workspace-584c77d68f-qtrth` was **3/3 Ready**, zero restarts at verification. Both the live worker catalogue and managed CLI showed exactly the eight account-approved models, including `gpt-6.1-terra`, and excluded `gpt-5.4-nano`. These were authenticated read-only discovery checks, not inference tests.
 
 All **10 task records** and credential bytes were unchanged. The maintenance checkpoint protected **3** review-stage tasks, completed successfully, and restored dispatch to its previous enabled state. Backups are private under `/home/node/.outpost/backups/openai-models-20261030T210815Z`; Server-1 rollout records are under `~/outpost-rollouts/openai-models-20261030T210815Z/`. The loopback tunnel reconnected after pod replacement and health returned ready.
 

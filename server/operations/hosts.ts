@@ -12,7 +12,7 @@ export interface HostAdministration { token: string; endpoints: Record<z.infer<t
 /** Exposes owner-authorized root execution; this is deliberately not a command allowlist. */
 export function registerHosts(gate: Gate, configuration: HostAdministration, taskId: string) {
   gate.register('host.execute',{
-    version: 1,effects: ['host.execute'],parse: input => HostCommand.parse(input),
+    version: 1,effects: ['host.execute'],inputSchema: z.toJSONSchema(HostCommand),description: 'Executes a shell command as root on the specified enrolled host through the coordinator approval/evidence gate. No sudo is required here. Use only for host operations needed for the owner task; preserve unrelated workloads.',parse: input => HostCommand.parse(input),
     target: args => `root@${String(args.host)}`,
     execute: async (args,signal) => {
       const input = HostCommand.parse(args);

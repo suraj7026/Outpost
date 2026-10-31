@@ -48,7 +48,7 @@ export function subscriptionProvider(base: Provider, options: { fetch?: typeof f
   const allowed = (access: string, id: string, baseUrl: string) =>
     baseUrl === 'https://api.openai.com/v1' && verified?.key === fingerprint(access) && verified.until > clock() && verified.models.has(id);
   const accepts = (credential: Credential | undefined, model: { id: string; baseUrl: string; type?: string }) =>
-    credential?.type !== 'oauth' || (credential.expires > clock() && model.type !== 'classifier' && model.type !== 'image' && allowed(credential.access, model.id, model.baseUrl));
+    credential?.type === 'oauth' && (credential.expires > clock() && model.type !== 'classifier' && model.type !== 'image' && allowed(credential.access, model.id, model.baseUrl));
   const verify = async (access: string, signal: AbortSignal, force = false, expires = Infinity,
     publish: RefreshModelsContext['publish'] = async publication => { publication.update?.(); return true; }) => {
     const accountKey = fingerprint(access);
@@ -69,22 +69,25 @@ export function subscriptionProvider(base: Provider, options: { fetch?: typeof f
     }
   };
   const guard = async (model: { id: string; baseUrl: string }, access: string | undefined, signal?: AbortSignal) => {
-    // Matches the pinned Pi transport's API-key/ChatGPT-token distinction. Never fall back to API billing.
-    if (!access || access.startsWith('sk-')) return;
+    // API-key inference stays blocked until a credential-scoped verifier is implemented for it.
+    if (!access || access.startsWith('sk-')) throw managementError('model_access_unverified');
     if (model.baseUrl !== 'https://api.openai.com/v1') throw managementError('subscription_model_not_verified');
     await verify(access, signal ?? AbortSignal.timeout(8000));
     if (!allowed(access, model.id, model.baseUrl)) throw managementError('subscription_model_not_verified');
   };
   const policy: Provider = {
     ...base,
+    ...(base.generateImages ? { generateImages: async () => { throw managementError('model_access_unverified'); } } : {}),
+    ...(base.classify ? { classify: async () => { throw managementError('model_access_unverified'); } } : {}),
+    ...(base.fetchDeferred ? { fetchDeferred: model => lazyStream(model, async () => { throw managementError('model_access_unverified'); }) } : {}),
     filterModels: (models, credential) => (base.filterModels?.(models, credential) ?? models).filter(m => accepts(credential, m)),
     filterAllModels: (models, credential) => (base.filterAllModels?.(models, credential) ?? models).filter(m => accepts(credential, m)),
     async refreshModels(context) {
+      if (context.credential?.type !== 'oauth') { revision++; verified = undefined; return; }
       if (context.allowNetwork && context.force) { revision++; verified = undefined; }
       // Pi's public catalogue supplies transport metadata only, never account access.
       // A failed public refresh may retain known metadata; authenticated discovery still must succeed.
       await base.refreshModels?.(context).catch(() => {});
-      if (context.credential?.type !== 'oauth') { revision++; verified = undefined; return; }
       const credential = context.credential, accountKey = fingerprint(credential.access);
       if (verified?.key !== accountKey) verified = undefined;
       if (!context.allowNetwork) return;
