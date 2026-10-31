@@ -899,9 +899,6 @@ time {
   display: flex;
   align-items: center;
 }
-.action-failed summary {
-  color: var(--danger);
-}
 .action-body {
   padding: 0 0 13px 22px;
 }

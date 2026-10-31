@@ -3,7 +3,6 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   ArrowUp,
-  Check,
   ChevronRight,
   Globe,
   Paperclip,
@@ -12,7 +11,6 @@ import {
   Square,
   Terminal,
   Shield,
-  AlertCircle,
   UserRound,
   X,
 } from "lucide-react";
@@ -22,6 +20,7 @@ import type { ServerRecord } from "./types";
 import { providerLabel } from './agent/types';
 import { Thinking, LiveTool, EvidenceTime } from "./LiveContent";
 import OutpostMark from "./OutpostMark";
+import OutcomeDot from "./OutcomeDot";
 import EvidencePanel, { type EvidenceTab } from "./EvidencePanel";
 import { actionNeedsReview, labelState, object, text, title } from "./types";
 
@@ -58,9 +57,7 @@ export function Action({
     >
       <summary>
         <ChevronRight size={13} className="disclosure" />
-        {failed ? (
-          <AlertCircle size={15} />
-        ) : name === "browser.run" ? (
+        {name === "browser.run" ? (
           <Globe size={15} />
         ) : name === "host.execute" ? (
           <Shield size={15} />
@@ -69,10 +66,8 @@ export function Action({
         )}
         <span>{label}<EvidenceTime record={record} /></span>
         <span className="action-state">
-          {failed ? (
-            "Needs review"
-          ) : state === "succeeded" ? (
-            <><Check size={14} /><span>Succeeded</span></>
+          {failed || state === 'succeeded' ? (
+            <OutcomeDot failed={failed} label={failed ? 'Needs review' : 'Succeeded'} />
           ) : (
             state === 'dispatching' ? 'Running' : state
           )}

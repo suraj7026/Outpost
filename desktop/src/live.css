@@ -45,7 +45,6 @@
 .live-tool .action-state {
   color: var(--muted);
 }
-.live-tool.action-failed summary,
 .live-tool.action-failed .action-state {
   color: var(--danger);
 }
@@ -53,6 +52,17 @@
   flex-shrink: 0;
   gap: 4px;
   white-space: nowrap;
+}
+.outcome-dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--positive);
+}
+.outcome-dot.outcome-failed {
+  background: var(--danger);
 }
 .action-time {
   display: block;

@@ -52,19 +52,34 @@ try {
     if (width <= 780) await page.getByRole('button', { name: /^Evidence \(/ }).click();
     check(await page.getByText('2 failed tool attempts recorded.', { exact: false }).isVisible(), 'Overview retains a count without presenting old errors as current activity');
     check(await page.locator('.live-tool').count() === 0, 'Settled failed attempts are not live tools in Overview');
+    check(await page.locator('.handoff-spine').getByRole('img', { name: 'Succeeded', exact: true }).count() === 2, 'Overview also shows accessible success dots');
+    check(await page.locator('.handoff-spine').getByRole('img', { name: 'Needs review', exact: true }).count() === 1, 'Overview retains the nonzero exit as a review dot');
+    check(await page.locator('.handoff-step small').count() === 0, 'Settled overview outcomes have no text badges');
     await page.getByRole('tab', { name: 'Activity', exact: true }).click();
     const ordered = await page.locator('#evidence-panel .action').evaluateAll(nodes => nodes.map(n => n.dataset.recordId));
     assert.deepEqual(ordered, ['write-success', 'nonzero', 'command-success', 'old-write', 'old-command']); checks++;
-    check(await page.locator('[data-record-id="write-success"] .action-state').textContent() === 'Succeeded', 'Later success is visibly successful');
-    check(await page.locator('[data-record-id="nonzero"] .action-state').textContent() === 'Needs review', 'Nonzero exit is never shown as success');
-    check(await page.locator('[data-record-id="old-write"] .action-state').textContent() === 'Failed attempt', 'Historical failures are not rewritten');
+    check(await page.locator('[data-record-id="write-success"]').getByRole('img', { name: 'Succeeded', exact: true }).isVisible(), 'Success dot has an accessible outcome');
+    check(await page.locator('[data-record-id="nonzero"]').getByRole('img', { name: 'Needs review', exact: true }).isVisible(), 'Nonzero exit is never shown as success');
+    check(await page.locator('[data-record-id="old-write"]').getByRole('img', { name: 'Failed attempt', exact: true }).isVisible(), 'Historical failures are not rewritten');
+    check((await page.locator('#evidence-panel .action-state').allTextContents()).every(text => text.trim() === ''), 'Settled status is only a dot, without visible outcome labels');
+    check(await page.locator('[data-record-id="write-success"] .outcome-dot').getAttribute('title') === 'Succeeded', 'Hover reveals outcome');
+    check(await page.locator('[data-record-id="write-success"] .outcome-dot').evaluate(el => {
+      const expected = document.createElement('span'); expected.style.background = 'var(--positive)'; el.append(expected);
+      const matches = getComputedStyle(el).backgroundColor === getComputedStyle(expected).backgroundColor;
+      expected.remove(); return matches;
+    }), 'Success dot is green');
     check(await page.locator('.live-tool[open]').count() === 0, 'Historical argument dumps start collapsed');
     check(await page.locator('[data-record-id="linked-command"]').count() === 0, 'Linked action and tool stream are deduplicated');
     check(await page.locator('#evidence-panel time').count() === 5, 'Each outcome has a timestamp');
     const old = page.locator('[data-record-id="old-write"]');
     await old.locator('summary').focus(); await page.keyboard.press('Enter');
     check(await old.getByText('invalid_tool_arguments: expectedHash is required.', { exact: true }).isVisible(), 'Keyboard disclosure reveals the recorded explanation');
-    check(await old.locator('.action-state').evaluate(el => getComputedStyle(el).color) === await page.locator('[data-record-id="nonzero"] .action-state').evaluate(el => getComputedStyle(el).color), 'Failed attempts use the danger state, not success green');
+    check(await old.locator('.outcome-dot').evaluate(el => {
+      const expected = document.createElement('span'); expected.style.background = 'var(--danger)'; el.append(expected);
+      const matches = getComputedStyle(el).backgroundColor === getComputedStyle(expected).backgroundColor;
+      expected.remove(); return matches;
+    }), 'Failed attempt dot is red');
+    check(await old.locator('.outcome-dot').evaluate(el => getComputedStyle(el).backgroundColor) === await page.locator('[data-record-id="nonzero"] .outcome-dot').evaluate(el => getComputedStyle(el).backgroundColor), 'Nonzero exit uses the same red dot');
     await old.locator('summary').click();
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No horizontal overflow');
     check(await page.evaluate(() => __mutations.length) === 0, 'Viewing history never retries commands');

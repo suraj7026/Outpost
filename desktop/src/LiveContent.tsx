@@ -1,8 +1,9 @@
 import "./live.css";
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, ChevronRight, Terminal } from "lucide-react";
+import { ChevronRight, Terminal } from "lucide-react";
 import type { ServerRecord } from "./types";
 import { object, text } from "./types";
+import OutcomeDot from "./OutcomeDot";
 
 export function Thinking({ message }: { message: ServerRecord }) {
   const thinking = text(message, "thinking");
@@ -90,10 +91,10 @@ export function LiveTool({ record }: { record: ServerRecord }) {
     <details className={`action live-tool ${failed ? 'action-failed' : ''}`} data-record-id={record.id} data-state={state} open={active}>
       <summary>
         <ChevronRight size={13} className="disclosure" />
-        {failed ? <AlertCircle size={15} /> : <Terminal size={15} />}
+        <Terminal size={15} />
         <span>{name || "Tool call"}<EvidenceTime record={record} /></span>
         <span className="action-state">
-          {state === 'error' ? 'Failed attempt' : state === 'interrupted' ? 'Interrupted' : state === 'finished' ? 'Finished' : state}
+          {failed || state === 'finished' ? <OutcomeDot failed={failed} label={state === 'error' ? 'Failed attempt' : state === 'interrupted' ? 'Interrupted' : 'Finished'} /> : state}
         </span>
       </summary>
       <div className="action-body">

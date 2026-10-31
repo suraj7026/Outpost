@@ -261,7 +261,7 @@ button { min-height: 34px; }
 .handoff-node { position: relative; display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--control); border-radius: 50%; background: var(--bg); flex: none; }
 .handoff-step small { display: block; color: var(--muted); font-size: 11px; margin-top: 3px; }
 .handoff-step.pending .handoff-node { color: var(--warning); border-color: var(--warning); }
-.handoff-step.failed .handoff-node { color: var(--danger); }
+.handoff-node.handoff-outcome { border-color: transparent; }
 .proposed-change { border-radius: 8px; background: var(--surface); overflow: hidden; margin: 10px 0; }
 .change-file { display: flex; align-items: center; gap: 7px; padding: 12px; font-size: 11px; color: var(--muted); }
 .change-file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

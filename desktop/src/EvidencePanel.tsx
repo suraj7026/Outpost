@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { AlertCircle, Check, ChevronRight, Clock3, FileText, Shield, Terminal } from "lucide-react";
+import { ChevronRight, Clock3, FileText, Shield, Terminal } from "lucide-react";
 import type { ServerRecord } from "./types";
 import { actionNeedsReview, labelState, object, text } from "./types";
+import OutcomeDot from "./OutcomeDot";
 
 export type EvidenceTab = "overview" | "changes" | "activity";
 const tabs: EvidenceTab[] = ["overview", "changes", "activity"];
@@ -55,8 +56,8 @@ export default function EvidencePanel({ actions, artifactCount, tab, onTabChange
               const state = text(action, "state");
               const failed = actionNeedsReview(action);
               return <button key={action.id} className={`handoff-step ${failed ? "failed" : state === "pending" ? "pending" : ""}`} onClick={() => onTabChange("activity")}>
-                <span className="handoff-node">{failed ? <AlertCircle size={12} /> : state === "succeeded" ? <Check size={12} /> : state === "pending" ? <Clock3 size={12} /> : <Terminal size={12} />}</span>
-                <span>{text(action, "tool").replaceAll(".", " ")}<small>{failed ? "Needs review" : labelState(state)}</small></span>
+                <span className={`handoff-node ${failed || state === 'succeeded' ? 'handoff-outcome' : ''}`}>{failed || state === 'succeeded' ? <OutcomeDot failed={failed} label={failed ? 'Needs review' : 'Succeeded'} /> : state === "pending" ? <Clock3 size={12} /> : <Terminal size={12} />}</span>
+                <span>{text(action, "tool").replaceAll(".", " ")}{!failed && state !== 'succeeded' && <small>{labelState(state)}</small>}</span>
               </button>;
             })}
           </div>
