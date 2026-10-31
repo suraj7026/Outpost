@@ -20,7 +20,7 @@ import { call, recordedPreview, upload } from "./api";
 import type { Connection } from "./useConnection";
 import type { ServerRecord } from "./types";
 import { providerLabel } from './agent/types';
-import { Thinking, LiveTool } from "./LiveContent";
+import { Thinking, LiveTool, EvidenceTime } from "./LiveContent";
 import OutpostMark from "./OutpostMark";
 import EvidencePanel, { type EvidenceTab } from "./EvidencePanel";
 import { actionNeedsReview, labelState, object, text, title } from "./types";
@@ -53,6 +53,7 @@ export function Action({
     <details
       className={`action ${failed ? "action-failed" : ""}`}
       data-state={state}
+      data-record-id={record.id}
       open={state === "pending" || state === "authorized"}
     >
       <summary>
@@ -66,12 +67,12 @@ export function Action({
         ) : (
           <Terminal size={15} />
         )}
-        <span>{label}</span>
+        <span>{label}<EvidenceTime record={record} /></span>
         <span className="action-state">
           {failed ? (
             "Needs review"
           ) : state === "succeeded" ? (
-            <><Check size={14} /><span className="sr-only">Succeeded</span></>
+            <><Check size={14} /><span>Succeeded</span></>
           ) : (
             state === 'dispatching' ? 'Running' : state
           )}
@@ -210,6 +211,9 @@ export default function TaskView({
       record.kind === "tool_stream" &&
       !actions.some((action) => action.id === text(record, "actionId")),
   );
+  const activeTools = liveTools.filter(record => record.data.streaming === true && !record.data.interrupted && ['preparing', 'running'].includes(text(record, 'state')));
+  const failedAttempts = liveTools.filter(record => text(record, 'state') === 'error').length;
+  const activity = [...actions, ...liveTools].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt) || a.id.localeCompare(b.id));
   const contentVersion = messages
     .map(
       (message) =>
@@ -434,10 +438,11 @@ export default function TaskView({
             tab={evidenceTab}
             onTabChange={setEvidenceTab}
             onReview={reviewAction}
-            liveContent={<>{liveTools.map((record) => <LiveTool key={record.id} record={record} />)}</>}
-            actionContent={<>
-              {actions.length === 0 && liveTools.length === 0 && <p className="empty-line">No actions recorded yet.</p>}
-              {actions.map((action) => <Action key={action.id} record={action} connection={connection} />)}
+            failedAttempts={failedAttempts}
+            liveContent={<>{activeTools.map((record) => <LiveTool key={record.id} record={record} />)}</>}
+            activityContent={<>
+              {activity.length === 0 && <p className="empty-line">No actions recorded yet.</p>}
+              {activity.map(record => record.kind === 'action' ? <Action key={record.id} record={record} connection={connection} /> : <LiveTool key={record.id} record={record} />)}
             </>}
             outputContent={<>
               {artifacts.length === 0 && <p className="empty-line">Files and screenshots will appear here.</p>}

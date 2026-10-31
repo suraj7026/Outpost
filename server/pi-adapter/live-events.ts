@@ -32,9 +32,10 @@ export function liveEvents(feed: LiveSink, taskId: string, sessionId: string, mo
       const previous = feed.snapshot().find(record => record.id === key)?.data ?? {};
       const data = { ...previous,taskId,callId: event.toolCallId,name: event.toolName,state: event.type === 'tool_execution_end' ? (event.isError ? 'error' : 'finished') : 'running' };
       if (event.type === 'tool_execution_end') {
-        const parsed = z.object({ content: z.array(z.object({ type: z.string(),text: z.string().optional() })).optional(),details: z.object({ actionId: z.string() }).optional() }).safeParse(event.result);
+        const parsed = z.object({ content: z.array(z.object({ type: z.string(),text: z.string().optional() })).optional(),details: z.unknown().optional() }).safeParse(event.result);
+        const action = parsed.success ? z.object({ actionId: z.string() }).safeParse(parsed.data.details) : null;
         const output = parsed.success ? parsed.data.content?.map(block => block.text ?? '').join('\n') ?? '' : '';
-        feed.finish('tool_stream',key,{ ...data,output: output.slice(0,16000),outputTruncated: output.length > 16000,actionId: parsed.success ? parsed.data.details?.actionId ?? null : null,durationMs: event.durationMs ?? null });
+        feed.finish('tool_stream',key,{ ...data,output: output.slice(0,16000),outputTruncated: output.length > 16000,actionId: action?.success ? action.data.actionId : null,durationMs: event.durationMs ?? null });
       } else {
         const partial = event.type === 'tool_execution_update' ? z.object({ details: z.object({ actionId: z.string() }) }).safeParse(event.partialResult) : null;
         feed.publish('tool_stream',key,{ ...data,arguments: json(event.args),...(partial?.success ? { actionId: partial.data.details.actionId } : {}),...(event.type === 'tool_execution_update' ? { output: JSON.stringify(json(event.partialResult)).slice(0,16000) } : {}) });

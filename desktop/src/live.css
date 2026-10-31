@@ -43,5 +43,20 @@
   color: var(--text);
 }
 .live-tool .action-state {
-  color: var(--positive);
+  color: var(--muted);
+}
+.live-tool.action-failed summary,
+.live-tool.action-failed .action-state {
+  color: var(--danger);
+}
+.action-state {
+  flex-shrink: 0;
+  gap: 4px;
+  white-space: nowrap;
+}
+.action-time {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
 }

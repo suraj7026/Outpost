@@ -6,13 +6,14 @@ import { actionNeedsReview, labelState, object, text } from "./types";
 export type EvidenceTab = "overview" | "changes" | "activity";
 const tabs: EvidenceTab[] = ["overview", "changes", "activity"];
 
-export default function EvidencePanel({ actions, artifactCount, tab, onTabChange, onReview, actionContent, liveContent, outputContent }: {
+export default function EvidencePanel({ actions, artifactCount, tab, onTabChange, onReview, activityContent, liveContent, outputContent, failedAttempts }: {
   actions: ServerRecord[];
   artifactCount: number;
   tab: EvidenceTab;
   onTabChange: (tab: EvidenceTab) => void;
   onReview: (action: ServerRecord) => void;
-  actionContent: ReactNode;
+  activityContent: ReactNode;
+  failedAttempts: number;
   liveContent: ReactNode;
   outputContent: ReactNode;
 }) {
@@ -60,11 +61,12 @@ export default function EvidencePanel({ actions, artifactCount, tab, onTabChange
             })}
           </div>
           {liveContent}
+          {failedAttempts > 0 && <p className="small">{failedAttempts} failed tool attempt{failedAttempts === 1 ? '' : 's'} recorded. See Activity for individual outcomes.</p>}
           {proposed.length > 0 && <section className="evidence-section"><h3>Proposed change{proposed.length === 1 ? "" : "s"}</h3>{proposed.map(change)}</section>}
           <section className="evidence-section"><div className="evidence-section-title"><h3>Artifacts</h3><span>{artifactCount} {artifactCount === 1 ? "file" : "files"}</span></div>{outputContent}</section>
         </>}
         {tab === "changes" && <section className="evidence-section"><h3>Proposed actions</h3>{proposed.length ? proposed.map(change) : <p className="empty-line">No actions waiting for approval or dispatch.</p>}</section>}
-        {tab === "activity" && <section className="evidence-section"><h3>Execution record</h3>{liveContent}{actionContent}</section>}
+        {tab === "activity" && <section className="evidence-section"><h3>Execution record</h3><p className="small">Newest first. Each attempt keeps its own result.</p>{activityContent}</section>}
       </div>
       <p className="evidence-footer"><Shield size={13} /> Every action leaves a record.</p>
     </>

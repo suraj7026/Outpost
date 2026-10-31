@@ -45,7 +45,7 @@ test('authenticated worker: add providers, log in, select each model and execute
       }
     }
     response.writeHead(200, { 'content-type': 'text/event-stream' });
-    const delta = tool ? { role: 'assistant', tool_calls: [{ index: 0, id: 'write_proof', type: 'function', function: {
+    const delta = tool ? { role: 'assistant', tool_calls: [{ index: 0, id: injectInvalid && toolMessages.length === 0 ? 'invalid_command' : 'write_proof', type: 'function', function: {
       name: 'outpost_action', arguments: JSON.stringify(injectInvalid && toolMessages.length === 0 ? { tool: 'command.run', arguments: { command: 'ls -la' } } : { tool: 'file.write', arguments: { path: 'proof.txt', text: 'ACTUAL_REMOTE_PI_TOOL', expectedHash: null } }) } }] }
       : { role: 'assistant', content: `Observed response from ${request.url?.startsWith('/beta/') ? 'beta' : 'alpha'}.` };
     response.write(`data: ${JSON.stringify({ id: randomUUID(), object: 'chat.completion.chunk', created: 1, model: body.model,
@@ -84,6 +84,7 @@ test('authenticated worker: add providers, log in, select each model and execute
     await adapter.run(task.id, task.data.goal, { providerId: 'alpha', modelId: 'same/model:identifier' });
     injectInvalid = false;
     assert.ok(correctedValidation, 'The real SDK receives safe actionable feedback and can correct invalid arguments');
+    assert.ok(db.list('tool_stream').some(record => record.data.state === 'error' && String(record.data.output).includes('invalid_tool_arguments')), 'The public execution record preserves the SDK error explanation');
     assert.equal(readFileSync(join(root, 'workspaces', task.id, 'proof.txt'), 'utf8'), 'ACTUAL_REMOTE_PI_TOOL');
     assert.equal(db.list('action')[0]?.data.state, 'succeeded');
     assert.equal(db.list('action').length, 1, 'Polling does not replay the proposed action');

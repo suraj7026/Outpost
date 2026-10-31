@@ -1,6 +1,6 @@
 import "./live.css";
 import { useEffect, useRef, useState } from "react";
-import { ChevronRight, Terminal } from "lucide-react";
+import { AlertCircle, ChevronRight, Terminal } from "lucide-react";
 import type { ServerRecord } from "./types";
 import { object, text } from "./types";
 
@@ -73,21 +73,33 @@ export function Thinking({ message }: { message: ServerRecord }) {
   );
 }
 
+export function EvidenceTime({ record }: { record: ServerRecord }) {
+  const date = new Date(record.updatedAt);
+  return Number.isFinite(date.getTime()) ? <time className="action-time" dateTime={record.updatedAt} title={date.toISOString()}>
+    {date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+  </time> : null;
+}
+
 export function LiveTool({ record }: { record: ServerRecord }) {
   const args = object(record.data.arguments);
   const name = typeof args.tool === "string" ? args.tool : text(record, "name");
+  const state = record.data.interrupted ? 'interrupted' : text(record, 'state');
+  const failed = state === 'error' || state === 'interrupted';
+  const active = record.data.streaming === true && ['preparing', 'running'].includes(state);
   return (
-    <details className="action live-tool" open>
+    <details className={`action live-tool ${failed ? 'action-failed' : ''}`} data-record-id={record.id} data-state={state} open={active}>
       <summary>
-        <Terminal size={15} />
-        <span>{name || "Tool call"}</span>
+        <ChevronRight size={13} className="disclosure" />
+        {failed ? <AlertCircle size={15} /> : <Terminal size={15} />}
+        <span>{name || "Tool call"}<EvidenceTime record={record} /></span>
         <span className="action-state">
-          {record.data.interrupted ? "Interrupted" : text(record, "state")}
+          {state === 'error' ? 'Failed attempt' : state === 'interrupted' ? 'Interrupted' : state === 'finished' ? 'Finished' : state}
         </span>
       </summary>
       <div className="action-body">
+        {failed && <p className="small">This attempt did not complete successfully. Separate later actions may have succeeded; each keeps its own result.</p>}
         <pre>{JSON.stringify(args.arguments ?? args, null, 2)}</pre>
-        {text(record, "output") && <pre>{text(record, "output")}</pre>}
+        {text(record, "output") ? <pre>{text(record, "output")}</pre> : failed ? <p className="small">No additional error detail is available in this execution record.</p> : null}
       </div>
     </details>
   );
