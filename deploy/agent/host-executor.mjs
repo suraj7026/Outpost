@@ -1,16 +1,28 @@
 import { createServer } from 'node:http';
 import { timingSafeEqual, createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
-const token = process.env.OUTPOST_HOST_TOKEN?.trim();
+export function executorConfiguration(env) {
+  const mode = env.OUTPOST_HOST_MODE ?? 'namespace';
+  if (!['native', 'namespace'].includes(mode)) throw new Error('Invalid host executor mode');
+  const port = Number(env.OUTPOST_HOST_PORT ?? (mode === 'native' ? 4519 : 4319));
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid host executor port');
+  const token = (env.OUTPOST_HOST_TOKEN_FILE ? readFileSync(env.OUTPOST_HOST_TOKEN_FILE, 'utf8') : env.OUTPOST_HOST_TOKEN)?.trim();
+  return { token, host: env.OUTPOST_HOST_NAME ?? 'local', mode, port, address: mode === 'native' ? '127.0.0.1' : '0.0.0.0' };
+}
+
+export function createHostExecutor({ token, host, mode }) {
 if (!token || token.length < 32) throw new Error('Host executor requires a strong authentication token');
+if (!['native', 'namespace'].includes(mode)) throw new Error('Invalid host executor mode');
 const expected = createHash('sha256').update(`Bearer ${token}`).digest();
 let running = 0;
 const server = createServer(async (request, response) => {
   response.setHeader('content-type', 'application/json');
   response.setHeader('cache-control', 'no-store');
   if (request.method === 'GET' && request.url === '/health') {
-    response.end(JSON.stringify({ ready: true, host: process.env.OUTPOST_HOST_NAME }));
+    response.end(JSON.stringify({ ready: true, host }));
     return;
   }
   const actual = createHash('sha256').update(request.headers.authorization ?? '').digest();
@@ -26,7 +38,7 @@ const server = createServer(async (request, response) => {
       parts.push(part);
     }
     const { command, timeoutMs = 30000, taskId } = JSON.parse(Buffer.concat(parts).toString());
-    if (typeof command !== 'string' || !command || command.length > 32768 ||
+    if (typeof command !== 'string' || !command || command.length > 32768 || command.includes('\0') ||
         !Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 300000 ||
         typeof taskId !== 'string' || !/^[a-f0-9-]{36}$/.test(taskId)) {
       response.writeHead(400).end('{"error":"invalid_command"}'); return;
@@ -36,11 +48,13 @@ const server = createServer(async (request, response) => {
     running++;
     const started = Date.now();
     const commandDigest = createHash('sha256').update(command).digest('hex');
-    console.log(JSON.stringify({ event: 'host.command.started', taskId, commandDigest, host: process.env.OUTPOST_HOST_NAME }));
-    const child = spawn('/usr/bin/nsenter', [
+    console.log(JSON.stringify({ event: 'host.command.started', taskId, commandDigest, host }));
+    const executable = mode === 'native' ? '/bin/bash' : '/usr/bin/nsenter';
+    const argv = mode === 'native' ? ['-lc', command] : [
       '--target', '1', '--mount', '--uts', '--ipc', '--net', '--pid', '--root', '--wd',
       '--', '/bin/bash', '-lc', command,
-    ], { detached: true, stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', HOME: '/root', LANG: 'C.UTF-8' } });
+    ];
+    const child = spawn(executable, argv, { cwd: '/', detached: true, stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', HOME: '/root', LANG: 'C.UTF-8' } });
     let stdout = '', stderr = '', bytes = 0, timedOut = false, outputLimitReached = false, settled = false;
     const kill = () => { if (child.pid) { try { process.kill(-child.pid, 'SIGKILL'); } catch {} } };
     const timer = setTimeout(() => { timedOut = true; kill(); }, timeoutMs);
@@ -57,11 +71,18 @@ const server = createServer(async (request, response) => {
       if (settled) return;
       settled = true; clearTimeout(timer); kill(); running--;
       console.log(JSON.stringify({ event: 'host.command.finished', taskId, commandDigest, exitCode, signal, elapsedMs: Date.now() - started }));
-      response.end(JSON.stringify({ host: process.env.OUTPOST_HOST_NAME, exitCode, signal, stdout, stderr: error ?? stderr, timedOut, outputLimitReached }));
+      response.end(JSON.stringify({ host, exitCode, signal, stdout, stderr: error ?? stderr, timedOut, outputLimitReached }));
     };
     child.on('error', error => finish(null, null, error.message));
     child.on('close', (code, signal) => finish(code, signal));
   } catch { if (!response.headersSent) response.writeHead(400); response.end('{"error":"invalid_request"}'); }
 });
 server.requestTimeout = 15000;
-server.listen(4319, '0.0.0.0');
+return server;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const configuration = executorConfiguration(process.env);
+  if (configuration.mode === 'native' && process.getuid?.() !== 0) throw new Error('Native host executor must run as root');
+  createHostExecutor(configuration).listen(configuration.port, configuration.address);
+}

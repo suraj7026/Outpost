@@ -4,6 +4,7 @@ import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { chromium, webkit } from 'playwright';
+import { assertIconControls } from './icon-control-assertions.mjs';
 
 // Synthetic IPC and generated images only. No Keychain, live server or provider calls.
 const root = resolve('desktop/dist');
@@ -54,6 +55,8 @@ async function open({ width = 1440, scenario = 'live', colorScheme = 'dark', red
     window.__TAURI_INTERNALS__ = {
       transformCallback() { return ++sequence; }, unregisterCallback() {},
       async invoke(command, args) {
+        if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: null, environments: {} }, legacy: { endpoint: null, pending: false } };
+        if (command === 'disconnect') return;
         if (command === 'set_sidebar_window_controls') return;
         if (command === 'sidebar_pointer_inside') return false;
         if (command === 'connection_info') return { endpoint: 'Synthetic transport', deviceId: 'fixture', publicKey: '', pending: false, nativeSidebar: false };
@@ -82,12 +85,14 @@ async function open({ width = 1440, scenario = 'live', colorScheme = 'dark', red
   }, { fixture, images, scenario });
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
-  if (width <= 780) await page.getByRole('button', { name: /^Evidence \(/ }).click();
+  await page.locator('.conversation .stream-artifact').first().waitFor();
   return page;
 }
 const ready = page => page.waitForFunction(() => {
-  const img = document.querySelector('.image-canvas img');
-  return img?.complete && img.naturalWidth > 0 && getComputedStyle(img).visibility === 'visible';
+  const img = document.querySelector('.image-canvas img'), stage = document.querySelector('.image-stage');
+  if (!img?.complete || !img.naturalWidth || !stage?.clientWidth || getComputedStyle(img).visibility !== 'visible') return false;
+  const fit = Math.max(.01, Math.min(1, (stage.clientWidth - 32) / img.naturalWidth, (stage.clientHeight - 32) / img.naturalHeight));
+  return Math.abs(Number(stage.dataset.zoom) - fit) < .002;
 });
 const out = `/tmp/outpost-image-viewer${process.env.OUTPOST_TEST_BROWSER === 'webkit' ? '-webkit' : ''}`; mkdirSync(out, { recursive: true });
 try {
@@ -96,6 +101,7 @@ try {
     await page.getByRole('button', { name: 'View capture.png', exact: true }).click();
     await ready(page);
     check(await page.getByRole('dialog', { name: 'Image viewer' }).isVisible(), `Modal opens at ${width}`);
+    checks += await assertIconControls(page, '.image-viewer');
     check(await page.getByText('1600 × 1000', { exact: true }).isVisible(), 'Dimensions shown');
     check(await page.getByRole('button', { name: 'Previous image', exact: true }).isDisabled(), 'First image boundary');
     check(await page.getByText('1 / 3', { exact: true }).isVisible(), 'Only supported images from this task are in gallery');
@@ -179,6 +185,7 @@ try {
   const light = await open({ colorScheme: 'light', reducedMotion: 'reduce' });
   await light.getByRole('button', { name: 'Open capture.png', exact: true }).click(); await ready(light);
   check(await light.locator('.image-viewer').evaluate(node => getComputedStyle(node).animationName) === 'none', 'Reduced motion disables viewer animation');
+  checks += await assertIconControls(light, '.image-viewer');
   await light.screenshot({ path: `${out}/viewer-light.png` }); await light.close();
   check(externalRequests.length === 0, 'Untrusted Markdown images never cause remote requests');
   check(errors.length === 0, errors.join('\n'));

@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowUp,
   ArrowUpRight,
-  Check,
   ChevronRight,
   Code2,
   Globe,
@@ -16,24 +15,24 @@ import {
   Shield,
   Sparkles,
   FileText,
-  ChevronDown,
   Search,
-  Clock3,
-  UserRound,
   Pin,
   PanelLeftClose,
 } from "lucide-react";
-import { call, nativeApp, recordedPreview } from "./api";
-import { useConnection, type Connection } from "./useConnection";
-import { labelState, object, text, title, type ServerRecord } from "./types";
-import ConnectionSettings from "./ConnectionSettings";
-import TaskView, { Action } from "./TaskView";
-import Artifact from "./image-viewer/Artifact";
+import { nativeApp, recordedPreview } from "./api";
+import type { Connection } from "./useConnection";
+import { labelState, text, title, type ServerRecord } from "./types";
+import { SidebarHistory, type ChatGroup, type OpenChat } from "./ChatHistory";
+import TaskView from "./TaskView";
+import Machines from "./server-terminal/Machines";
+import { retainTerminals } from "./server-terminal/controller";
 import { ImageViewerProvider } from "./image-viewer/ImageViewer";
-import OutpostMark from "./OutpostMark";
+
 import { preferredCloudModel } from "./models";
-import { useAppearance, useMediaQuery } from "./appearance";
+import { useAppearance, useMediaQuery, type Appearance } from "./appearance";
 import { useSidebar } from "./useSidebar";
+import ComposerContext from "./ComposerContext";
+import WorkspaceView, { isApproval, isWorkspaceSection } from "./WorkspaceViews";
 
 const navigation = [
   {
@@ -48,7 +47,7 @@ const navigation = [
     icon: "checkmark.shield",
     glyph: Inbox,
   },
-  { id: "servers", title: "Machines", icon: "server.rack", glyph: Server },
+  { id: "machines", title: "Machines", icon: "server.rack", glyph: Server },
   { id: "outputs", title: "Library", icon: "doc.on.doc", glyph: FileText },
   { id: "automations", title: "Automations", icon: "clock", glyph: RefreshCw },
   {
@@ -74,7 +73,9 @@ function Composer({
   connection,
   onCreated,
   initialProfile = "code",
+  contextBar,
 }: {
+  contextBar: ReactNode;
   connection: Connection;
   onCreated: (id: string) => void;
   initialProfile?: string;
@@ -94,7 +95,7 @@ function Composer({
       !modelReady ||
       connection.busy ||
       !connection.connected ||
-      connection.info?.pending
+      connection.info?.pending || connection.retired || !!connection.info?.pendingError
     )
       return;
     const id = crypto.randomUUID();
@@ -131,6 +132,8 @@ function Composer({
           },
         )}
       </div>
+      <div className="composer-stack">
+      {contextBar}
       <form
         className="composer"
         onSubmit={(event) => {
@@ -158,6 +161,15 @@ function Composer({
           }}
         />
         <div className="composer-toolbar">
+          <label className="composer-permission">
+            <Shield size={16} aria-hidden="true" />
+            <select aria-label="Control mode" value={mode} onChange={(event) => setMode(event.target.value)}>
+              <option value="full_control">Full control</option>
+              <option value="ask_permission">Ask permission</option>
+              <option value="auto">Auto review</option>
+            </select>
+          </label>
+          <div className="composer-model-control">
           {managed ? <ModelPicker catalogue={connection.agentCatalogue} value={selectedRef} onChange={setModelRef} disabled={!connection.connected || connection.busy || !!connection.info?.pending} /> : <select
             aria-label="Ollama model"
             title="Cloud models advertised by your connected Ollama server"
@@ -168,31 +180,25 @@ function Composer({
             {!connection.models.length && <option value="">No cloud models available</option>}
             {connection.models.map((name) => <option key={name} value={name}>{name}</option>)}
           </select>}
-          <select
-            aria-label="Control mode"
-            value={mode}
-            onChange={(event) => setMode(event.target.value)}
-          >
-            <option value="full_control">Full control</option>
-            <option value="ask_permission">Ask permission</option>
-            <option value="auto">Auto review</option>
-          </select>
+          </div>
           <button
             type="submit"
             className="send-button"
             aria-label="Start task"
+            title="Start task"
             disabled={
               !goal.trim() ||
               !modelReady ||
               !connection.connected ||
               connection.busy ||
-              connection.info?.pending
+              connection.info?.pending || connection.retired || !!connection.info?.pendingError
             }
           >
             <ArrowUp size={18} />
           </button>
         </div>
       </form>
+      </div>
       <p className="composer-note">
         {managed && !selectedRef ? "Choose an available model. Manage server providers in Settings." : !managed && !connection.models.length ? "No cloud models returned by the connected Ollama server. Local models are not listed." : mode === "full_control"
           ? "Runs autonomously. Root commands on both hosts are available when enabled."
@@ -205,14 +211,16 @@ function Composer({
 }
 
 function RecentTasks({
-  tasks,
-  connection,
-  select,
+  groups,
+  connections,
+  openChat,
 }: {
-  tasks: ServerRecord[];
-  connection: Connection;
-  select: (id: string) => void;
+  groups: ChatGroup[];
+  connections: Record<string, Connection>;
+  openChat: OpenChat;
 }) {
+  const tasks = groups.flatMap(group => group.tasks.map(task => ({ task, group })))
+    .sort((a, b) => b.task.updatedAt.localeCompare(a.task.updatedAt));
   return (
     <section className="recent">
       <div className="section-heading">
@@ -228,26 +236,27 @@ function RecentTasks({
         </p>
       ) : (
         <div className="session-list">
-          {tasks.slice(0, 8).map((task) => {
+          {tasks.slice(0, 8).map(({ task, group }) => {
+            const owner = group.id ?? "legacy";
             const Icon =
               profileIcons[
                 text(task, "profile") as keyof typeof profileIcons
               ] ?? MessageSquare;
-            const actionCount = connection.records.filter(
+            const actionCount = connections[owner]?.records.filter(
               (record) =>
                 record.kind === "action" && text(record, "taskId") === task.id,
-            ).length;
+            ).length ?? 0;
             return (
               <button
                 className="session-row"
-                key={task.id}
-                onClick={() => select(task.id)}
+                key={`${owner}:${task.id}`}
+                onClick={() => openChat(group.id, task.id)}
               >
                 <Icon size={17} />
                 <span className="session-title">
                   <strong>{title(task)}</strong>
                   <span>
-                    {text(task, "profile")} · {actionCount} recorded actions
+                    {group.label} · {text(task, "profile")} · {actionCount} recorded actions
                   </span>
                 </span>
                 <span className={`state state-${text(task, "state")}`}>
@@ -263,129 +272,36 @@ function RecentTasks({
   );
 }
 
-function Servers({
-  connection,
-  select,
-}: {
-  connection: Connection;
-  select: (id: string) => void;
-}) {
-  const inspect = async () => {
-    const id = crypto.randomUUID();
-    const result = await connection.command("task.create", id, 0, {
-      goal: "Read-only host inspection. Use host.execute on surajhomeserver and surajhomeserver2 to run: hostname; uptime; free -h; df -h /. Report the observed output. Do not change files, install software or restart anything.",
-      profile: "operations",
-      mode: "full_control",
-    });
-    if (result) select(id);
-  };
-  return (
-    <div className="page">
-      <div className="page-heading">
-        <div>
-          <h1>Your servers</h1>
-          <p>Two machines. One agent environment.</p>
-        </div>
-        <button
-          className="primary"
-          onClick={() => void inspect()}
-          disabled={
-            connection.busy ||
-            !connection.connected ||
-            !connection.runtime?.hostAdministration
-          }
-        >
-          Run inspection <ArrowUpRight size={15} />
-        </button>
-      </div>
-      <div className="server-list">
-        {["surajhomeserver", "surajhomeserver2"].map((host) => {
-          const latest = connection.records
-            .filter(
-              (record) =>
-                record.kind === "action" &&
-                text(record, "tool") === "host.execute" &&
-                object(record.data.arguments).host === host,
-            )
-            .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
-          return (
-            <section className="server-row" key={host}>
-              <Server size={23} />
-              <div>
-                <h2>{host}</h2>
-                <p>
-                  {host === "surajhomeserver"
-                    ? "Control plane · Ollama · existing host services"
-                    : "Pi workspace · Outpost runtime · self-hosted Chromium"}
-                </p>
-                <p className="small">
-                  {connection.runtime?.hostAdministration
-                    ? "Root executor enabled"
-                    : "Root executor not configured"}
-                </p>
-              </div>
-              <div className="server-observation">
-                {latest ? (
-                  <>
-                    <span>Last recorded command</span>
-                    <strong>
-                      {object(latest.data.result).exitCode === 0
-                        ? "Exit code 0"
-                        : "Inspect result"}
-                    </strong>
-                    <time>{new Date(latest.updatedAt).toLocaleString()}</time>
-                  </>
-                ) : (
-                  <span>No host commands recorded</span>
-                )}
-              </div>
-            </section>
-          );
-        })}
-      </div>
-      <p className="inline-notice">
-        These are recorded command results, not live host-health measurements.
-        Run an inspection for current CPU, memory and storage information.
-      </p>
-      <h2 className="section-title">Execution environment</h2>
-      <dl className="settings-list">
-        <div>
-          <dt>Agent runtime</dt>
-          <dd>Pi SDK on Kubernetes</dd>
-        </div>
-        <div>
-          <dt>Model</dt>
-          <dd>{connection.runtime?.model ?? "Not configured"}</dd>
-        </div>
-        <div>
-          <dt>Browser</dt>
-          <dd>
-            {connection.runtime?.browserUse
-              ? "Browser-Use with local Chromium"
-              : "Not configured"}
-          </dd>
-        </div>
-        <div>
-          <dt>Workspace commands</dt>
-          <dd>
-            {connection.runtime?.unrestrictedCommands
-              ? "Unrestricted executables enabled"
-              : "Enrolled executables only"}
-          </dd>
-        </div>
-      </dl>
-    </div>
-  );
+function settingsSelection() {
+  const hash = window.location.hash;
+  return /^#settings\/servers(?:\/|$)/.test(hash) ? "servers" : hash.startsWith("#settings") ? "connection" : null;
 }
 
-export default function App() {
-  const connection = useConnection();
+export default function App({ connection, initialTask, environmentNavigation, newTaskNavigation, draftConnection, draftLabel, renderSettings, groups, connections, sharedMemory, openChat, showHistory, history, dismissHistory, ownerLabel }: {
+  connection: Connection; initialTask: string | null; environmentNavigation: ReactNode; newTaskNavigation: ReactNode; renderSettings: (appearance: Appearance) => ReactNode;
+  draftConnection: Connection | undefined; draftLabel: string; connections: Record<string, Connection>; sharedMemory: ReactNode;
+  groups: ChatGroup[]; openChat: OpenChat; showHistory: () => void;
+  history: ReactNode; dismissHistory: () => void; ownerLabel: string;
+}) {
+  const mounted = useRef(true);
+  useEffect(retainTerminals, []);
+  useEffect(() => () => { mounted.current = false; }, []);
   const appearance = useAppearance();
   const narrow = useMediaQuery("(max-width: 780px)");
-  const [selection, setSelection] = useState<string | null>(null),
+  const [selection, setSelection] = useState<string | null>(settingsSelection() ?? initialTask),
     [searchOpen, setSearchOpen] = useState(false),
     [taskSearch, setTaskSearch] = useState("");
+  const currentSelection = useRef(selection);
+  currentSelection.current = selection;
+  useEffect(() => { if (initialTask && !window.location.hash.startsWith("#settings")) setSelection(initialTask); }, [initialTask]);
+  useEffect(() => {
+    const update = () => { dismissHistory(); setSelection(settingsSelection() ?? "home"); };
+    window.addEventListener("hashchange", update);
+    return () => window.removeEventListener("hashchange", update);
+  }, [dismissHistory]);
   const sidebar = useSidebar(appearance, narrow);
+  const showingHistory = !!history;
+  useEffect(() => { if (showingHistory) sidebar.dismiss(); }, [showingHistory]);
   const tasks = useMemo(
     () =>
       connection.records
@@ -397,9 +313,8 @@ export default function App() {
     if (selection === null && connection.connected) setSelection(tasks[0]?.id ?? "home");
   }, [selection, connection.connected, tasks]);
   const selectedTask = tasks.find((task) => task.id === selection);
-  const pending = connection.records.filter(
-    (record) => record.kind === "action" && text(record, "state") === "pending",
-  );
+  const pending = groups.filter(group => !group.archived).reduce((count, group) =>
+    count + (connections[group.id ?? "legacy"]?.records.filter(record => isApproval(record) && text(record, "state") === "pending").length ?? 0), 0);
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
       if (document.querySelector("dialog[open]")) return;
@@ -407,6 +322,8 @@ export default function App() {
       if (!(event.metaKey || event.ctrlKey)) return;
       if (event.key.toLowerCase() === "n") {
         event.preventDefault();
+        dismissHistory();
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
         setSelection("home");
         sidebar.dismiss();
         requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('[aria-label="Task goal"]')?.focus());
@@ -425,19 +342,25 @@ export default function App() {
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
   }, [sidebar.visible, sidebar.pinned, narrow]);
-  const select = (id: string) => {
+  const select = (id: string, settingsPath?: string) => {
+    if (!mounted.current) return;
+    dismissHistory();
+    if (id === "connection" || id === "servers") window.location.hash = settingsPath ?? (id === "servers" ? "settings/servers" : "settings");
+    else window.history.replaceState(null, "", window.location.pathname + window.location.search);
     setSelection(id);
     sidebar.dismiss();
   };
-  const heading = selectedTask
-    ? "Session"
-    : selection === "connection"
-      ? "Settings"
-      : (navigation.find((item) => item.id === selection)?.title ??
-        "Workspace");
+
+  const composerConnection = selectedTask ? connection : draftConnection;
+  const composerContext = <ComposerContext environmentNavigation={selectedTask ? environmentNavigation : newTaskNavigation}
+    onReconnect={composerConnection ? () => void composerConnection.connect() : undefined}
+    onSettings={() => select("servers", `settings/servers/${composerConnection?.environmentId ?? "legacy"}/models`)} />;
+  const showingComposer = !history && (!!selectedTask || selection === "home" || selection === null);
+  const showingSettings = !history && (selection === "connection" || selection === "servers");
+  const status = showingComposer ? composerConnection : undefined;
   return (
-    <ImageViewerProvider key={`${connection.info?.endpoint}:${connection.info?.deviceId}`} records={connection.records}>
     <div
+      data-tauri-drag-region
       className={`app-shell web-shell ${nativeApp() && navigator.userAgent.includes("Macintosh") ? "desktop-window" : ""} ${narrow ? "sidebar-overlay" : "sidebar-push"} ${sidebar.present ? "sidebar-present" : ""} ${sidebar.visible ? "sidebar-visible" : "sidebar-hidden"}`}
     >
         {!sidebar.docked && <button className="sidebar-edge" aria-label="Show sidebar" aria-controls="app-sidebar" aria-expanded={sidebar.visible} onPointerEnter={() => { sidebar.enter(); sidebar.reveal(); }} onPointerLeave={sidebar.leave} onClick={() => sidebar.reveal(true)} onFocus={() => sidebar.reveal(true)} />}
@@ -445,253 +368,119 @@ export default function App() {
           <div className="sidebar-chrome" data-tauri-drag-region>
             <button className="icon-button" aria-label={sidebar.pinned ? "Collapse sidebar" : "Pin sidebar"} aria-controls="app-sidebar" title={sidebar.pinned ? "Collapse sidebar (⌘B)" : "Pin sidebar · keep open"} onClick={sidebar.pinned ? sidebar.close : sidebar.pin}>{sidebar.pinned ? <PanelLeftClose size={16} /> : <Pin size={15} />}</button>
           </div>
-          <div className="brand" data-tauri-drag-region>
-            <OutpostMark />
-            <strong data-tauri-drag-region>Outpost</strong>
-          </div>
+
           <button className="new-task-button" onClick={() => select("home")}>
             <Plus size={16} />
             New task <span className="shortcut">⌘ N</span>
           </button>
+          <div className="sidebar-content">
           <nav aria-label="Main navigation">
-            {navigation.slice(0, 4).map((item) => (
+            {navigation.map((item) => (
               <button
                 key={item.id}
-                aria-current={selection === item.id || (item.id === "home" && selectedTask) ? "page" : undefined}
+                aria-current={!history && (selection === item.id || (item.id === "home" && selectedTask)) ? "page" : undefined}
                 onClick={() => select(item.id)}
               >
                 <item.glyph size={16} />
                 {item.title}
-                {item.id === "decisions" && pending.length > 0 && (
-                  <span className="nav-count">{pending.length}</span>
+                {item.id === "decisions" && pending > 0 && (
+                  <span className="nav-count">{pending}</span>
                 )}
               </button>
             ))}
+            <button aria-current={history ? "page" : undefined} onClick={showHistory}><MessageSquare size={16} />All chats</button>
           </nav>
-          <div className="sidebar-section"><span>Recent tasks</span><button className="icon-button" aria-label="Find a task" onClick={() => setSearchOpen(!searchOpen)}><Search size={14} /></button></div>
+          <div className="sidebar-section"><span>Chats by server</span><button className="icon-button" aria-label="Find a task" title="Find a task" onClick={() => setSearchOpen(!searchOpen)}><Search size={14} /></button></div>
           {searchOpen && <input id="task-search" className="task-search" aria-label="Find a task" placeholder="Find a task…" value={taskSearch} onChange={(event) => setTaskSearch(event.target.value)} autoFocus />}
-          <div className="sidebar-sessions">
-            {tasks.filter((task) => title(task).toLowerCase().includes(taskSearch.toLowerCase())).slice(0, 16).map((task) => (
-              <button
-                key={task.id}
-                title={`${title(task)} · ${labelState(text(task, "state"))}`}
-                aria-label={`${title(task)} · ${labelState(text(task, "state"))}`}
-                aria-current={selection === task.id ? "page" : undefined}
-                onClick={() => select(task.id)}
-              >
-                <span className="sidebar-task-top">{text(task, "state") === "completed" ? <Check size={13} /> : <Clock3 size={13} />}<span>{title(task)}</span></span>
-                <span className="sidebar-task-meta"><span>{text(task, "profile") || "Task"}</span><time dateTime={task.updatedAt}>{new Date(task.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}</time></span>
-              </button>
-            ))}
+          <SidebarHistory groups={groups} selectedServer={connection.environmentId} selectedTask={!history ? selectedTask?.id : undefined} search={taskSearch} open={openChat} />
           </div>
-          <details className="workspace-tools"><summary>Workspace tools <ChevronDown size={13} /></summary>{navigation.slice(4).map((item) => <button key={item.id} onClick={() => select(item.id)}><item.glyph size={15} />{item.title}</button>)}</details>
           <div className="sidebar-bottom">{sidebar.nativeError && <p role="status">{sidebar.nativeError}</p>}{recordedPreview() && <p>Recorded server preview</p>}
           <button
             className="connection-nav"
-            aria-label="Connection settings"
-            aria-current={selection === "connection" ? "page" : undefined}
+            aria-label="Settings"
+            aria-current={!history && selection === "connection" ? "page" : undefined}
             onClick={() => select("connection")}
           >
-            <span className="profile-avatar"><UserRound size={14} /></span>
-            <span>This Mac<small>Connection settings</small></span><ChevronDown size={13} />
+            <Settings size={16} aria-hidden="true" /><span>Settings</span><ChevronRight size={14} aria-hidden="true" />
           </button></div>
         </aside>
-      <div className={`main-shell ${selectedTask ? "task-active" : ""}`} tabIndex={-1} onPointerDown={() => { if (!sidebar.docked) sidebar.dismiss(); }}>
-        <header className="topbar" data-tauri-drag-region>
-          <div className="topbar-leading">
-            <span>{heading}</span>
-          </div>
-          <div className="topbar-status">
-            <span
-              className={`status-dot ${connection.connected ? "online" : ""}`}
-            />
-            <span>
-              {recordedPreview()
-                ? "Read-only snapshot"
-                : connection.connected
-                  ? "Private server connected"
-                  : "Disconnected"}
-            </span>
-            <button
-              className="icon-button"
-              aria-label="Reconnect"
-              title="Reconnect"
-              onClick={() => void connection.connect()}
-            >
-              <RefreshCw size={14} />
-            </button>
-            <button
-              className="icon-button"
-              aria-label="Open connection settings"
-              onClick={() => select("connection")}
-            >
-              <Settings size={14} />
-            </button>
-          </div>
-        </header>
-        {connection.error && (
+      <div data-owner-id={connection.environmentId ?? "legacy"} className={`main-shell ${selectedTask && !history ? "task-active" : ""}`} tabIndex={-1} onPointerDown={() => { if (!sidebar.docked) sidebar.dismiss(); }}>
+
+        {status?.reconnecting && <div className="inline-notice" role="status">Reconnecting securely… Your saved server access is being restored automatically.</div>}
+        {status?.error && (
           <div className="connection-error" role="alert">
-            <span>{connection.error}</span>
-            <button onClick={() => void connection.connect()}>
+            <span>{status.error}</span>
+            <button onClick={() => void status.connect()}>
               Retry connection
             </button>
           </div>
         )}
-        {connection.info?.pending && (
+        {status?.info?.pending && (
           <div className="inline-notice pending-notice">
             A command has an unknown outcome. Retrying uses its original
             operation key.
             <button
               onClick={() =>
-                void connection.perform(() => call("retry_command"))
+                void status.perform(() => status.api.call("retry_command"), true)
               }
-              disabled={connection.busy}
+              disabled={status.busy || status.retired || !!status.info?.pendingError}
             >
               Retry same command
             </button>
           </div>
         )}
-        {selectedTask ? (
-          <TaskView
-            key={selectedTask.id}
-            task={selectedTask}
-            connection={connection}
-          />
+        {history ? history : selectedTask ? (
+          <ImageViewerProvider key={connection.info?.deviceId} records={connection.records}>
+            <TaskView
+              key={`${connection.environmentId ?? 'legacy'}:${selectedTask.id}`}
+              task={selectedTask}
+              ownerLabel={ownerLabel}
+              contextBar={composerContext}
+              connection={connection}
+            />
+          </ImageViewerProvider>
         ) : selection === "home" || selection === null ? (
           <main className="home">
             <div className="home-content">
-              <Composer connection={connection} onCreated={select} />
-              <RecentTasks
-                tasks={tasks}
-                connection={connection}
-                select={select}
-              />
+              {draftConnection && <Composer connection={draftConnection} onCreated={id => {
+                if (mounted.current && (currentSelection.current === "home" || currentSelection.current === null)) {
+                  openChat(draftConnection.environmentId, id);
+                }
+              }} contextBar={composerContext} />}
+              <RecentTasks groups={groups} connections={connections} openChat={openChat} />
               <div className="home-footer">
                 <Server size={14} />
-                <span>surajhomeserver + surajhomeserver2</span>
+                <span>{draftLabel}</span>
                 <button onClick={() => select("servers")}>
                   View servers <ArrowUpRight size={13} />
                 </button>
               </div>
             </div>
           </main>
-        ) : selection === "connection" ? (
-          <ConnectionSettings connection={connection} appearance={appearance} />
-        ) : selection === "servers" ? (
-          <Servers connection={connection} select={select} />
-        ) : selection === "decisions" ? (
-          <main className="page">
-            <div className="page-heading">
-              <div>
-                <h1>Approvals</h1>
-                <p>
-                  {pending.length
-                    ? `${pending.length} actions waiting for you.`
-                    : "Nothing is waiting for approval."}
-                </p>
-              </div>
-              <Shield size={22} />
-            </div>
-            {connection.records
-              .filter(
-                (record) =>
-                  record.kind === "action" &&
-                  ["pending", "authorized"].includes(text(record, "state")),
-              )
-              .map((record) => (
-                <Action
-                  key={record.id}
-                  record={record}
-                  connection={connection}
-                />
-              ))}
-            {pending.length === 0 && (
-              <p className="empty-line">
-                Full-control tasks execute without individual approvals. Change
-                a task’s mode to Ask Permission when you want to review each
-                action.
-              </p>
-            )}
-          </main>
-        ) : selection === "outputs" ? (
-          <main className="page">
-            <div className="page-heading">
-              <div>
-                <h1>Outputs</h1>
-                <p>Files, screenshots and results produced by your agent.</p>
-              </div>
-            </div>
-            <div className="outputs-grid">
-              {connection.records
-                .filter((record) => record.kind === "artifact")
-                .map((record) => (
-                  <Artifact
-                    key={record.id}
-                    record={record}
-                  />
-                ))}
-            </div>
-            {!connection.records.some(
-              (record) => record.kind === "artifact",
-            ) && (
-              <p className="empty-line">
-                No outputs yet. Start a task to produce a file or browser
-                capture.
-              </p>
-            )}
-          </main>
+        ) : selection === "machines" ? (
+          <Machines groups={groups} />
+        ) : showingSettings ? (
+          renderSettings(appearance)
+        ) : isWorkspaceSection(selection) ? (
+          <WorkspaceView section={selection} groups={groups} connections={connections} sharedMemory={sharedMemory} />
         ) : (
-          <main className="page">
-            <div className="page-heading">
-              <div>
-                <h1>{heading}</h1>
-                <p>
-                  {selection === "memory"
-                    ? "Notes recorded by your private workspace."
-                    : "Schedules recorded by the server."}
-                </p>
-              </div>
-            </div>
-            {connection.records
-              .filter(
-                (record) =>
-                  record.kind ===
-                  (selection === "memory" ? "memory" : "automation"),
-              )
-              .map((record) => (
-                <article className="record-row" key={record.id}>
-                  <h2>{title(record)}</h2>
-                  <pre>{JSON.stringify(record.data, null, 2)}</pre>
-                </article>
-              ))}
-            {!connection.records.some(
-              (record) =>
-                record.kind ===
-                (selection === "memory" ? "memory" : "automation"),
-            ) && (
-              <p className="empty-line">
-                No {selection === "memory" ? "saved memories" : "automations"}{" "}
-                yet.
-              </p>
-            )}
-          </main>
+          <main className="page"><p role="status">This chat is not available yet.</p></main>
         )}
-        <footer className="statusbar">
+        {status && <footer className="statusbar">
           <span>
-            {connection.busy
+            {status.retired ? status.environmentId === null ? "Legacy read-only · mutations retired" : "Removed connection · read-only" : status.busy
               ? "Sending to server…"
-              : connection.connected
+              : status.connected
                 ? "Server-owned history"
-                : "Last-known history"}
+                : "Stale in-memory history · read-only"}
           </span>
           <span>
-            {connection.lastSync
-              ? `Updated ${connection.lastSync.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+            {status.lastSync
+              ? `Updated ${status.lastSync.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
               : "Waiting for connection"}
           </span>
-        </footer>
+        </footer>}
       </div>
     </div>
-    </ImageViewerProvider>
   );
 }

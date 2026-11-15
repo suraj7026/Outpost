@@ -1,5 +1,5 @@
-import { chromium } from 'playwright';
-import type { Browser, BrowserContext, Page } from 'playwright';
+import { openBrowser } from './engine.js';
+import type { Browser, BrowserContext, Page } from 'playwright-camoufox';
 import { Ledger } from '../core/ledger.js';
 import { id, requireThat } from '../core/contracts.js';
 interface Lease { holder: string; expiresAt: number; observation: number; needsObservation: boolean }
@@ -37,7 +37,7 @@ export class HeadlessBrowser {
   constructor(private db: Ledger, private origins: Set<string>) { this.leases = new BrowserLeases(db); }
   async open(taskId: string, url: string) {
     requireThat(this.origins.has(new URL(url).origin),'origin_not_enrolled');
-    this.browser ??= await chromium.launch({ headless: true });
+    this.browser ??= await openBrowser();
     const context = await this.browser.newContext({ acceptDownloads: false,serviceWorkers: 'block' });
     await context.route('**/*',async route => {
       if (this.origins.has(new URL(route.request().url()).origin)) await route.continue(); else await route.abort('blockedbyclient');

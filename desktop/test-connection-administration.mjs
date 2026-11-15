@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { openSettings, serverTab } from './settings-test-navigation.mjs';
 
 // Synthetic IPC only: no Keychain, accounts, credentials or server connections.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), 'dist');
@@ -20,11 +21,11 @@ const publicKey = Buffer.alloc(32, 9).toString('base64');
 const record = (kind, id, revision, data) => ({ kind, id, revision, data, updatedAt: '2026-10-30T00:00:00Z' });
 const fixture = {
   snapshot: { protocolVersion: 1, cursor: 1, records: [
-    record('device', self, 1, { name: 'This Mac', publicKey, revoked: false }),
+    record('device', self, 1, { name: 'Outpost Desktop', publicKey, revoked: false }),
     record('device', other, 3, { name: 'Other Mac', publicKey, revoked: false }),
     record('recovery', 'server', 5, { dispatchEnabled: false, reason: 'Review restored work.', restoredAt: '2026-10-30T00:00:00Z' }),
   ] },
-  runtime: { configured: true, model: 'fixture', hostAdministration: false, browserUse: false, unrestrictedCommands: false },
+  runtime: { configured: true, model: 'fixture', hostAdministration: false, browserDirect: false, browserEngine: null, unrestrictedCommands: false },
   models: { models: [], defaultModel: '' },
 };
 const errors = [];
@@ -41,6 +42,8 @@ async function open(scenario = 'normal') {
     window.__TAURI_INTERNALS__ = {
       transformCallback() { return ++sequence; }, unregisterCallback() {},
       async invoke(command, args) {
+        if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: null, environments: {} }, legacy: { endpoint: null, pending: false } };
+        if (command === 'disconnect') return;
         if (command === 'set_sidebar_window_controls') return;
         if (command === 'sidebar_pointer_inside') return false;
         if (command === 'connection_info') return { endpoint: 'Fixture transport', deviceId: self, publicKey: '', pending, nativeSidebar: false };
@@ -76,14 +79,13 @@ async function open(scenario = 'normal') {
     };
   }, { fixture, scenario, self });
   await page.goto(`http://127.0.0.1:${server.address().port}`);
-  await page.getByRole('button', { name: 'Connection settings', exact: true }).click();
+  await openSettings(page, { tab: 'devices' });
   await page.getByRole('heading', { name: 'Trusted devices', exact: true }).waitFor();
   return page;
 }
 try {
   const page = await open();
   const resume = page.getByRole('button', { name: 'Confirm and resume dispatch' });
-  assert.ok(await resume.isDisabled());
   await page.getByRole('button', { name: 'Revoke Other Mac…', exact: true }).click();
   assert.deepEqual(await page.evaluate(() => window.__requests), []);
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -92,9 +94,12 @@ try {
   await page.getByRole('button', { name: 'Confirm revocation' }).click();
   await page.getByRole('article', { name: 'Other Mac', exact: true }).getByText('Revoked · Revision 4').waitFor();
   assert.deepEqual((await page.evaluate(() => window.__requests))[0], { command: 'send_command', args: { kind: 'device.revoke', id: other, revision: 3, payload: {} } });
+  await serverTab(page, 'recovery');
+  assert.ok(await resume.isDisabled());
   await page.getByRole('checkbox').check(); await resume.click();
   await page.getByText('Dispatch enabled · Revision 6', { exact: true }).waitFor();
   assert.deepEqual((await page.evaluate(() => window.__requests))[1], { command: 'send_command', args: { kind: 'recovery.resume', id: 'server', revision: 5, payload: { acknowledged: true } } });
+  await serverTab(page, 'devices');
   const target = '33333333-3333-4333-8333-333333333333';
   await page.getByLabel('Device name', { exact: true }).fill('New Mac');
   await page.getByLabel('Other device ID', { exact: true }).fill(target);
@@ -102,12 +107,13 @@ try {
   await page.getByRole('button', { name: 'Enroll device', exact: true }).click();
   await page.getByRole('article', { name: 'New Mac', exact: true }).waitFor();
   assert.deepEqual((await page.evaluate(() => window.__requests))[2], { command: 'enroll_device', args: { deviceId: target, name: 'New Mac', publicKey } });
-  await page.getByRole('button', { name: 'Revoke This Mac…', exact: true }).click();
+  await page.getByRole('button', { name: 'Revoke Outpost…', exact: true }).click();
   await page.getByText(/This Mac will lose access/).waitFor();
   await page.close();
 
   for (const kind of ['revoke', 'resume']) {
     const stale = await open('stale');
+    if (kind === 'resume') await serverTab(stale, 'recovery');
     if (kind === 'revoke') {
       await stale.getByRole('button', { name: 'Revoke Other Mac…', exact: true }).click();
       await stale.getByRole('button', { name: 'Confirm revocation' }).click();
@@ -133,33 +139,43 @@ try {
     await stale.close();
   }
   const changed = await open();
-  await changed.getByRole('checkbox').check();
   await changed.getByRole('button', { name: 'Revoke Other Mac…', exact: true }).click();
   await changed.evaluate(() => window.__advanceRevision());
   await changed.getByRole('button', { name: 'Refresh authority' }).click();
   await changed.getByText('Device changed. Cancel and review its current revision.').waitFor();
   assert.ok(await changed.getByRole('button', { name: 'Confirm revocation' }).isDisabled());
+  await serverTab(changed, 'recovery');
+  await changed.getByRole('checkbox').check();
+  await changed.evaluate(() => window.__advanceRevision());
+  await changed.getByRole('button', { name: 'Reconnect', exact: true }).click();
+  await changed.getByText('Dispatch held · Revision 7', { exact: true }).waitFor();
   assert.ok(await changed.getByRole('button', { name: 'Confirm and resume dispatch' }).isDisabled());
   assert.equal(await changed.getByRole('checkbox').isChecked(), false);
   assert.deepEqual(await changed.evaluate(() => window.__requests), []);
   await changed.close();
   const disconnected = await open('disconnect');
+  await serverTab(disconnected, 'recovery');
   await disconnected.getByRole('checkbox').check();
   await disconnected.getByRole('button', { name: 'Confirm and resume dispatch' }).click();
+  await serverTab(disconnected, 'devices');
   await disconnected.getByText('Offline. Showing last received records, not current authority.').waitFor();
   assert.ok(await disconnected.getByRole('button', { name: 'Enroll device', exact: true }).isDisabled());
   await disconnected.close();
   for (const scenario of ['preview', 'offline', 'revoked', 'pending', 'unknown']) {
     const page = await open(scenario);
     if (scenario === 'unknown') {
+      await serverTab(page, 'recovery');
       await page.getByRole('checkbox').check();
       await page.getByRole('button', { name: 'Confirm and resume dispatch' }).click();
       await page.getByRole('button', { name: 'Retry same command' }).waitFor();
+      await serverTab(page, 'devices');
     }
     assert.ok(await page.getByRole('button', { name: 'Enroll device', exact: true }).isDisabled());
     for (const button of await page.getByRole('button', { name: /^Revoke / }).all()) assert.ok(await button.isDisabled());
+    await serverTab(page, 'recovery');
     for (const checkbox of await page.getByRole('checkbox').all()) assert.ok(await checkbox.isDisabled());
     if (scenario === 'preview') {
+      await serverTab(page, 'setup');
       assert.ok(await page.getByRole('button', { name: 'Save and connect' }).isDisabled());
       assert.ok(await page.getByRole('button', { name: 'Pair device', exact: true }).isDisabled());
     }

@@ -1,6 +1,6 @@
 import { Ledger } from '../core/ledger.js';
 import { id, requireThat } from '../core/contracts.js';
-interface Memory { text: string; project: string; identityId: string; source: string; provenance: 'owner' | 'observation' | 'inference'; confirmed: boolean; forgotten: boolean }
+interface Memory { text: string; project: string; identityId: string; source: string; provenance: 'owner' | 'observation' | 'inference'; confirmed: boolean; forgotten: boolean; shared?: true }
 export class MemoryStore {
   constructor(private db: Ledger) { db.db.exec('CREATE VIRTUAL TABLE IF NOT EXISTS memory_search USING fts5(id UNINDEXED, project UNINDEXED, identity_id UNINDEXED, text)'); }
   save(input: Omit<Memory,'confirmed' | 'forgotten'>) {
@@ -8,6 +8,22 @@ export class MemoryStore {
     return this.db.transaction(() => {
       const record = this.db.put<Memory>('memory',id(),0,{ ...input,confirmed: input.provenance === 'owner',forgotten: false });
       this.db.db.prepare('INSERT INTO memory_search VALUES(?,?,?,?)').run(record.id,input.project,input.identityId,input.text); return record;
+    });
+  }
+  applyShared(key: string, text: string | null) {
+    return this.db.transaction(() => {
+      const existing = this.db.get<Memory>('memory',key);
+      requireThat(!existing || existing.data.shared === true, 'memory_scope_conflict');
+      if (existing?.data.forgotten) return existing;
+      if (text === null && existing) return this.forget(key, existing.revision);
+      if (existing) {
+        requireThat(existing.data.text === text, 'shared_memory_conflict');
+        return existing;
+      }
+      const scope = { project: 'shared', identityId: 'owner', source: 'Shared Memory', provenance: 'owner' as const };
+      const record = this.db.put<Memory>('memory',key,0,{ ...scope,text: text ?? '',confirmed: true,forgotten: text === null,shared: true }, text === null ? 'memory.forgotten' : 'memory.changed');
+      if (text !== null) this.db.db.prepare('INSERT INTO memory_search VALUES(?,?,?,?)').run(key,scope.project,scope.identityId,text);
+      return record;
     });
   }
   search(text: string, project: string, identityId: string) {

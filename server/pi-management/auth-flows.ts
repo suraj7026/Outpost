@@ -25,6 +25,7 @@ export class AuthFlows {
     save: (provider: string, credential: Credential, generation: string, signal: AbortSignal) => Promise<void>;
     loginOptions?: LoginOptions;
   }, private lifetime = 10 * 60 * 1000) {}
+  get busy() { return [...this.flows.values()].some(flow => active(flow) && flow.public.expiresAt > Date.now()); }
   close() { for (const flow of this.flows.values()) this.end(flow, 'cancelled'); this.flows.clear(); }
   private owned(owner: string, id: string) {
     const flow = this.flows.get(id);

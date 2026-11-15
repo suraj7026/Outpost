@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { chromium, webkit } from 'playwright';
+import { openSettings } from './settings-test-navigation.mjs';
 
 // Synthetic IPC only. No credentials, Keychain, accounts or live servers are accessed.
 const root = resolve('desktop/dist');
@@ -37,6 +38,8 @@ async function open(width = 1440, legacy = false, colorScheme = 'dark') {
     const rows = [], row = (kind, id, data) => ({ kind, id, data, revision: 1, updatedAt: new Date().toISOString() });
     document.addEventListener('pointermove', event => { pointerX = event.clientX; pointerY = event.clientY; });
     window.__TAURI_INTERNALS__ = { transformCallback: () => 1, unregisterCallback() {}, async invoke(command, args) {
+        if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: null, environments: {} }, legacy: { endpoint: null, pending: false } };
+      if (command === 'disconnect') return;
       if (command === 'set_sidebar_window_controls') return;
       if (command === 'sidebar_pointer_inside') return pointerX >= 0 && pointerX <= args.width && pointerY >= 0 && pointerY <= innerHeight;
       if (command === 'connection_info') return { endpoint: 'Synthetic Server 2', deviceId: 'synthetic', pending: false, nativeSidebar: false };
@@ -59,7 +62,12 @@ async function open(width = 1440, legacy = false, colorScheme = 'dark') {
         if (request.type === 'catalogue' || request.type === 'refresh') {
           if (window.__failCatalogue) throw new Error('Synthetic failure');
           if (window.__failOpenAI) return { ...structuredClone(catalogue), models: [], refreshErrors: ['openai'] };
-          return structuredClone(catalogue);
+          const result = structuredClone(catalogue);
+          if (window.__ollamaAuthentication) {
+            result.providers.find(p => p.id === 'ollama-cloud').authentication = window.__ollamaAuthentication;
+            if (window.__ollamaAuthentication.state !== 'validated') result.models = result.models.filter(m => m.providerId !== 'ollama-cloud');
+          }
+          return result;
         }
         if (request.type === 'login.start') {
           flow = { id: 'flow', providerId: request.providerId, method: request.method, state: 'waiting', expiresAt: Date.now() + 60000,
@@ -121,7 +129,7 @@ try {
   await page.getByRole('button', { name: 'Send message' }).click();
   await page.waitForFunction(() => __commands.length === 2);
   check(await page.evaluate(() => __commands[1].payload.modelRef.providerId === 'alpha'), 'Follow-up sends next-instruction selection');
-  await page.getByRole('button', { name: 'Connection settings', exact: true }).click();
+  await openSettings(page, { tab: 'models' });
   await page.getByRole('searchbox', { name: 'Add or manage a provider' }).fill('alpha');
   await page.getByRole('button', { name: 'API key', exact: true }).click();
   check(await page.getByRole('region', { name: 'Confirm credential change' }).isVisible(), 'Stored credential replacement requires confirmation');
@@ -201,24 +209,38 @@ try {
   await cloud.getByRole('button', { name: 'Start task' }).click();
   await cloud.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
   check(await cloud.evaluate(() => __commands[0].payload.modelRef.providerId === 'ollama-cloud'), 'Display name does not rewrite exact provider identity');
-  await cloud.getByRole('button', { name: 'Connection settings', exact: true }).click();
+  await openSettings(cloud, { tab: 'models' });
   await cloud.getByRole('searchbox', { name: 'Add or manage a provider' }).fill('ollama');
   check(await cloud.locator('.provider-row strong').textContent() === 'Ollama', 'Settings names the provider Ollama');
+  check(await cloud.getByText(/Only models with verified access for the current credential/).isVisible(), 'Older servers are not described as supporting the new Ollama policy');
+  for (const [state, quota, message] of [
+    ['validated', 'available', 'Cloud catalogue, not per-model entitlement'],
+    ['validated', 'exhausted', 'Ollama reports no remaining credits'],
+    ['invalid_key', undefined, 'Ollama rejected this API key'],
+    ['account_suspended', undefined, 'Ollama reports that this account is suspended'],
+    ['rate_limited', undefined, 'This does not mean the key is invalid'],
+    ['unavailable', undefined, 'No inference test was sent'],
+  ]) {
+    await cloud.evaluate(({ state, quota }) => { window.__ollamaAuthentication = { state, quota, retryAt: state === 'rate_limited' ? Date.now() + 120000 : undefined }; }, { state, quota });
+    await cloud.getByRole('button', { name: 'Refresh models' }).click();
+    await cloud.getByText(message, { exact: false }).waitFor();
+    check(await cloud.getByText(message, { exact: false }).isVisible(), `Ollama ${state}/${quota} is explained without a false entitlement claim`);
+    if (state === 'validated' && quota === 'available') check(await cloud.getByText(/it does not verify entitlement to each model/).isVisible(), 'Key validation is explicitly distinct from model entitlement');
+    if (state === 'rate_limited') check(await cloud.getByText(/Next check after/).isVisible(), 'Balance throttling shows a retry time');
+  }
   await cloud.close();
   mkdirSync('/tmp/outpost-providers', { recursive: true });
   for (const [width, scheme] of [[1440, 'dark'], [900, 'light'], [390, 'dark']]) {
     const page = await open(width, false, scheme);
-    // Use header settings entry at narrow widths; navigation itself is covered by the sidebar suite.
-    if (width > 780) await page.getByRole('button', { name: 'Connection settings', exact: true }).click();
-    else await page.getByRole('button', { name: 'Open connection settings', exact: true }).click();
-    await page.getByText('Server Pi providers', { exact: true }).waitFor();
+    await openSettings(page, { tab: 'models' });
+    await page.getByRole('heading', { name: 'Models & providers', exact: true }).waitFor();
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `No page overflow at ${width}`);
     await page.screenshot({ path: `/tmp/outpost-providers/${engine.name()}-${width}-${scheme}.png` });
     await page.close();
   }
   const old = await open(1440, true);
   check(await old.getByRole('combobox', { name: 'Ollama model' }).isVisible(), 'Legacy server keeps working selector');
-  await old.getByRole('button', { name: 'Connection settings', exact: true }).click();
+  await openSettings(old, { tab: 'models' });
   check(await old.getByText(/Server update required/).isVisible(), 'Legacy server gets truthful capability state');
   check(await old.getByRole('button', { name: 'Refresh models' }).count() === 0, 'No nonfunctional provider controls on legacy server');
   await old.close();

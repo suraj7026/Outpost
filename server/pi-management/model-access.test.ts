@@ -7,11 +7,14 @@ import { PiProfile } from './profile.js';
 import { ProviderManagement } from './providers.js';
 import { CompatibleProvider } from './contracts.js';
 
-test('production blocks every unverified API-key/subscription provider, including compatible endpoints and cached public catalogues', async t => {
+test('production blocks unsupported providers and rejects Ollama keys without authenticated validation', async t => {
   const directory = mkdtempSync(join(tmpdir(), 'outpost-strict-access-'));
   const profile = new PiProfile(directory), service = new ProviderManagement(profile);
   let requests = 0;
-  t.mock.method(globalThis, 'fetch', async () => { requests++; throw new Error('Unexpected network request'); });
+  t.mock.method(globalThis, 'fetch', async (url: Parameters<typeof fetch>[0]) => {
+    requests++; assert.equal(String(url), 'https://ollama.com/api/balance', 'Only the approved read-only key check is permitted');
+    return Response.json({ error: 'synthetic invalid key' }, { status: 401 });
+  });
   try {
     writeFileSync(join(directory,'auth.json'), JSON.stringify({
       openai: { type: 'api_key', key: 'sk-fixture' },
@@ -32,6 +35,7 @@ test('production blocks every unverified API-key/subscription provider, includin
     const catalogue = await service.catalogue();
     assert.equal(catalogue.models.length, 0);
     for (const id of ['openai','anthropic','ollama-cloud','compatible']) assert.equal(catalogue.providers.find(p => p.id === id)?.configured, true);
-    assert.equal(requests, 0, 'No inference probe or public-catalogue permission guess');
+    assert.equal(requests, 1, 'Read-only authentication check, never inference or a public-catalogue permission guess');
+    assert.equal(catalogue.providers.find(p => p.id === 'ollama-cloud')?.authentication?.state, 'invalid_key');
   } finally { service.close(); rmSync(directory,{recursive:true,force:true}); }
 });

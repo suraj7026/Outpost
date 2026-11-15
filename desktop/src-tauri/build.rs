@@ -5,6 +5,7 @@ fn main() {
             .flag("-fobjc-arc")
             .compile("outpost_window_controls");
         println!("cargo:rustc-link-lib=framework=Cocoa");
+        println!("cargo:rustc-link-lib=framework=CoreGraphics");
         println!("cargo:rerun-if-changed=native/window_controls.m");
     }
     tauri_build::build()

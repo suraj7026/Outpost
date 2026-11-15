@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { z } from 'zod';
 import { Ledger } from '../core/ledger.js';
-import { Command, Fault, id, requireThat } from '../core/contracts.js';
+import { ClientCommand, Fault, id, requireThat } from '../core/contracts.js';
 import type { Json } from '../core/contracts.js';
 import { Devices, Gate } from '../policy/trust.js';
 import type { Action } from '../policy/trust.js';
@@ -24,21 +24,44 @@ import type { InferenceConfiguration } from '../models/inference.js';
 import { registerHosts } from '../operations/hosts.js';
 import type { HostAdministration } from '../operations/hosts.js';
 import { LiveFeed } from './live.js';
-import { registerBrowserUse } from '../browser/browser-use.js';
+import { BrowserSessions } from '../browser/sessions.js';
+import { BrowserControl } from '../browser/control.js';
+import { setTimeout as delay } from 'node:timers/promises';
+import type { BrowserSessionOptions } from '../browser/sessions.js';
+import { registerDirectBrowser } from '../browser/direct.js';
+import { Maintenance } from '../environment/maintenance.js';
+import { Installation } from '../environment/installation.js';
+import type { EnvironmentOptions } from '../environment/contracts.js';
 
-export const publicKinds = ['task','policy','message','action','artifact','inbox','automation','memory','identity','capability','browser','workflow','source','citation','deployment_evidence','operation','device','recovery','tool_stream'];
+export const publicKinds = ['task','policy','message','action','artifact','inbox','automation','memory','identity','capability','browser','browser_control','workflow','source','citation','deployment_evidence','operation','device','recovery','tool_stream'];
 const wire = (value: unknown): Json => z.json().parse(value);
 export class Coordinator {
+  readonly browsers: BrowserSessions | undefined;
+  readonly browserControl: BrowserControl | undefined;
+  readonly environment: Installation;
+  readonly maintenance: Maintenance;
   readonly live: LiveFeed;
   readonly devices: Devices; readonly tasks: Tasks; readonly artifacts: Artifacts; readonly memory: MemoryStore; readonly scheduler: Scheduler;
   private managementWrites = new Map<string, number>();
   private gates = new Map<string,Gate>(); private runtimes = new Map<string,PiRuntime | RemotePiRuntime>(); private jobs = new Set<string>();
-  constructor(readonly db: Ledger, readonly root: string, private options: { apiKey?: string; roles?: unknown; executables?: string[]; inference?: InferenceConfiguration; unrestrictedCommands?: boolean; hosts?: HostAdministration; browserPython?: string; worker?: WorkerClient } = {}) {
+  constructor(readonly db: Ledger, readonly root: string, private options: { workspaceRoot?: string; sharedWorkspaces?: boolean; apiKey?: string; roles?: unknown; executables?: string[]; inference?: InferenceConfiguration; unrestrictedCommands?: boolean; hosts?: HostAdministration; browser?: BrowserSessionOptions; worker?: WorkerClient; environment?: EnvironmentOptions } = {}) {
+    this.environment = new Installation(db, options.environment);
     db.db.exec('CREATE TABLE IF NOT EXISTS credential_leases(id TEXT PRIMARY KEY, device_id TEXT NOT NULL, expires_at INTEGER NOT NULL)');
     this.live = new LiveFeed(db);
+    this.browsers = options.browser ? new BrowserSessions(db, root, options.browser) : undefined;
     for (const kind of ['message','tool_stream']) for (const record of db.list(kind)) if (record.data.streaming) db.put(kind,record.id,record.revision,{ ...record.data,streaming: false,interrupted: true });
     this.devices = new Devices(db); this.tasks = new Tasks(db); this.artifacts = new Artifacts(db,join(root,'artifacts')); this.memory = new MemoryStore(db); this.scheduler = new Scheduler(db,this.tasks);
     this.tasks.recover();
+    this.maintenance = new Maintenance(db, this.tasks, options.worker, () => this.jobs.size > 0 || this.managementWrites.size > 0);
+    if (this.browsers) this.browserControl = new BrowserControl(db, this.browsers, taskId => {
+      const task = db.need<Task>('task', taskId);
+      requireThat(!['cancelled', 'completed'].includes(task.data.state), 'terminal_task');
+      db.put('task', taskId, task.revision, { ...task.data, state: 'paused', blocker: 'Browser takeover requested. Return control, then explicitly resume Pi.' }, 'task.browser_takeover');
+    }, async taskId => {
+      await this.runtimes.get(taskId)?.abort(taskId);
+      for (let attempt = 0; attempt < 1000 && this.runtimes.get(taskId)?.isActive(taskId); attempt++) await delay(10);
+      requireThat(!this.runtimes.get(taskId)?.isActive(taskId), 'browser_runtime_not_settled');
+    });
     db.db.prepare("UPDATE outbox SET state='unknown' WHERE state='claimed'").run();
     for (const operation of db.list('operation')) if (operation.data.state === 'running') db.put('operation',operation.id,operation.revision,{ ...operation.data,state: 'unknown',error: 'Coordinator restarted; reconcile before retry' });
     for (const action of db.list<Action>('action')) if (action.data.state === 'dispatching') db.put('action',action.id,action.revision,{ ...action.data,state: 'unknown',result: { error: 'Coordinator restarted; reconcile before retry' } });
@@ -48,10 +71,10 @@ export class Coordinator {
     const task = this.db.need<Task>('task',taskId); z.uuid().parse(taskId);
     let gate = this.gates.get(taskId); if (gate) return gate;
     const reviewer = this.options.apiKey && this.options.roles ? cloudReviewer(this.options.apiKey,this.options.roles) : undefined;
-    gate = new Gate(this.db,reviewer,!!this.options.hosts); const workspace = new Workspace(join(this.root,'workspaces',taskId));
+    gate = new Gate(this.db,reviewer,!!this.options.hosts); const workspace = new Workspace(join(this.options.workspaceRoot ?? join(this.root,'workspaces'),taskId),this.options.sharedWorkspaces);
     workspace.register(gate); registerInventory(gate); registerCommands(gate,workspace,new Set(this.options.executables ?? []),this.options.unrestrictedCommands);
     if (this.options.hosts) registerHosts(gate,this.options.hosts,taskId);
-    if (this.options.browserPython && this.options.inference) registerBrowserUse(gate,this.options.browserPython,{ ...this.options.inference,model: !task.data.provider && task.data.model ? task.data.model : this.options.inference.model },workspace,this.artifacts,taskId);
+    if (this.browsers) registerDirectBrowser(gate,this.browsers,this.artifacts,taskId);
     const ArtifactRead = z.strictObject({ artifactId: z.uuid() });
     gate.register('artifact.read_text',{ version: 1,effects: ['workspace.read'],inputSchema: z.toJSONSchema(ArtifactRead),description: 'Reads a published text artifact by its UUID artifactId. For workspace paths such as STATUS.md use file.read instead.',parse: input => ArtifactRead.parse(input),target: args => String(args.artifactId),execute: async args => {
       const artifact = this.db.need('artifact',String(args.artifactId)); requireThat(artifact.data.taskId === taskId,'artifact_scope_denied');
@@ -70,7 +93,11 @@ export class Coordinator {
     return { operationId,status: 'accepted' };
   }
   command(input: unknown) {
-    const command = Command.parse(input); requireThat(Math.abs(Date.now()-command.issuedAt) < 300000,'expired_command');
+    const command = ClientCommand.parse(input);
+    if (this.maintenance.holding) requireThat(this.maintenance.status().state === 'draining' && ['task.pause', 'task.cancel', 'approval.decide'].includes(command.type), 'maintenance_in_progress');
+    this.environment.requireProtocol(command.protocolVersion);
+    if (command.protocolVersion === 2) this.environment.requireTarget(command.environmentId);
+    requireThat(Math.abs(Date.now()-command.issuedAt) < 300000,'expired_command');
     const accepted = this.db.accept(command,() => {
       const { type,aggregateId: key,expectedRevision: expected,payload } = command;
       switch (type) {
@@ -79,7 +106,8 @@ export class Coordinator {
           requireThat(!payload.modelRef || !!this.options.worker,'pi_worker_required');
           return wire(this.tasks.steer(key,expected,z.string().parse(payload.text),payload.modelRef ? ModelRef.parse(payload.modelRef) : undefined));
         }
-        case 'task.pause': case 'task.cancel': case 'task.resume': return wire(this.tasks.control(key,expected,type.split('.')[1] as 'pause' | 'cancel' | 'resume'));
+        case 'task.resume': requireThat(!this.browsers?.isHeld(key) && !['pending', 'human', 'releasing'].includes(String(this.browserControl?.status(key)?.state)), 'browser_control_held'); return wire(this.tasks.control(key,expected,'resume'));
+        case 'task.pause': case 'task.cancel': return wire(this.tasks.control(key,expected,type.split('.')[1] as 'pause' | 'cancel'));
         case 'policy.change': return wire(this.gate(key).changePolicy(key,expected,payload.mode));
         case 'approval.decide': {
           const action = this.db.need<Action>('action',key);
@@ -102,6 +130,12 @@ export class Coordinator {
         case 'automation.save': return wire(this.scheduler.save(key,expected,payload));
         case 'memory.save': return wire(this.memory.save(z.strictObject({ text: z.string(),project: z.string(),identityId: z.string(),source: z.string(),provenance: z.literal('owner') }).parse(payload)));
         case 'memory.forget': return wire(this.memory.forget(key,expected));
+        case 'memory.shared': {
+          requireThat(command.protocolVersion === 2, 'shared_memory_requires_verified_server');
+          requireThat(expected === 0, 'invalid_shared_memory_revision');
+          const value = z.strictObject({ text: z.string().trim().min(1).max(20000).nullable() }).parse(payload);
+          return wire(this.memory.applyShared(z.uuid().parse(key),value.text));
+        }
         case 'device.register_push': {
           const value = z.strictObject({ token: z.string(),topic: z.string().min(1),environment: z.enum(['sandbox','production']) }).parse(payload);
           return wire(new Notifications(this.db).register(command.deviceId,value.token,value.topic,value.environment));
@@ -117,8 +151,10 @@ export class Coordinator {
         default: throw new Fault('unknown_command','Unsupported command',400);
       }
     });
+    if (command.type === 'device.revoke') this.browserControl?.revoke(command.aggregateId);
     if (['task.pause','task.cancel'].includes(command.type)) {
       this.gates.get(command.aggregateId)?.stop(command.aggregateId);
+      void this.browsers?.stop(command.aggregateId,'Task paused or cancelled');
       void this.runtimes.get(command.aggregateId)?.abort(command.aggregateId);
     }
     return accepted;
@@ -127,6 +163,9 @@ export class Coordinator {
     requireThat(this.options.worker, 'pi_worker_unavailable', 'Server Pi management is not enabled.');
     const request = ManagementRequest.parse(input);
     requireThat(!this.db.need('device', deviceId).data.revoked, 'revoked_device');
+    if (['maintenance.stage', 'maintenance.prepare', 'maintenance.status', 'maintenance.cancel'].includes(request.type)) return this.maintenance.request(deviceId, request);
+    requireThat(!['maintenance.hold', 'maintenance.release'].includes(request.type), 'maintenance_internal_operation');
+    if (this.maintenance.holding) requireThat(['catalogue', 'runtime.inventory', 'transfer.inventory', 'transfer.history', 'transfer.status', 'transfer.cancel', 'login.status', 'login.answer', 'login.cancel'].includes(request.type), 'maintenance_in_progress');
     const writes = !['catalogue', 'refresh', 'login.status', 'login.start', 'login.cancel'].includes(request.type);
     const leaseId = id();
     if (writes) {
@@ -149,10 +188,20 @@ export class Coordinator {
     }
   }
   runtimeStatus() {
-    return { piManagement: !!this.options.worker, configured: !!this.options.worker || !!this.options.inference || !!(this.options.apiKey && this.options.roles),model: this.options.inference?.model ?? null,hostAdministration: !!this.options.hosts,browserUse: !!this.options.browserPython,unrestrictedCommands: !!this.options.unrestrictedCommands };
+    return { piManagement: !!this.options.worker, configured: !!this.options.worker || !!this.options.inference || !!(this.options.apiKey && this.options.roles),model: this.options.inference?.model ?? null,hostAdministration: !!this.options.hosts,browserEngine: this.browsers ? 'camoufox' : null,browserDirect: !!this.browsers,browserTakeover: !!this.browserControl,unrestrictedCommands: !!this.options.unrestrictedCommands };
+  }
+  environmentDescriptor() {
+    return this.environment.descriptor({ worker: !!this.options.worker, hostAdministration: !!this.options.hosts });
   }
   query(type: string, payload: Record<string,Json>) {
-    if (type === 'runtime') return wire(this.runtimeStatus());
+    if (type === 'browser.frame') {
+      const { taskId } = z.strictObject({ taskId: z.uuid() }).parse(payload);
+      this.db.need('task',taskId);
+      requireThat(this.browsers,'browser_unavailable');
+      return this.browsers.frame(taskId).then(frame => wire({ ...frame, control: this.browserControl?.status(taskId) ?? null, controlEpoch: this.browserControl?.epoch ?? null }));
+    }
+    if (type === 'environment') return wire(this.environmentDescriptor());
+    if (type === 'runtime') return wire({ ...this.runtimeStatus(), sharedMemory: true });
     if (type === 'models' && this.options.inference) {
       const base = this.options.inference.baseUrl.replace(/\/v1\/?$/,'');
       return fetch(`${base}/api/tags`,{ signal: AbortSignal.timeout(10000),redirect: 'error' }).then(async response => {
@@ -169,6 +218,10 @@ export class Coordinator {
     if (type === 'tools') return wire(this.gate(z.string().parse(payload.taskId)).catalogue());
     throw new Fault('unknown_query','Unsupported query',400);
   }
+  async closeBrowsers() {
+    await this.browsers?.close();
+    await this.browserControl?.close();
+  }
   private runPi(taskId: string, prompt: string, selection?: ModelRef) {
     const task = this.db.need<Task>('task',taskId);
     let pending: Promise<void>;
@@ -182,7 +235,7 @@ export class Coordinator {
       const saved = this.runtimes.get(taskId);
       const runtime = saved instanceof PiRuntime ? saved : new PiRuntime(this.db,this.gate(taskId),join(this.root,'pi',taskId),this.live);
       this.runtimes.set(taskId,runtime);
-      pending = runtime.run(taskId,join(this.root,'workspaces',taskId),prompt,this.options.apiKey ?? 'ollama',this.options.roles,inference);
+      pending = runtime.run(taskId,join(this.options.workspaceRoot ?? join(this.root,'workspaces'),taskId),prompt,this.options.apiKey ?? 'ollama',this.options.roles,inference);
     }
     void pending.catch(error => {
       const current = this.db.need<Task>('task',taskId);
@@ -199,6 +252,7 @@ export class Coordinator {
       if (topic === 'task.steer') {
         const taskId = String(data.taskId), runtime = this.runtimes.get(taskId);
         if (blockedTasks.has(taskId)) continue;
+        if (this.browsers?.isHeld(taskId)) { blockedTasks.add(taskId); continue; }
         if (runtime instanceof RemotePiRuntime && runtime.isActive(taskId) && data.modelRef && !runtime.canSteer(ModelRef.parse(data.modelRef))) {
           blockedTasks.add(taskId); continue;
         }

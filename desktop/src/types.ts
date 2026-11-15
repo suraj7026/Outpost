@@ -22,14 +22,19 @@ export interface ConnectionInfo {
   deviceId: string;
   publicKey: string;
   pending: boolean;
+  pendingError?: string | null;
   nativeSidebar: boolean;
+  lifecycle?: { state: "connecting" | "connected" | "retrying" | "paused" | "needs_attention"; error: string | null } | null;
 }
 export interface RuntimeInfo {
+  sharedMemory?: boolean;
   piManagement?: boolean;
   configured: boolean;
   model: string | null;
   hostAdministration: boolean;
-  browserUse: boolean;
+  browserEngine?: 'camoufox' | null;
+  browserDirect?: boolean;
+  browserTakeover?: boolean;
   unrestrictedCommands: boolean;
 }
 export interface ModelCatalogue {

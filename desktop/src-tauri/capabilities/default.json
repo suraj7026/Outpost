@@ -2,5 +2,5 @@
   "identifier": "default",
   "description": "Local Outpost window; signed server requests and custom window drag regions",
   "windows": ["main"],
-  "permissions": ["core:default", "core:window:allow-start-dragging", "core:window:allow-toggle-maximize", "core:window:allow-set-effects"]
+  "permissions": ["core:default", "core:window:allow-start-dragging", "core:window:allow-toggle-maximize"]
 }

@@ -1,0 +1,14 @@
+{
+  "nodeVersion": "24.22.1",
+  "nodeUrl": "https://nodejs.org/dist/v24.22.1/node-v24.22.1-linux-x64.tar.xz",
+  "nodeSha256": "6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6",
+  "uvVersion": "0.10.9",
+  "uvUrl": "https://files.pythonhosted.org/packages/79/34/b104c413079874493eed7bf11838b47b697cf1f0ed7e9de374ea37b4e4e0/uv-0.10.9-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+  "uvSha256": "7c9d6deb30edbc22123be75479f99fb476613eaf38a8034c0e98bba24a344179",
+  "pythonVersion": "3.13.12",
+  "camoufoxVersion": "158.0.1",
+  "camoufoxBuild": "beta.41",
+  "camoufoxInterface": 1,
+  "camoufoxUrl": "https://github.com/daijro/camoufox/releases/download/v158.0.1-beta.41/camoufox-158.0.1-beta.41-lin.x86_64.zip",
+  "camoufoxSha256": "3f2eb1d0451fa58e45e43e55f5e6181565069791ae60c0574f0ceb1f01341c33"
+}

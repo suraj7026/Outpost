@@ -3,6 +3,7 @@
 
 extern void outpost_set_window_controls(void *, bool, double, double);
 extern bool outpost_sidebar_pointer_inside(void *, double);
+extern bool outpost_set_window_blur(void *, unsigned int);
 
 @interface SidebarFixtureWindow : NSWindow
 @property NSPoint testPointer;
@@ -43,6 +44,7 @@ int main(void) {
             backing:NSBackingStoreBuffered defer:NO];
         window.titlebarAppearsTransparent = YES;
         window.titleVisibility = NSWindowTitleHidden;
+        NSRect defaultZoomFrame = [window standardWindowButton:NSWindowZoomButton].frame;
         buttonSpacing = MAX(20, [window standardWindowButton:NSWindowMiniaturizeButton].frame.origin.x - [window standardWindowButton:NSWindowCloseButton].frame.origin.x);
         void *pointer = (__bridge void *)window;
         for (NSNumber *visible in @[@NO, @YES, @NO]) {
@@ -77,6 +79,17 @@ int main(void) {
         NSButton *close = [window standardWindowButton:NSWindowCloseButton];
         [close setFrameOrigin:NSMakePoint(7, 4)];
         assertPosition(window, true, 29, 35);
+        // Simulate AppKit restoring only the zoom widget after a focus callback.
+        NSButton *zoom = [window standardWindowButton:NSWindowZoomButton];
+        zoom.postsFrameChangedNotifications = NO;
+        zoom.frame = defaultZoomFrame;
+        assert(NSEqualRects(zoom.frame, defaultZoomFrame));
+        [[NSNotificationCenter defaultCenter] postNotificationName:NSWindowDidResignKeyNotification object:window];
+        assertPosition(window, true, 29, 35);
+        zoom.frame = defaultZoomFrame;
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.05]];
+        assertPosition(window, true, 29, 35);
+        zoom.postsFrameChangedNotifications = YES;
         outpost_set_window_controls(pointer, false, 29, 35);
         [window setContentSize:NSMakeSize(900, 600)];
         assertPosition(window, false, 29, 35);
@@ -91,7 +104,12 @@ int main(void) {
         assert(!outpost_sidebar_pointer_inside(pointer, 250));
         window.testPointer = NSMakePoint(26, height + 10);
         assert(!outpost_sidebar_pointer_inside(pointer, 250));
+        assert(outpost_set_window_blur(pointer, 6));
+        assert(outpost_set_window_blur(pointer, 32));
+        assert(outpost_set_window_blur(pointer, 0));
+        assert(outpost_set_window_blur(pointer, 6));
         puts("PASS: native AppKit button visibility, synchronous resize/layout anchoring and sidebar/traffic-light hit testing (no visible window or Accessibility permission).");
+        puts("PASS: the window compositor accepts the light, strong, off, and restored blur radii.");
     }
     return 0;
 }

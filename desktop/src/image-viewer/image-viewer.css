@@ -9,7 +9,7 @@
 .image-viewer-actions { display: flex; align-items: center; gap: 6px; flex: none; }
 .image-position { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .image-stage { position: relative; flex: 1; min-height: 0; overflow: auto; background: var(--bg); overscroll-behavior: contain; touch-action: none; cursor: grab; scrollbar-width: thin; scrollbar-color: var(--control) transparent; }
-.image-stage:focus-visible { outline: 2px solid var(--focus); outline-offset: -3px; }
+
 .image-stage[data-dragging=true] { cursor: grabbing; }
 .image-canvas { display: grid; place-items: center; padding: 16px; }
 .image-canvas img { display: block; max-width: none; max-height: none; flex: none; user-select: none; -webkit-user-drag: none; }
@@ -20,7 +20,7 @@
 .image-zoom-controls { display: flex; align-items: center; gap: 6px; }
 .image-viewer-toolbar button { font-size: 12px; white-space: nowrap; }
 .image-zoom-controls output { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 45px; text-align: center; }
-.image-zoom-controls button[aria-pressed=true] { background: var(--active); border-color: var(--control); }
+.image-zoom-controls button[aria-pressed=true] { background: var(--active); }
 .image-download-status { margin: 0; padding: 0 20px 12px; font-size: 11px; overflow-wrap: anywhere; max-height: 80px; overflow: auto; }
 .artifact .artifact-preview { display: block; width: 100%; padding: 0; margin: 0 0 8px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
 .artifact .artifact-preview img { display: block; width: 100%; height: 120px; object-fit: contain; border: 0; margin: 0; }
@@ -30,10 +30,11 @@
 @media (max-width: 620px) {
   .image-viewer { width: calc(100vw - 16px); height: calc(100dvh - 16px); border-radius: 14px; }
   .image-viewer-header { padding: 12px; gap: 8px; }
-  .image-viewer-actions { gap: 0; }
+  .image-viewer-actions { gap: 4px; }
   .image-viewer-toolbar { padding: 10px 12px; gap: 8px; flex-wrap: wrap; }
   .image-zoom-controls { gap: 3px; }
-  .image-viewer-toolbar button { padding: 6px 8px; min-height: 36px; font-size: 11px; }
+  .image-viewer-toolbar button:not(.icon-button) { padding: 6px 8px; min-height: 36px; font-size: 11px; }
+  .image-viewer .icon-button { --icon-button-size: 36px; }
   .image-download { margin-left: auto; }
 }
 @media (prefers-reduced-motion: reduce) { .image-viewer[open] { animation: none; } }

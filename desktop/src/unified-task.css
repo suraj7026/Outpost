@@ -1,0 +1,91 @@
+.task-unified { --disclosure-spring: linear(0, .062, .191, .338, .475, .594, .692, .77, .83, .875, .909, .934, .953, .966, .976, .983, .988, .992, .995, .997, 1); }
+.task-unified .task-columns { display: grid; position: relative; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
+.task-unified .task-columns.with-resources { grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); }
+.task-unified .conversation-column { display: flex; height: 100%; min-height: 0; padding: 0 28px 12px; }
+.task-unified .conversation { overflow-anchor: none; overscroll-behavior: contain; scroll-behavior: auto; margin: 0 -14px; padding: 24px 14px 20px; }
+.task-unified .conversation-content { width: 100%; max-width: 804px; margin: 0 auto; }
+.task-unified .message { max-width: none; margin: 0; padding-bottom: 24px; }
+.task-unified .message.owner { display: flex; justify-content: flex-end; align-items: flex-start; gap: 14px; margin: 0 0 40px; padding: 0 0 28px; background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
+.task-unified .owner-content { min-width: 0; max-width: calc(100% - 96px); text-align: right; }
+.task-unified .message.owner .message-avatar { position: static; flex: none; width: 34px; height: 34px; border: 1px solid var(--control); background: var(--active); color: var(--text); }
+.task-unified .message.owner .message-byline { justify-content: flex-end; min-height: 34px; margin-bottom: 8px; }
+.task-unified .message-byline > span:not(.message-avatar) { font-weight: 600; color: var(--text); }
+.task-unified .message-markdown { overflow-wrap: anywhere; }
+.task-unified .message-markdown pre { max-width: 100%; overflow-x: auto; }
+.task-unified .message.owner .message-markdown :is(ul, ol, pre, blockquote, table) { text-align: left; }
+.task-unified .message.owner .message-markdown :is(ul, ol) { display: inline-block; max-width: 100%; }
+.task-unified .run-byline { display: flex; align-items: center; gap: 14px; min-height: 34px; margin: 0 0 14px; }
+.task-unified .run-byline time { margin-left: 0; }
+.task-unified .run-byline .assistant-avatar { flex: none; width: 34px; height: 34px; border: 0; border-radius: 0; background: transparent; color: var(--text); }
+.task-unified .assistant-avatar .outpost-mark { width: 25px; height: 27px; }
+.task-unified .message .message-markdown :is(p, li) { color: var(--text); }
+.task-unified .message-byline { gap: 10px; }
+
+.task-unified .run-content { margin-left: 48px; min-width: 0; }
+.task-unified .run-message:empty { display: none; }
+.task-unified .run-message:not(:empty) { margin-bottom: 20px; }
+.task-unified .thinking-block { margin: 0 0 16px; border: 0; font-size: 13px; }
+.task-unified .thinking-block summary { min-height: 40px; }
+.task-unified .thinking-block summary .small { margin-left: 6px; font-size: 12px; }
+.task-unified .reasoning-segments { max-height: 320px; overflow: auto; }
+.task-unified .reasoning-segments pre { max-height: none; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; background: transparent; margin: 0 0 12px; }
+.task-unified .disclosure { flex: none; transition: transform 300ms var(--disclosure-spring); }
+.task-unified details[open] > summary > .disclosure { transform: rotate(90deg); }
+.task-unified details:not([open]) > summary > .disclosure { transform: rotate(0deg); }
+.task-unified .completed-action-group { margin: 0 0 20px; padding: 4px 0; border-block: 1px solid var(--line); }
+.task-unified .completed-action-group > summary { display: flex; align-items: center; list-style: none; gap: 10px; min-height: 44px; cursor: pointer; font-size: 13px; }
+.task-unified .completed-action-group > summary > svg:nth-child(2) { color: var(--positive); }
+.task-unified .completed-action-group > summary .small { margin-left: auto; }
+.task-unified .completed-action-group > div { padding-top: 8px; }
+.task-unified .execution-entry { margin: 0 0 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--raised); min-width: 0; }
+.task-unified .execution-entry[data-state=succeeded]:not(.action-failed), .task-unified .execution-entry[data-state=finished]:not(.action-failed) { background: transparent; }
+.task-unified .execution-entry > summary { padding: 12px 14px; min-height: 48px; gap: 10px; font-size: 13px; }
+.task-unified .execution-entry > summary > svg { flex: none; color: var(--muted); }
+.task-unified .execution-entry .execution-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.task-unified .execution-entry .action-state { flex: none; font-size: 12px; color: var(--muted); }
+.task-unified .execution-review { flex: none; font-size: 12px; border: 0; color: var(--text); background: transparent; min-height: 30px; padding: 3px 8px; }
+.task-unified .execution-entry > .action-body { padding: 0 16px 0 38px; min-width: 0; }
+.task-unified .execution-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+.task-unified .execution-meta .action-time { margin: 0; font-size: 12px; }
+.task-unified .execution-target { overflow-wrap: anywhere; }
+.task-unified .execution-section-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); padding: 6px 0; }
+.task-unified .execution-section-title button { border: 0; background: transparent; font-size: 12px; padding: 3px 8px; min-height: 30px; }
+.task-unified .execution-entry pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 22px; padding: 0; border: 0; border-radius: 0; background: transparent; margin: 0 0 12px; }
+.task-unified .execution-command { max-height: 132px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.task-unified .execution-output { height: 110px; min-height: 110px; overflow: auto; white-space: pre; color: var(--muted); }
+.task-unified .execution-output.error-text { color: var(--danger); }
+.task-unified .execution-raw { border-top: 1px solid var(--line); margin-top: 10px; }
+.task-unified .execution-raw > summary { min-height: 40px; padding: 8px 0; font-size: 12px; color: var(--muted); }
+.task-unified .execution-raw pre { max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding-block: 8px; }
+.task-unified summary::-webkit-details-marker { display: none; }
+.task-unified .stream-artifact { margin: 0 0 20px; scroll-margin-block: 70px; }
+.task-unified .reply-composer-stack { max-width: 804px; margin-top: 8px; }
+.task-unified .task-resources { min-width: 0; min-height: 0; overflow: auto; padding: 20px 16px; border-left: 1px solid var(--line); background: var(--bg); }
+.task-unified .task-resources h2 { font-size: 15px; }
+.task-unified .task-resources h3 { font-size: 13px; margin-bottom: 12px; }
+.task-unified .resource-section { margin-top: 24px; }
+.task-unified .resource-link { display: flex; align-items: center; width: 100%; gap: 8px; border: 0; background: transparent; text-align: left; padding: 10px 0; font-size: 13px; }
+.task-unified .resource-link > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.task-unified .resource-link > svg { flex: none; }
+
+@media (max-width: 1000px) {
+  .task-unified .task-columns.with-resources { grid-template-columns: minmax(0, 1fr); }
+  .task-unified .task-resources { position: absolute; z-index: 5; inset: 0 0 0 auto; width: min(420px, 100%); }
+}
+@media (max-width: 620px) {
+  .task-unified .conversation-column { padding-inline: 16px; }
+  .task-unified .message.owner { gap: 8px; }
+  .task-unified .owner-content { max-width: calc(100% - 40px); }
+  .task-unified .message.owner .message-avatar, .task-unified .run-byline .assistant-avatar { width: 32px; height: 32px; }
+  .task-unified .run-byline { gap: 8px; }
+  .task-unified .run-content { margin-left: 40px; }
+
+  .task-unified .execution-entry > .action-body { padding-inline: 14px; }
+  .task-unified .execution-entry > summary { padding-inline: 10px; gap: 7px; }
+  .task-unified .execution-command { font-size: 12px; }
+  .task-unified .thinking-block summary { flex-wrap: wrap; gap: 6px; }
+  .task-unified .execution-review { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .task-unified .disclosure { transition: none; }
+}

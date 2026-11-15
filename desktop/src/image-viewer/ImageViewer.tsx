@@ -95,10 +95,10 @@ function ImageSlide({ record, index, count, onClose, onPrevious, onNext }: {
     <header className="image-viewer-header">
       <div className="image-viewer-title"><h2>{text(record, "name") || "Image"}</h2><span>{size ? `${size.width} × ${size.height}` : imageMime(record)?.replace("image/", "").toUpperCase()}</span></div>
       <div className="image-viewer-actions">
-        <button className="icon-button" aria-label="Previous image" disabled={index <= 0} onClick={onPrevious}><ChevronLeft size={18} /></button>
+        <button className="icon-button" aria-label="Previous image" title="Previous image" disabled={index <= 0} onClick={onPrevious}><ChevronLeft size={18} /></button>
         <span className="image-position" aria-live="polite">{index + 1} / {count}</span>
-        <button className="icon-button" aria-label="Next image" disabled={index >= count - 1} onClick={onNext}><ChevronRight size={18} /></button>
-        <button className="icon-button" aria-label="Close image viewer" onClick={onClose}><X size={19} /></button>
+        <button className="icon-button" aria-label="Next image" title="Next image" disabled={index >= count - 1} onClick={onNext}><ChevronRight size={18} /></button>
+        <button className="icon-button" aria-label="Close image viewer" title="Close image viewer" onClick={onClose}><X size={19} /></button>
       </div>
     </header>
     <div className="image-stage" ref={stage} tabIndex={0} aria-label="Image canvas" aria-busy={!ready && !error}
@@ -135,13 +135,13 @@ function ImageSlide({ record, index, count, onClose, onPrevious, onNext }: {
     </div>
     <footer className="image-viewer-toolbar">
       <div className="image-zoom-controls">
-        <button className="icon-button" aria-label="Zoom out" disabled={!ready || scale <= .01} onClick={() => changeZoom(scale * .8)}><Minus size={16} /></button>
+        <button className="icon-button" aria-label="Zoom out" title="Zoom out" disabled={!ready || scale <= .01} onClick={() => changeZoom(scale * .8)}><Minus size={16} /></button>
         <output aria-label="Zoom level">{ready ? `${Math.round(scale * 100)}%` : "—"}</output>
-        <button className="icon-button" aria-label="Zoom in" disabled={!ready || scale >= 8} onClick={() => changeZoom(scale * 1.25)}><Plus size={16} /></button>
+        <button className="icon-button" aria-label="Zoom in" title="Zoom in" disabled={!ready || scale >= 8} onClick={() => changeZoom(scale * 1.25)}><Plus size={16} /></button>
         <button title="Fit to window (0)" aria-pressed={zoom === null} disabled={!ready} onClick={() => setZoom(null)}><Maximize size={14} />Fit</button>
         <button title="Actual size (1)" aria-pressed={zoom === 1} disabled={!ready} onClick={() => setZoom(1)}>Actual size</button>
       </div>
-      <button className="image-download" disabled={download.pending || recordedPreview()} onClick={() => void download.download()}><Download size={15} />{download.pending ? "Saving…" : "Download"}</button>
+      <button className="image-download" disabled={!download.available || download.pending || recordedPreview()} onClick={() => void download.download()}><Download size={15} />{download.pending ? "Saving…" : "Download"}</button>
     </footer>
     {(download.error || download.saved) && <p className="image-download-status" role={download.error ? "alert" : "status"}>{download.error || `Saved to ${download.saved}`}</p>}
   </div>;

@@ -1,14 +1,20 @@
 import { useState } from "react";
-import { call, nativeApp, recordedPreview } from "./api";
+import { nativeApp, recordedPreview } from "./api";
 import { text, type ServerRecord } from "./types";
 import type { Connection } from "./useConnection";
 
-export default function ConnectionAdministration({ connection }: { connection: Connection }) {
+function deviceName(device: ServerRecord) {
+  const name = text(device, "name");
+  // Devices enrolled before the rename still carry the original default label.
+  return name === "Outpost Desktop" ? "Outpost" : name;
+}
+
+export default function ConnectionAdministration({ connection, section = "devices" }: { connection: Connection; section?: "devices" | "recovery" }) {
   const devices = connection.records.filter((record) => record.kind === "device");
   const recovery = connection.records.find((record) => record.kind === "recovery" && record.id === "server");
   const self = devices.find((record) => record.id === connection.info?.deviceId);
   const readOnly = recordedPreview() || !nativeApp();
-  const disabled = readOnly || !connection.connected || connection.busy ||
+  const disabled = connection.retired || !!connection.info?.pendingError || readOnly || !connection.connected || connection.busy ||
     !!connection.info?.pending || self?.data.revoked !== false;
   const [revoking, setRevoking] = useState<ServerRecord | null>(null);
   const [acknowledgedRevision, setAcknowledgedRevision] = useState<number | null>(null);
@@ -33,12 +39,12 @@ export default function ConnectionAdministration({ connection }: { connection: C
   }
 
   return <>
-    <section className="settings-section">
+    {section === "devices" && <><section className="settings-section">
       <div>
         <h2>Trusted devices</h2>
         <p>Device authority from authenticated server snapshots. Revocation prevents future signed requests; it does not undo external effects.</p>
         <p role="status">{recordedPreview() ? "Read-only recorded preview. Administration is disabled." :
-          !nativeApp() ? "Open Outpost Desktop to administer this server." :
+          !nativeApp() ? "Open Outpost to administer this server." :
           self?.data.revoked === true ? "This device is revoked. Use another trusted device to manage the server." :
           !connection.connected ? "Offline. Showing last received records, not current authority." :
           self?.data.revoked !== false ? "This device’s authority has not been confirmed." :
@@ -47,14 +53,14 @@ export default function ConnectionAdministration({ connection }: { connection: C
       </div>
       <div className="administration-list">
         {!devices.length && <p>No device records received.</p>}
-        {devices.map((device) => <article className="administration-record" key={device.id} aria-label={text(device, "name") || device.id}>
-          <h3>{text(device, "name") || "Unnamed device"}{device.id === connection.info?.deviceId ? " (this device)" : ""}</h3>
+        {devices.map((device) => <article className="administration-record" key={device.id} aria-label={deviceName(device) || device.id}>
+          <h3>{deviceName(device) || "Unnamed device"}{device.id === connection.info?.deviceId ? " (this device)" : ""}</h3>
           <p>{device.data.revoked === true ? "Revoked" : device.data.revoked === false ? "Trusted" : "Authority unknown"} · Revision {device.revision}</p>
           <code className="identity-value">{device.id}</code>
           <details><summary>Public pairing key</summary><code className="identity-value">{text(device, "publicKey") || "Unavailable"}</code></details>
-          <button disabled={disabled || device.data.revoked !== false} onClick={() => setRevoking(device)}>Revoke {text(device, "name") || "device"}…</button>
+          <button disabled={disabled || device.data.revoked !== false} onClick={() => setRevoking(device)}>Revoke {deviceName(device) || "device"}…</button>
           {revoking?.id === device.id && <div className="administration-confirmation" role="group" aria-label="Confirm device revocation">
-            <p>Revoke {text(revoking, "name") || revoking.id} at revision {revoking.revision}?{revoking.id === connection.info?.deviceId ? " This Mac will lose access. Another trusted device will be needed to administer the server." : " This device will lose server access."}</p>
+            <p>Revoke {deviceName(revoking) || revoking.id} at revision {revoking.revision}?{revoking.id === connection.info?.deviceId ? " This Mac will lose access. Another trusted device will be needed to administer the server." : " This device will lose server access."}</p>
             {revokeChanged && <p role="alert">Device changed. Cancel and review its current revision.</p>}
             <button onClick={() => setRevoking(null)}>Cancel</button>{" "}
             <button disabled={disabled || !!revokeChanged} onClick={() => void mutate("device.revoke", revoking)}>Confirm revocation</button>
@@ -72,7 +78,7 @@ export default function ConnectionAdministration({ connection }: { connection: C
         event.preventDefault();
         if (disabled) return;
         setNotice("");
-        void connection.perform(() => call<ServerRecord>("enroll_device", { deviceId: deviceId.trim(), name: name.trim(), publicKey: publicKey.trim() })).then((result) => {
+        void connection.perform(() => connection.api.call<ServerRecord>("enroll_device", { deviceId: deviceId.trim(), name: name.trim(), publicKey: publicKey.trim() })).then((result) => {
           if (result) { setName(""); setDeviceId(""); setPublicKey(""); }
         });
       }}>
@@ -84,8 +90,8 @@ export default function ConnectionAdministration({ connection }: { connection: C
         <input id="enroll-key" required disabled={disabled} autoComplete="off" spellCheck={false} value={publicKey} onChange={(event) => setPublicKey(event.target.value)} />
         <button disabled={disabled || !name.trim() || !deviceId.trim() || !publicKey.trim()}>Enroll device</button>
       </form>
-    </section>
-    <section className="settings-section">
+    </section></>}
+    {section === "recovery" && <section className="settings-section">
       <div>
         <h2>Recovery Hold</h2>
         <p>Before enabling dispatch, review device authority, pending work and unknown external effects. Resuming permits queued work to run; it does not reconcile those effects.</p>
@@ -105,7 +111,7 @@ export default function ConnectionAdministration({ connection }: { connection: C
           </>}
         </>}
       </div>
-    </section>
+    </section>}
     {notice && <p role="status">{notice}</p>}
   </>;
 }

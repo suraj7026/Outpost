@@ -1,0 +1,397 @@
+/* Workspace pages (Automations, Memory, All chats, Approvals) — offline preview.
+   Every rule here is scoped to `workspace-review-` so the mock cannot restyle
+   production screens. Tokens come from the shared stylesheet. */
+
+.workspace-review-page {
+  display: grid;
+  gap: 24px;
+  align-content: start;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ heading */
+
+.workspace-review-page .workspace-review-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.workspace-review-page .workspace-review-heading h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.workspace-review-page .workspace-review-heading p {
+  margin: 6px 0 0;
+  max-width: 64ch;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.workspace-review-page .workspace-review-heading-actions {
+  flex: none;
+  align-items: center;
+}
+
+/* ------------------------------------------------------------------ notice */
+
+.workspace-review-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--raised);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.workspace-review-notice > svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--warning);
+}
+
+.workspace-review-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ lists */
+
+.workspace-review-page .workspace-review-list {
+  display: grid;
+  border-top: 1px solid var(--line);
+}
+
+.workspace-review-page .workspace-review-item.row {
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.workspace-review-page .workspace-review-item-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--muted);
+}
+
+.workspace-review-page .workspace-review-item-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.workspace-review-page .workspace-review-item-text {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.workspace-review-page .workspace-review-item-actions {
+  flex: none;
+  align-items: center;
+}
+
+.workspace-review-page .workspace-review-note-text {
+  margin-top: 0;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+/* ------------------------------------------------------------------ scope switch */
+
+.workspace-review-scope {
+  display: inline-flex;
+  gap: 4px;
+  justify-self: start;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--raised);
+}
+
+.workspace-review-scope button {
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.workspace-review-scope button:hover {
+  color: var(--text);
+}
+
+.workspace-review-scope button[aria-pressed="true"] {
+  background: var(--active);
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------------ toolbar */
+
+.workspace-review-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.workspace-review-search {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ chats */
+
+.workspace-review-page .workspace-review-chat {
+  border-bottom: 1px solid var(--line);
+}
+
+.workspace-review-chat-open {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0 -12px;
+  padding: 13px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspace-review-chat-open:hover {
+  background: var(--raised);
+}
+
+.workspace-review-chat-icon {
+  flex: none;
+  color: var(--muted);
+}
+
+.workspace-review-chat-body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.workspace-review-chat-title {
+  font-size: 14px;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+
+.workspace-review-chat-chevron {
+  flex: none;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ example action */
+
+.workspace-review-example {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--raised);
+}
+
+.workspace-review-example-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.workspace-review-example-head .workspace-review-item-icon {
+  background: var(--surface);
+}
+
+.workspace-review-example-actions {
+  align-items: center;
+}
+
+.workspace-review-command {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.workspace-review-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 12px 20px;
+  margin: 0;
+}
+
+.workspace-review-facts > div {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  min-width: 0;
+}
+
+.workspace-review-facts dt {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.workspace-review-facts dd {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.workspace-review-facts-plain {
+  padding-top: 4px;
+}
+
+/* ------------------------------------------------------------------ switch */
+
+.workspace-review-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.workspace-review-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+}
+
+.workspace-review-switch-track {
+  position: relative;
+  display: block;
+  width: 34px;
+  height: 20px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background 140ms var(--ease, ease);
+}
+
+.workspace-review-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 140ms var(--ease, ease), background 140ms var(--ease, ease);
+}
+
+.workspace-review-switch input:checked + .workspace-review-switch-track {
+  background: var(--active);
+}
+
+.workspace-review-switch input:checked + .workspace-review-switch-track .workspace-review-switch-thumb {
+  transform: translateX(14px);
+  background: var(--positive);
+}
+
+.workspace-review-switch input:focus-visible + .workspace-review-switch-track {
+  outline: 2px solid var(--control);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ dialog */
+
+.workspace-review-dialog {
+  min-width: 0;
+}
+
+.workspace-review-dialog p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.workspace-review-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.workspace-review-field-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.workspace-review-two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+  gap: 16px;
+  min-width: 0;
+}
+
+.workspace-review-two-col > * {
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ narrow */
+
+@media (max-width: 720px) {
+  .workspace-review-page .workspace-review-heading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .workspace-review-page .workspace-review-item.row {
+    flex-wrap: wrap;
+  }
+
+  .workspace-review-page .workspace-review-item-actions {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-review-switch-track,
+  .workspace-review-switch-thumb {
+    transition: none;
+  }
+}

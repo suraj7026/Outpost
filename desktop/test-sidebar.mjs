@@ -34,6 +34,8 @@ async function open(width, colorScheme = 'dark') {
     window.__TAURI_INTERNALS__ = {
       transformCallback() { return ++sequence; }, unregisterCallback() {},
       async invoke(command, args) {
+        if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: null, environments: {} }, legacy: { endpoint: null, pending: false } };
+        if (command === 'disconnect') return;
         if (command === 'set_sidebar_window_controls') { window.__controls.push(args.visible); window.__controlFrames.push(args); return; }
         if (command === 'sidebar_pointer_inside') return window.__nativeArea ?? (x >= 0 && x <= args.width && y >= 0 && y <= innerHeight);
         if (command === 'connection_info') return { endpoint: 'Synthetic transport', deviceId: 'fixture', pending: false, nativeSidebar: false };
@@ -53,10 +55,13 @@ try {
     const page = await open(1320, scheme);
     await controls(page, true);
     check(await page.locator('#app-sidebar .sidebar-chrome button').count() === 1, 'One state-aware sidebar control replaces Close and Pin');
-    check(await page.locator('.task-heading .sidebar-toggle, .topbar .sidebar-toggle').count() === 0, 'Content headers have no sidebar controls');
+    check(await page.locator('.topbar, .task-heading, .task-title').count() === 0, 'Content headers are removed, not hidden with their sidebar controls');
+    check(await page.locator('.conversation').evaluate(node => node.getBoundingClientRect().top - document.querySelector('.main-shell').getBoundingClientRect().top <= 32), 'Conversation starts at the workspace top without a reserved header row');
+    check(await page.locator('.reply-composer').evaluate(node => Math.abs(document.querySelector('.main-shell').getBoundingClientRect().bottom - node.getBoundingClientRect().bottom - 12) <= 1), 'Composer stays pinned after removing the task header');
+    check(await page.locator('#app-sidebar .brand').count() === 0, 'Sidebar brand is removed from the DOM');
     const geometry = () => page.evaluate(() => {
       const box = selector => { const rect = document.querySelector(selector).getBoundingClientRect(); return { x: rect.x, y: rect.y, width: rect.width }; };
-      return { sidebar: box('#app-sidebar'), brand: box('.brand'), navigation: box('.web-sidebar nav'), chrome: box('.sidebar-chrome'), control: box('.sidebar-chrome button') };
+      return { sidebar: box('#app-sidebar'), navigation: box('.web-sidebar nav'), chrome: box('.sidebar-chrome'), control: box('.sidebar-chrome button') };
     });
     const anchor = await geometry();
     const nativeRequests = await page.evaluate(() => window.__controlFrames.length);
@@ -161,7 +166,9 @@ try {
     await shown(page, false);
     await page.getByRole('heading', { name: 'What should run next?', exact: true }).waitFor();
     await page.mouse.move(1, 400); await shown(page, true);
-    await page.locator('.topbar').click({ position: { x: 300, y: 20 } }); await shown(page, false);
+    check(await page.locator('.topbar, .task-heading, .task-title').count() === 0, 'Home also has no hidden header DOM');
+    await page.locator('.home').click({ position: { x: 300, y: 20 } }); await shown(page, false);
+    check(await page.locator('.home').evaluate(node => Math.abs(node.getBoundingClientRect().top - document.querySelector('.main-shell').getBoundingClientRect().top) <= 1), 'Home content starts at the main-shell top after outside-click dismissal');
     await page.evaluate(() => { const dialog = document.createElement('dialog'); dialog.id = 'test-dialog'; document.body.append(dialog); dialog.showModal(); });
     await page.mouse.move(500, 400); await page.mouse.move(1, 400);
     await page.keyboard.press('Meta+b');

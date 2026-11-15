@@ -5,11 +5,13 @@
 @property(nonatomic, weak) NSWindow *window;
 @property(nonatomic) BOOL visible;
 @property(nonatomic) BOOL applying;
+@property(nonatomic) BOOL reapplyScheduled;
 @property(nonatomic) NSPoint anchor;
 @property(nonatomic) CGFloat spacing;
 @property(nonatomic, strong) NSHashTable<NSView *> *observedViews;
 - (instancetype)initWithWindow:(NSWindow *)window;
 - (void)apply;
+- (void)reapplyAfterLayout;
 @end
 
 @implementation OutpostWindowControls
@@ -22,6 +24,7 @@
         _spacing = MAX(20, minimize.frame.origin.x - close.frame.origin.x);
         for (NSNotificationName name in @[NSWindowDidResizeNotification, NSWindowDidEndLiveResizeNotification,
                                          NSWindowDidUpdateNotification, NSWindowDidBecomeKeyNotification,
+                                         NSWindowDidResignKeyNotification, NSWindowDidDeminiaturizeNotification,
                                          NSWindowDidExitFullScreenNotification]) {
             [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(geometryChanged:)
                                                         name:name object:window];
@@ -40,7 +43,20 @@
                                                 name:NSViewFrameDidChangeNotification object:view];
 }
 - (void)geometryChanged:(NSNotification *)notification {
+    if (self.applying) return;
     [self apply];
+    [self reapplyAfterLayout];
+}
+- (void)reapplyAfterLayout {
+    if (!self.visible || self.reapplyScheduled) return;
+    self.reapplyScheduled = YES;
+    // AppKit can finish laying out the zoom widget after the window notification.
+    __weak OutpostWindowControls *weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        OutpostWindowControls *controls = weakSelf;
+        controls.reapplyScheduled = NO;
+        [controls apply];
+    });
 }
 - (void)apply {
     NSWindow *window = self.window;
@@ -93,6 +109,7 @@ void outpost_set_window_controls(void *pointer, bool visible, double x, double c
     [controls apply];
     [window.contentView.superview layoutSubtreeIfNeeded];
     [controls apply];
+    [controls reapplyAfterLayout];
 }
 
 bool outpost_sidebar_pointer_inside(void *pointer, double width) {
@@ -102,4 +119,14 @@ bool outpost_sidebar_pointer_inside(void *pointer, double width) {
     NSRect bounds = window.contentView.bounds;
     // Includes the native traffic-light row, which doesn't emit DOM pointer events.
     return NSPointInRect(point, NSMakeRect(0, 0, MIN(width, NSWidth(bounds)), NSHeight(bounds)));
+}
+
+// AppKit materials add tint and do not expose a behind-window blur radius.
+extern int32_t CGSDefaultConnectionForThread(void) __attribute__((weak_import));
+extern CGError CGSSetWindowBackgroundBlurRadius(int32_t connection, NSInteger windowNumber, int radius) __attribute__((weak_import));
+
+bool outpost_set_window_blur(void *pointer, unsigned int radius) {
+    NSWindow *window = (__bridge NSWindow *)pointer;
+    if (!CGSDefaultConnectionForThread || !CGSSetWindowBackgroundBlurRadius || window.windowNumber <= 0) return false;
+    return CGSSetWindowBackgroundBlurRadius(CGSDefaultConnectionForThread(), window.windowNumber, (int)radius) == kCGErrorSuccess;
 }

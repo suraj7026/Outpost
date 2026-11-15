@@ -26,13 +26,13 @@ function ArtifactContent({ record }: { record: ServerRecord }) {
     return () => observer.disconnect();
   }, [supported, preview]);
   return <div className="artifact" ref={container}>
-    {supported && <button className="artifact-preview" aria-label={`View ${name}`} disabled={preview} onClick={(event) => open(record, event.currentTarget)}>
+    {supported && <button className="artifact-preview" aria-label={`View ${name}`} disabled={preview || !download.available} onClick={(event) => open(record, event.currentTarget)}>
       {image.url && !decodeError ? <img src={image.url} alt="" onError={() => setDecodeError(true)} /> : <span><Image size={19} />{preview ? "Preview unavailable in recorded view" : image.error || decodeError ? "Open image to retry" : "Open image"}</span>}
     </button>}
     <div className="artifact-row">
       <File size={15} />
-      {supported ? <button className="artifact-name" aria-label={`Open ${name}`} disabled={preview} onClick={(event) => open(record, event.currentTarget)}>{name}</button> : <span>{name}</span>}
-      <button className="icon-button" aria-label={`Download ${name}`} disabled={preview || download.pending} onClick={() => void download.download()}><Download size={15} /></button>
+      {supported ? <button className="artifact-name" aria-label={`Open ${name}`} disabled={preview || !download.available} onClick={(event) => open(record, event.currentTarget)}>{name}</button> : <span>{name}</span>}
+      <button className="icon-button" aria-label={`Download ${name}`} title={`Download ${name}`} disabled={preview || !download.available || download.pending} onClick={() => void download.download()}><Download size={15} /></button>
     </div>
     {download.saved && <p className="small" role="status">Saved to {download.saved}</p>}
     {download.error && <p className="small error-text" role="alert">{download.error}</p>}

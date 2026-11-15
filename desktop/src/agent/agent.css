@@ -1,4 +1,4 @@
-/* Preserve Studio's existing shell, Geist type and neutral surfaces. */
+/* Preserve Studio's existing shell, shared typography and neutral surfaces. */
 .agent-settings-body { min-width: 0; display: grid; gap: 16px; }
 .agent-settings-body code { overflow-wrap: anywhere; }
 .provider-settings > div:first-child { min-width: 0; }
@@ -16,7 +16,7 @@
 .agent-settings-body summary { cursor: pointer; font-size: 14px; padding: 8px 0; }
 .agent-settings-body .agent-check { display: flex; align-items: center; gap: 8px; }
 .agent-settings-body .agent-check input { min-height: 0; width: auto; }
-.message-byline .message-model { min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
+
 .model-picker-trigger { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 300px; }
 .model-picker-trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-picker-trigger svg { flex: none; }

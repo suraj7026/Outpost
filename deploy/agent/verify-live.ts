@@ -20,7 +20,7 @@ async function command(type: string, revision: number, payload: Record<string,un
 try {
   await command('task.create',0,{
     profile: 'operations',mode: 'full_control',
-    goal: 'Integration verification only. Perform these real actions through outpost_action, then summarize the observed evidence. 1. file.write: create integration-check.txt containing exactly OUTPOST_WORKSPACE_OK with expectedHash null. 2. command.run: argv ["/bin/bash","-lc","pwd; cat integration-check.txt"], cwd ".". 3. host.execute on surajhomeserver with command "id -u; hostname". 4. host.execute on surajhomeserver2 with command "id -u; hostname". 5. browser.run with task "Open https://example.com and report the page title and heading. Do not visit other sites or submit forms." and maxSteps 5. Do not install, restart, deploy or change any other files or services. Do not claim success for failed actions.',
+    goal: 'Integration verification only. Perform these real actions through outpost_action, then summarize the observed evidence. 1. file.write: create integration-check.txt containing exactly OUTPOST_WORKSPACE_OK with expectedHash null. 2. command.run: argv ["/bin/bash","-lc","pwd; cat integration-check.txt"], cwd ".". 3. host.execute on surajhomeserver with command "id -u; hostname". 4. host.execute on surajhomeserver2 with command "id -u; hostname". 5. browser.open with url https://example.com, then browser.capture. Report the observed title and heading. Do not visit other sites or submit forms. Do not install, restart, deploy or change any other files or services. Do not claim success for failed actions.',
   });
   console.log(`Real signed-API integration task: ${taskId}`);
   const deadline = Date.now()+420000;
@@ -40,14 +40,12 @@ try {
   assert.ok(commandResult.stdout.includes('OUTPOST_WORKSPACE_OK'));
   const hostResults = actions.filter(action => action.data.tool === 'host.execute' && action.data.state === 'succeeded').map(action => z.object({ exitCode: z.literal(0),host: z.string(),stdout: z.string(),timedOut: z.literal(false) }).parse(action.data.result));
   for (const host of ['surajhomeserver','surajhomeserver2']) assert.ok(hostResults.some(result => result.host === host && result.stdout.trim() === `0\n${host}`));
-  const browser = z.object({ done: z.literal(true),agent_reported_success: z.literal(true),urls: z.array(z.string()),screenshots: z.array(z.string()).min(1),artifactIds: z.array(z.string()).min(2) }).parse(actions.find(action => action.data.tool === 'browser.run' && action.data.state === 'succeeded')?.data.result);
-  assert.ok(browser.urls.some(url => new URL(url).hostname === 'example.com'));
-  for (const path of browser.screenshots) {
-    const bytes = readFileSync(path);
-    assert.ok(bytes.length > 1000 && bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])),'Browser capture is an actual PNG');
-  }
-  for (const artifactId of browser.artifactIds) assert.equal(db.need('artifact',artifactId).data.taskId,taskId);
-  console.log('Signed API → Pi SDK → workspace files/commands → both root executors → self-hosted Browser-Use: PASSED');
+  const browser = z.object({ title: z.string(), url: z.string() }).parse(actions.find(action => action.data.tool === 'browser.open' && action.data.state === 'succeeded')?.data.result);
+  assert.equal(new URL(browser.url).hostname, 'example.com');
+  assert.equal(browser.title, 'Example Domain');
+  const capture = z.object({ artifactIds: z.array(z.string()).min(1) }).parse(actions.find(action => action.data.tool === 'browser.capture' && action.data.state === 'succeeded')?.data.result);
+  for (const artifactId of capture.artifactIds) assert.equal(db.need('artifact',artifactId).data.taskId,taskId);
+  console.log('Signed API → Pi SDK → workspace files/commands → both root executors → direct Camoufox browser: PASSED');
 } finally {
   const task = db.get('task',taskId);
   if (task && task.data.state === 'running') await command('task.cancel',task.revision,{}).catch(() => {});

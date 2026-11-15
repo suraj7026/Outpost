@@ -1,0 +1,59 @@
+
+.server-terminal-pane { display: flex; flex-direction: column; min-width: 0; min-height: 180px; height: clamp(230px, 36vh, 400px); flex: none; padding: 0 18px 12px; border-top: 1px solid var(--control); background: var(--bg); overflow: auto; }
+.server-terminal-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 0; flex: none; }
+.server-terminal-identity { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 12px; }
+.server-terminal-identity > strong { padding-right: 12px; border-right: 1px solid var(--control); font-size: 12px; }
+.server-terminal-identity > div { min-width: 0; overflow-wrap: anywhere; }
+.server-terminal-identity small { display: block; margin-top: 4px; font-size: 11px; color: var(--muted); }
+.server-terminal-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.server-terminal-actions button { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; font-size: 12px; padding: 5px 9px; }
+.server-terminal-actions .server-terminal-reboot, .server-reboot-authorize { color: var(--danger); }
+.server-terminal-state { color: var(--muted); font-size: 11px; margin: 0 0 8px; }
+.server-terminal-screen { flex: 1; min-height: 92px; min-width: 0; overflow: hidden; padding: 10px; border: 1px solid var(--line); border-radius: 8px 8px 0 0; background: #101113; }
+.server-terminal-emulator { width: 100%; height: 100%; }
+.server-terminal-emulator .xterm { height: 100%; }
+.server-terminal-emulator .xterm-viewport { overscroll-behavior: contain; }
+.server-terminal-footer { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 8px 10px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 8px 8px; font-size: 10px; color: var(--muted); flex: none; }
+.server-terminal-notice, .server-terminal-reboot-status { font-size: 12px; padding: 10px; margin: 0 0 8px; background: var(--raised); border-radius: 6px; overflow-wrap: anywhere; flex: none; }
+.server-terminal-notice p { margin: 0 0 8px; }
+.server-terminal-notice a, .machines-page a, .machines-terminal-page a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.server-reboot-dialog { width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--control); border-radius: 14px; background: var(--surface, var(--bg)); color: var(--text); padding: 24px; }
+.server-reboot-dialog::backdrop { background: #0009; }
+.server-reboot-heading { display: flex; align-items: center; justify-content: space-between; color: var(--danger); }
+.server-reboot-dialog h2 { font-size: 21px; margin: 18px 0 12px; }
+.server-reboot-dialog p { font-size: 13px; line-height: 1.6; }
+.server-reboot-target { display: grid; gap: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin: 16px 0; overflow-wrap: anywhere; }
+.server-reboot-target span, .server-reboot-target small { font-size: 12px; color: var(--muted); }
+.server-reboot-confirm { display: block; font-size: 13px; }
+.server-reboot-confirm input { display: block; width: 100%; margin-top: 8px; }
+.server-reboot-password { display: flex; align-items: flex-start; gap: 9px; font-size: 12px; margin: 18px 0; }
+.server-reboot-password input { width: auto; margin-top: 2px; flex: none; }
+.machines-server-list { display: grid; gap: 12px; margin: 24px 0; }
+.machines-server-card { display: flex; align-items: center; gap: 16px; border: 1px solid var(--line); border-radius: 10px; padding: 20px; }
+.machines-server-card > div { flex: 1; min-width: 0; }
+.machines-server-card h2 { font-size: 16px; margin: 0 0 6px; overflow-wrap: anywhere; }
+.machines-server-card p { margin: 0; font-size: 12px; color: var(--muted); }
+.machines-server-card button, .machines-terminal-heading button { display: inline-flex; align-items: center; gap: 8px; }
+.machines-terminal-page { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.machines-terminal-heading { padding: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.machines-terminal-heading h1 { font-size: 24px; margin: 16px 0 0; }
+.machines-terminal-heading a { font-size: 12px; }
+.server-terminal-full { flex: 1; height: auto; }
+@media (max-width: 620px) {
+
+  .server-terminal-pane { padding-inline: 10px; height: 38vh; min-height: 250px; }
+  .server-terminal-full { height: auto; }
+  .server-terminal-identity > strong { display: none; }
+  .server-terminal-toolbar { gap: 8px; }
+  .server-terminal-actions { gap: 4px; }
+  .server-terminal-actions button { min-height: 40px; }
+  .server-terminal-footer { flex-wrap: wrap; }
+  .server-terminal-footer > span:nth-child(2) { display: none; }
+  .machines-server-card { flex-wrap: wrap; }
+  .machines-server-card > div { flex-basis: 70%; }
+  .machines-terminal-heading { padding: 16px; }
+  .server-reboot-dialog { padding: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .server-terminal-pane *, .server-reboot-dialog * { animation: none !important; transition: none !important; }
+}

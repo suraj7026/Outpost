@@ -1,0 +1,700 @@
+{
+  "schemaVersion": 1,
+  "qualificationScope": "One full isolated Linux qualification of unchanged helper b47 after the authorized fixture-only ACL-capable ancestor bind. Not production authorization.",
+  "status": "passed",
+  "qualificationPassed": true,
+  "fullLinuxSuiteRunForThisHash": true,
+  "command": [
+    "python3",
+    "-B",
+    "scripts/qualify-setup-restart.py"
+  ],
+  "workingDirectory": "/Users/sudarshanrajagopalan/Developer/Outpost",
+  "environmentOverride": {
+    "PATHPrefix": "/Applications/Docker.app/Contents/Resources/bin"
+  },
+  "runnerInvocations": 1,
+  "allCasesRequested": true,
+  "caseSelectionArguments": [],
+  "retried": false,
+  "interruptionHandling": "The existing attempt had already completed successfully before the follow-up interruption message. Its captured result and cleanup were collected; no duplicate qualification was dispatched.",
+  "startedAt": "2026-11-15T12:57:05.363550+00:00",
+  "finishedAt": "2026-11-15T12:59:37.165632+00:00",
+  "elapsedSeconds": 151.801,
+  "exitCode": 0,
+  "terminalTimeoutMs": 900000,
+  "captureTimeoutSeconds": 850,
+  "timedOut": false,
+  "runId": "outpost-reset-qual-34c2dca9c535",
+  "requestedHelperSha256": "b47fca46be69ab592314a69b24c96b51e467a8def0ecb2d2e5db8d9aa794fc8d",
+  "testedHelperSha256": "b47fca46be69ab592314a69b24c96b51e467a8def0ecb2d2e5db8d9aa794fc8d",
+  "fixtureCorrection": {
+    "astWhitespaceAndDiagnosticsPassed": true,
+    "helperAndPolicyUnchanged": true,
+    "path": "desktop/src-tauri/src/test_setup_restart_linux.py",
+    "priorAssertionsAndVariantsPreserved": true,
+    "scope": "ACL-capable container-owned backing bound only onto /run/systemd/transient before review; existing declarations/portable metadata verified; guarded drop-in parents remain nonmountpoints; owned mount verified/unmounted in teardown.",
+    "source": "/srv/qualification/cpu-weight-transient",
+    "target": "/run/systemd/transient",
+    "guardedDropinParentsAndFilesNotMountpoints": true,
+    "mountStableAcrossEveryReviewAndApply": true,
+    "realSetfaclProbeBeforeAnyReview": true,
+    "metadataPolicy": "cp -a preserves existing declarations. Verification compares types/modes, UID/GID, mtime, regular-file size/content hashes, symlink text and xattr hashes. Linked regular declarations or unsupported node types refuse. Cross-filesystem device/inode/ctime cannot be copied; read atimes are not compared. The original tree is rechecked after unmount.",
+    "preexistingDeclarationCountObserved": 0,
+    "preservationCoverageLimit": "The actual preexisting declaration count is recorded; no claim is made that this run exercised a nonempty transient tree if that count is zero.",
+    "priorAssertionsAndVariantsProof": "Removing only the backing setup and mount-consistency checks exactly reproduces the final-17 Linux-test SHA-256. All eight post-scan replacements, real setfacl calls and native-tree/identity/intent-absence assertions are retained."
+  },
+  "sourceSha256BeforeCorrection": {
+    "deploy/environment/host_install.py": "d5ce74e40751e1ab9cb736f5e8f72f368f364e9e78d812a61fd952a7e47814ce",
+    "desktop/src-tauri/src/server_restart.rs": "069cafb96daec2e0dca3a0573eb005534075096f6e16dc6ce891668767a080eb",
+    "desktop/src-tauri/src/setup_restart_bootstrap.py": "11a88641f12ef19dc618facb9e4d7058b35769b83c775a8d6ee1a87c46965392",
+    "desktop/src-tauri/src/setup_restart_helper.py": "b47fca46be69ab592314a69b24c96b51e467a8def0ecb2d2e5db8d9aa794fc8d",
+    "desktop/src-tauri/src/test_setup_restart_bootstrap.py": "d16b215c07d3a6a8f0d125d2860869fae725406ba07b9ac9b0f0cc1a108c65e5",
+    "desktop/src-tauri/src/test_setup_restart_helper.py": "5b8381ec4932acbc1543163b8d69283b443cf32df88442965fca8d5f8bf8f512",
+    "desktop/src-tauri/src/test_setup_restart_linux.py": "f7676e0b354267ca5a54bfe7f83f4539d28baebfebd3d77d9277746ca9cf516e",
+    "scripts/fixtures/outpost2-original-release.tar.gz": "f79cfd440df77d7fda482e707126df7fe84167551644d5540eb8874c44d52c57",
+    "scripts/qualify-setup-restart.py": "b5dd3ebd16a2ba02a7910f35a6794800642e28470ee0db0a8f146931d8e34715",
+    "scripts/repair-outpost2-browser.py": "ac2ec0b4c767897fff4f9fbc35c6cd8e17bdf433b507943cbe8b296c02f3095d",
+    "server/browser-engine/launch.py": "467d6f496c9d0ab06ba10799269e13f4cf8738ea6bdb01f4293412ffa50a07b2"
+  },
+  "sourceSha256Before": {
+    "deploy/environment/host_install.py": "d5ce74e40751e1ab9cb736f5e8f72f368f364e9e78d812a61fd952a7e47814ce",
+    "desktop/src-tauri/src/server_restart.rs": "069cafb96daec2e0dca3a0573eb005534075096f6e16dc6ce891668767a080eb",
+    "desktop/src-tauri/src/setup_restart_bootstrap.py": "11a88641f12ef19dc618facb9e4d7058b35769b83c775a8d6ee1a87c46965392",
+    "desktop/src-tauri/src/setup_restart_helper.py": "b47fca46be69ab592314a69b24c96b51e467a8def0ecb2d2e5db8d9aa794fc8d",
+    "desktop/src-tauri/src/test_setup_restart_bootstrap.py": "d16b215c07d3a6a8f0d125d2860869fae725406ba07b9ac9b0f0cc1a108c65e5",
+    "desktop/src-tauri/src/test_setup_restart_helper.py": "5b8381ec4932acbc1543163b8d69283b443cf32df88442965fca8d5f8bf8f512",
+    "desktop/src-tauri/src/test_setup_restart_linux.py": "10705bbcb1744467b4f486074a0649eeb54b662352a174ed92f807f4a9918b3a",
+    "scripts/fixtures/outpost2-original-release.tar.gz": "f79cfd440df77d7fda482e707126df7fe84167551644d5540eb8874c44d52c57",
+    "scripts/qualify-setup-restart.py": "b5dd3ebd16a2ba02a7910f35a6794800642e28470ee0db0a8f146931d8e34715",
+    "scripts/repair-outpost2-browser.py": "ac2ec0b4c767897fff4f9fbc35c6cd8e17bdf433b507943cbe8b296c02f3095d",
+    "server/browser-engine/launch.py": "467d6f496c9d0ab06ba10799269e13f4cf8738ea6bdb01f4293412ffa50a07b2"
+  },
+  "sourceSha256After": {
+    "deploy/environment/host_install.py": "d5ce74e40751e1ab9cb736f5e8f72f368f364e9e78d812a61fd952a7e47814ce",
+    "desktop/src-tauri/src/server_restart.rs": "069cafb96daec2e0dca3a0573eb005534075096f6e16dc6ce891668767a080eb",
+    "desktop/src-tauri/src/setup_restart_bootstrap.py": "11a88641f12ef19dc618facb9e4d7058b35769b83c775a8d6ee1a87c46965392",
+    "desktop/src-tauri/src/setup_restart_helper.py": "b47fca46be69ab592314a69b24c96b51e467a8def0ecb2d2e5db8d9aa794fc8d",
+    "desktop/src-tauri/src/test_setup_restart_bootstrap.py": "d16b215c07d3a6a8f0d125d2860869fae725406ba07b9ac9b0f0cc1a108c65e5",
+    "desktop/src-tauri/src/test_setup_restart_helper.py": "5b8381ec4932acbc1543163b8d69283b443cf32df88442965fca8d5f8bf8f512",
+    "desktop/src-tauri/src/test_setup_restart_linux.py": "10705bbcb1744467b4f486074a0649eeb54b662352a174ed92f807f4a9918b3a",
+    "scripts/fixtures/outpost2-original-release.tar.gz": "f79cfd440df77d7fda482e707126df7fe84167551644d5540eb8874c44d52c57",
+    "scripts/qualify-setup-restart.py": "b5dd3ebd16a2ba02a7910f35a6794800642e28470ee0db0a8f146931d8e34715",
+    "scripts/repair-outpost2-browser.py": "ac2ec0b4c767897fff4f9fbc35c6cd8e17bdf433b507943cbe8b296c02f3095d",
+    "server/browser-engine/launch.py": "467d6f496c9d0ab06ba10799269e13f4cf8738ea6bdb01f4293412ffa50a07b2"
+  },
+  "helperSourceUnchanged": true,
+  "sourcesUnchangedDuringRun": true,
+  "copiedBuildContextHashesMatchBefore": true,
+  "priorReportsPreserved": {
+    "sha256": {
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-02.json": "d65224aeaa9cce254d887f702c1318cabfc1d8264b09a179c3c481d4eba8712d",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-03.json": "a44f85f9e205e56b23418997f261f855115b42e41278aa3aa962f596fa0db8e3",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-04.json": "7b288a9dcf401fc536b8ae63917c5e4b03320ddddbcc8e9abc2f6f5314bb9118",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-05.json": "6aca7a048b72b265452abbf79ae8e69cb13eefb9fce474709fa24922333aff33",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-06-attempt-01.json": "be1ee97787f998ece3ba2d7bd35b338af18f2b1c1ce0ec62a092beae2036ef44",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-06.json": "dcce79d0036890f6ca37bda8bb1b60531518fb69145085d1faa7ecab47b950f5",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-07.json": "95ff7f14c083a4201dc791aeee2e11f58f17ff984e70d26bfc26aa61e0e5f7ba",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-08-attempt-01.json": "95a4beb648d0099b6b6e374fb82e9dec33345b45d242e34f014c6b85fe9cab96",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-08.json": "d449f05f8e401e4e917b39bcecf0b0a3c916626e4b5420fc5a76f85b71b0f5e6",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-09.json": "bca8475856782a23e3502ab044f08a706243cf8afb49287c939a3431b3256628",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-10.json": "51a53cf352a15e395b5ef13f79fb3cebb7c6b1af07cd1e46ceb135fd848c7bc8",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-11.json": "ca9ca4b2ebdeba889d1296108d800936fba1fa2a7ac4956b20221198fd4aa324",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-12.json": "b239463fd865e37d5710e19fe8a2e89d394a8f7aa26b396035eb8b911b0fcf85",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-13.json": "1fb1f7fec26ac7fab70e5b104d8e337915b1c0244e4e64f3b05cc065b7b6c500",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-14.json": "761682a2d8e1e08083ebd03de2763d6a6e1d3bf11c82151fdbc875ad8b0e37ee",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-15.json": "f086f911b7c469fdff5c5c42e7e65b67309bc1a60735a70d50134236c973841c",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-16.json": "67b975e594b185397ed6644be55b5784c4d36ea2d6eab582ce697ef0355c9f3f",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-final-17.json": "b883467dff956864a9b202bc11fd0f8a8ba5ae620113c6aca33b7b28f263c839",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-findings-b6f37dba4d5f.json": "5d0e7b95761b11e19ffcd241eee800159ca9d5c81edd4b075133bb5542310a23",
+      "docs/implementation/evidence/server-setup-restart/linux-qualification-rerun-01.json": "3c182b5914226e12ba388b6a2662ae1f7ba679889305f11658240ac12677181d"
+    },
+    "allUnchanged": true,
+    "final12ThroughFinal17PrivateLogsUnchanged": true,
+    "failedFinal17Preserved": true
+  },
+  "probes": [
+    {
+      "probe": "default-capabilities",
+      "result": "Isolated systemd did not reach qualification.target"
+    },
+    {
+      "probe": "private-cgroup-systemd",
+      "result": "active"
+    }
+  ],
+  "fixtureSuites": [
+    {
+      "suite": "existing-isolated-fixtures",
+      "run": 240,
+      "passed": 240,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 5.949,
+      "exitCode": 0
+    },
+    {
+      "suite": "bootstrap-transport-fixtures",
+      "run": 8,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 10.585,
+      "exitCode": 0
+    }
+  ],
+  "linuxCases": {
+    "requested": 96,
+    "run": 96,
+    "passed": 96,
+    "failed": 0,
+    "skipped": 0,
+    "notRun": 0,
+    "passedCases": [
+      "test_active_installer_block_and_cooperative_stop",
+      "test_active_owned_units_reset",
+      "test_actual_installation_lock_blocks_without_truncation",
+      "test_benign_unloaded_dependency_cycle_preserved_after_reset",
+      "test_bootstrap_corrupt_real_source_frames_refused",
+      "test_bootstrap_real_helper_reset_via_stdin",
+      "test_bootstrap_real_helper_status_and_packet_limits",
+      "test_capsule_exact_prefixed_generic_and_loaded_metadata_preserved_reset",
+      "test_completed_idempotency_and_unprivileged_status",
+      "test_component_acl_kernel_descriptor_matrix",
+      "test_component_actual_lock_contention",
+      "test_component_authenticated_descriptor_deletion",
+      "test_component_completed_receipt_replay",
+      "test_component_cooperative_stop",
+      "test_component_external_linked_unit_refusal",
+      "test_component_full_root_ownership_and_acl_inventory",
+      "test_component_mount_boundaries",
+      "test_component_process_inventory",
+      "test_component_sigkill_receipt_holds_fresh_installer",
+      "test_component_systemd_reverse_dependency_matrix",
+      "test_component_userdel_and_groupdel",
+      "test_configured_escaped_native_instances_still_refused",
+      "test_configured_template_native_instances_refused",
+      "test_cron_literal_native_identity_or_scope_refused",
+      "test_cron_shell_assignments_preserved_after_reset",
+      "test_dracut_nine_external_links_preserved_after_reset",
+      "test_escaped_instance_and_benign_alias_metadata_preserved_reset",
+      "test_external_access_group_acl",
+      "test_external_access_user_acl",
+      "test_external_account_owned_hardlink",
+      "test_external_default_group_acl",
+      "test_external_default_user_acl",
+      "test_external_identity_process",
+      "test_external_linked_active_reverse_stop_refused_without_hooks",
+      "test_external_linked_changed_snapshot_refused",
+      "test_external_linked_foreign_unit",
+      "test_external_linked_native_alias_and_scope_refused",
+      "test_external_linked_native_names_groups_and_numeric_ids_refused",
+      "test_external_linked_partof_refused_without_hooks",
+      "test_external_linked_unsafe_chain_refused",
+      "test_failed_four_reset_preserves_evidence_links_and_outside_data",
+      "test_finished_owned_units_reset",
+      "test_hotfix_audit_private_identity_and_links_refused",
+      "test_hotfix_changed_snapshot_and_mounted_audit_refused",
+      "test_hotfix_foreign_manifest_or_completion_binding_refused",
+      "test_hotfix_missing_partial_or_unrecorded_audit_refused",
+      "test_hotfix_other_source_or_unpinned_launcher_refused",
+      "test_linux_argument_limit_negative_control",
+      "test_loaded_benign_template_instance_preserved_after_reset",
+      "test_loaded_inventory_and_stale_declaration_snapshot_refused",
+      "test_loaded_template_native_gid_refused",
+      "test_loaded_template_native_uid_refused",
+      "test_mounted_native_root",
+      "test_mounted_owned_unit_file",
+      "test_native_metadata_diagnostic_is_bounded_and_nonsecret",
+      "test_nsfs_inside_native_scope_still_refused",
+      "test_nsfs_nonsupport_does_not_skip_external_identity_audit",
+      "test_nsfs_own_namespace_mount_preserved_through_reset",
+      "test_plain_alias_template_source_prefix_refused",
+      "test_plain_contextless_template_selectors_refused",
+      "test_plain_numeric_prefix_template_references_refused",
+      "test_plain_template_reference_does_not_hide_explicit_native_use",
+      "test_prefixed_identity_changed_scope_rejects_cached_review",
+      "test_prefixed_identity_concrete_native_names_and_ids_refused",
+      "test_prefixed_identity_unknown_syntax_and_expansion_bound_refused",
+      "test_real_cpu_weight_atomic_rewrites_preserved_through_reset",
+      "test_real_cpu_weight_postscan_acl_replacement_refuses_before_intent",
+      "test_real_current_session_hidden_native_references_refuse",
+      "test_real_distinct_current_session_scopes_review_and_apply",
+      "test_real_other_session_and_current_dropin_changes_remain_bound",
+      "test_real_recovery_barrier_stale_tokens_same_id_completion_and_no_replay",
+      "test_real_recovery_changed_snapshot_and_peer_hold_block_before_intent",
+      "test_real_recovery_prior_intent_partial_and_foreign_preparation_refused",
+      "test_real_recovery_sigkill_after_cleanup_cannot_replay",
+      "test_real_reverse_stop_dependencies",
+      "test_recorded_browser_hotfix_real_payload_reset",
+      "test_same_device_bind_mount_descriptor_boundary",
+      "test_sigkill_after_deletion_holds_fresh_installer",
+      "test_sshd_keygen_exact_plain_template_reference_preserved_reset",
+      "test_stock_user_templates_preserved_by_reset",
+      "test_systemd_continued_native_gid_refused",
+      "test_systemd_quoted_native_identity_lists_refused",
+      "test_systemd_unknown_identity_and_activation_syntax_refused",
+      "test_tmpfs_mount_inserted_after_review",
+      "test_unloaded_dependency_only_native_instances_refused",
+      "test_unloaded_transitive_and_source_context_native_instances_refused",
+      "test_userdel_with_retained_primary_groups",
+      "test_uv_locks_changed_after_review_refused",
+      "test_uv_locks_external_identity_use_refused",
+      "test_uv_locks_linked_or_special_inode_refused",
+      "test_uv_locks_nonempty_or_unsafe_mode_refused",
+      "test_uv_locks_real_private_parents_reset",
+      "test_uv_locks_shared_or_foreign_parent_refused",
+      "test_uv_locks_wrong_path_or_foreign_release_refused",
+      "test_wrong_completed_identity",
+      "test_wrong_expected_identity"
+    ],
+    "failedCases": []
+  },
+  "totalTests": {
+    "requested": 344,
+    "run": 344,
+    "passed": 344,
+    "failed": 0,
+    "skipped": 0,
+    "notRun": 0
+  },
+  "aclRegressionEvidence": [
+    {
+      "test": "test_cpu_weight_postscan_native_acls_refuse_before_intent_even_with_zero_permissions",
+      "logLine": 195,
+      "result": "passed"
+    },
+    {
+      "test": "test_cpu_weight_nonnative_acl_changes_are_snapshot_bound",
+      "logLine": 191,
+      "result": "passed"
+    },
+    {
+      "test": "test_cpu_weight_postscan_unavailable_or_malformed_acl_refuses",
+      "logLine": 196,
+      "result": "passed"
+    },
+    {
+      "test": "test_cpu_weight_descriptor_acl_nonsupport_uses_existing_policy",
+      "logLine": 183,
+      "result": "passed"
+    },
+    {
+      "test": "test_cpu_weight_pinned_descriptor_refuses_content_and_acl_read_races",
+      "logLine": 192,
+      "result": "passed"
+    }
+  ],
+  "realPostscanAclRejectionQualified": true,
+  "realPostscanAclCase": {
+    "case": "test_real_cpu_weight_postscan_acl_replacement_refuses_before_intent",
+    "exitCode": 0,
+    "seconds": 3.62,
+    "failures": []
+  },
+  "realPostscanAclRefusalEvidence": [
+    {
+      "logLine": 1905,
+      "data": {
+        "path": "/run/systemd/transient/kubepods-besteffort.slice.d/50-CPUWeight.conf",
+        "kind": "u",
+        "permissions": "r--",
+        "sameContentAndStableMetadata": true,
+        "externalScanCompletedFirst": true,
+        "noIntentOrDeletion": true,
+        "nativeIdentitiesAndSentinelsPreserved": true
+      }
+    },
+    {
+      "logLine": 1907,
+      "data": {
+        "path": "/run/systemd/transient/kubepods-besteffort.slice.d/50-CPUWeight.conf",
+        "kind": "u",
+        "permissions": "---",
+        "sameContentAndStableMetadata": true,
+        "externalScanCompletedFirst": true,
+        "noIntentOrDeletion": true,
+        "nativeIdentitiesAndSentinelsPreserved": true
+      }
+    },
+    {
+      "logLine": 1909,
+      "data": {
+        "path": "/run/systemd/transient/kubepods-besteffort.slice.d/50-CPUWeight.conf",
+        "kind": "g",
+        "permissions": "r--",
+        "sameContentAndStableMetadata": true,
+        "externalScanCompletedFirst": true,
+        "noIntentOrDeletion": true,
+        "nativeIdentitiesAndSentinelsPreserved": true
+      }
+    },
+    {
+      "logLine": 1911,
+      "data": {
+        "path": "/run/systemd/transient/kubepods-besteffort.slice.d/50-CPUWeight.conf",
+        "kind": "g",
+        "permissions": "---",
+        "sameContentAndStableMetadata": true,
+        "externalScanCompletedFirst": true,
+        "noIntentOrDeletion": true,
+        "nativeIdentitiesAndSentinelsPreserved": true
+      }
+    },
+    {
+      "logLine": 1913,
+      "data": {
+        "path": "/run/systemd/transient/kubepods-burstable.slice.d/50-CPUWeight.conf",
+        "kind": "u",
+        "permissions": "r--",
+        "sameContentAndStableMetadata": true,
+        "externalScanCompletedFirst": true,
+        "noIntentOrDeletion": true,
+        "nativeIdentitiesAndSentinelsPreserved": true
+      }
+    },
+    {
+      "logLine": 1915,
+      "data": {
+        "path": "/run/systemd/transient/kubepods-burstable.slice.d/50-CPUWeight.conf",
+        "kind": "u",
+        "permissions": "---",
+        "sameContentAndStableMetadata": true,
+        "externalScanCompletedFirst": true,
+        "noIntentOrDeletion": true,
+        "nativeIdentitiesAndSentinelsPreserved": true
+      }
+    },
+    {
+      "logLine": 1917,
+      "data": {
+        "path": "/run/systemd/transient/kubepods-burstable.slice.d/50-CPUWeight.conf",
+        "kind": "g",
+        "permissions": "r--",
+        "sameContentAndStableMetadata": true,
+        "externalScanCompletedFirst": true,
+        "noIntentOrDeletion": true,
+        "nativeIdentitiesAndSentinelsPreserved": true
+      }
+    },
+    {
+      "logLine": 1919,
+      "data": {
+        "path": "/run/systemd/transient/kubepods-burstable.slice.d/50-CPUWeight.conf",
+        "kind": "g",
+        "permissions": "---",
+        "sameContentAndStableMetadata": true,
+        "externalScanCompletedFirst": true,
+        "noIntentOrDeletion": true,
+        "nativeIdentitiesAndSentinelsPreserved": true
+      }
+    }
+  ],
+  "fixtureBackingEvidence": [
+    {
+      "logLine": 1903,
+      "data": {
+        "source": "/srv/qualification/cpu-weight-transient",
+        "target": "/run/systemd/transient",
+        "mountId": "82",
+        "mountInfo": "82 144 0:62 /srv/qualification/cpu-weight-transient /run/systemd/transient rw,relatime - overlay overlay rw,lowerdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/2992/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/2855/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/2854/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/2853/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/390/fs,upperdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/2993/fs,workdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/2993/work",
+        "realAclProbePassed": true,
+        "existingDeclarationCount": 0,
+        "existingDeclarationsAndPortableMetadataPreserved": true,
+        "hostMountUsed": false
+      }
+    }
+  ],
+  "fixtureUnmountEvidence": [
+    {
+      "logLine": 1926,
+      "data": {
+        "target": "/run/systemd/transient",
+        "mountId": "82",
+        "originalDeclarationsRestored": true
+      }
+    }
+  ],
+  "actualCompletedResetCount": 23,
+  "actualCompletedResets": [
+    {
+      "case": "test_active_installer_block_and_cooperative_stop",
+      "logLine": 499,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_active_owned_units_reset",
+      "logLine": 518,
+      "completedSteps": 17
+    },
+    {
+      "case": "test_actual_installation_lock_blocks_without_truncation",
+      "logLine": 537,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_benign_unloaded_dependency_cycle_preserved_after_reset",
+      "logLine": 556,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_bootstrap_real_helper_reset_via_stdin",
+      "logLine": 592,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_capsule_exact_prefixed_generic_and_loaded_metadata_preserved_reset",
+      "logLine": 636,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_completed_idempotency_and_unprivileged_status",
+      "logLine": 655,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_cron_shell_assignments_preserved_after_reset",
+      "logLine": 953,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_dracut_nine_external_links_preserved_after_reset",
+      "logLine": 972,
+      "completedSteps": 17
+    },
+    {
+      "case": "test_escaped_instance_and_benign_alias_metadata_preserved_reset",
+      "logLine": 992,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_failed_four_reset_preserves_evidence_links_and_outside_data",
+      "logLine": 1293,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_finished_owned_units_reset",
+      "logLine": 1311,
+      "completedSteps": 17
+    },
+    {
+      "case": "test_loaded_benign_template_instance_preserved_after_reset",
+      "logLine": 1485,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_nsfs_own_namespace_mount_preserved_through_reset",
+      "logLine": 1661,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_real_cpu_weight_atomic_rewrites_preserved_through_reset",
+      "logLine": 1887,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_real_distinct_current_session_scopes_review_and_apply",
+      "logLine": 1955,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_real_recovery_barrier_stale_tokens_same_id_completion_and_no_replay",
+      "logLine": 1982,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_real_recovery_changed_snapshot_and_peer_hold_block_before_intent",
+      "logLine": 2005,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_recorded_browser_hotfix_real_payload_reset",
+      "logLine": 2091,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_sshd_keygen_exact_plain_template_reference_preserved_reset",
+      "logLine": 2146,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_stock_user_templates_preserved_by_reset",
+      "logLine": 2166,
+      "completedSteps": 7
+    },
+    {
+      "case": "test_userdel_with_retained_primary_groups",
+      "logLine": 2360,
+      "completedSteps": 10
+    },
+    {
+      "case": "test_uv_locks_real_private_parents_reset",
+      "logLine": 2494,
+      "completedSteps": 7
+    }
+  ],
+  "actualCompletedResetDefinition": "Count distinct ACTUAL_AUDIT_STEPS events from LinuxResetTests.assert_complete after real native-root/account cleanup and preserved-sentinel/receipt checks. Excludes mocked fixtures, component-only deletion/account tests, status/idempotent replays, crash-held incomplete cleanup and all eight real ACL refusal variants (which explicitly performed no deletion).",
+  "runtime": {
+    "hostPlatform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+    "hostPython": "3.13.5 | packaged by Anaconda, Inc. | (main, Jun 12 2025, 11:23:37) [Clang 14.0.6 ]",
+    "dockerContext": "desktop-linux",
+    "dockerEndpoint": "unix:///Users/sudarshanrajagopalan/.docker/run/docker.sock",
+    "dockerExecutable": "/Applications/Docker.app/Contents/Resources/bin/docker",
+    "dockerInfo": "linux aarch64 [\"name=seccomp,profile=builtin\",\"name=cgroupns\"]",
+    "baseImage": "ubuntu:24.04@sha256:2198e4c65076e9cb0b3d695219df667c0e3b0072da64ca3c2648aca17dcecaf5",
+    "kernel": "Linux c9ee5292b080 6.12.76-linuxkit #1 SMP Wed May 13 14:27:36 UTC 2026 aarch64 aarch64 aarch64 GNU/Linux",
+    "systemd": "systemd 255 (255.4-1ubuntu8.18)",
+    "python": "Python 3.12.3",
+    "probeCgroup": "0::/",
+    "probeCgroupMount": "/sys/fs/cgroup cgroup2 rw,nosuid,nodev,noexec,relatime",
+    "aclFixtureFilesystem": "overlay",
+    "packages": {
+      "acl": "2.3.2-1build1.1",
+      "passwd": "1:4.13+dfsg1-4ubuntu3.2",
+      "python3": "3.12.3-0ubuntu2.1",
+      "systemd": "255.4-1ubuntu8.18"
+    }
+  },
+  "isolation": {
+    "containerInspectionsPassed": 98,
+    "allNonPrivileged": true,
+    "allTestContainersNetworkNone": true,
+    "allCgroupNamespacesPrivate": true,
+    "noHostPidOrIpcNamespace": true,
+    "noHostBindsOrDockerSocketPassthrough": true,
+    "mountInspectionBasis": "Unchanged runner asserts empty HostConfig.Binds and inspect.Mounts at launch. The additional test bind uses only container-owned backing inside the private mount namespace.",
+    "noNewPrivileges": true,
+    "memory": "768m",
+    "cpus": 2,
+    "pidsLimit": 256,
+    "tmpfs": {
+      "/run": "rw,nosuid,nodev,size=64m",
+      "/tmp": "rw,nosuid,nodev,size=32m"
+    },
+    "capabilityCounts": {
+      "none": 1,
+      "CAP_SYS_ADMIN": 86,
+      "CAP_SYS_ADMIN,CAP_SYS_PTRACE": 11
+    },
+    "defaultProbeFallback": "Default-capabilities probe did not reach qualification.target; existing private-cgroup SYS_ADMIN fallback succeeded. This is not a skipped or failed testcase.",
+    "networkLimit": "Test containers use network=none; the approved source-only Docker image build may access Ubuntu package repositories."
+  },
+  "cleanup": {
+    "containersCreated": 98,
+    "containersRemovedByRunner": 98,
+    "successfulRemovalAcknowledgements": 98,
+    "probeContainers": [
+      "outpost-reset-qual-34c2dca9c535-default-probe",
+      "outpost-reset-qual-34c2dca9c535-private-cgroup-probe"
+    ],
+    "caseContainers": 96,
+    "caseContainerNameRange": [
+      "outpost-reset-qual-34c2dca9c535-case-01",
+      "outpost-reset-qual-34c2dca9c535-case-96"
+    ],
+    "allCreatedNamesHaveMatchingRemovalCommand": true,
+    "runImage": "outpost-reset-qual-34c2dca9c535:test",
+    "deletedImageId": "sha256:b25e4760a4654c063b4199c704a889a558d4e6119891b42f707b2e68b790c9c5",
+    "ownedFixtureAncestorMountUnmounted": true,
+    "originalTransientTreeRestored": true,
+    "ownedFixtureMountId": "82",
+    "volumesCreated": 0,
+    "volumeBasis": "No Docker volumes or host binds were supplied. Fixture tmpfs and the container-owned ancestor bind are not Docker volumes.",
+    "postRunVerification": {
+      "checkedAt": "2026-11-15T13:00:06.902977+00:00",
+      "checks": [
+        {
+          "command": [
+            "docker",
+            "ps",
+            "-a",
+            "--filter",
+            "label=outpost.reset.qualification=outpost-reset-qual-34c2dca9c535",
+            "--format",
+            "{{.Names}}"
+          ],
+          "exitCode": 0,
+          "stderr": "",
+          "stdout": ""
+        },
+        {
+          "command": [
+            "docker",
+            "image",
+            "ls",
+            "--filter",
+            "reference=outpost-reset-qual-34c2dca9c535:test",
+            "--format",
+            "{{.ID}}"
+          ],
+          "exitCode": 0,
+          "stderr": "",
+          "stdout": ""
+        },
+        {
+          "command": [
+            "docker",
+            "image",
+            "inspect",
+            "outpost-reset-qual-34c2dca9c535:test",
+            "--format",
+            "{{.Id}}"
+          ],
+          "exitCode": 1,
+          "stderr": "Error response from daemon: No such image: outpost-reset-qual-34c2dca9c535:test\n",
+          "stdout": "\n"
+        }
+      ],
+      "noRunContainersRemain": true,
+      "runId": "outpost-reset-qual-34c2dca9c535",
+      "runImageAbsent": true,
+      "scope": "Read-only queries restricted to this run label and exact image; no prune or unrelated resource mutations."
+    },
+    "baseImageAndBuildCacheMayRemain": true,
+    "globalPruneUsed": false,
+    "unrelatedResourcesChangedByThisRun": false
+  },
+  "filesystemCoverageGaps": [
+    {
+      "kernelAdvertises": {
+        "nsfs": false,
+        "squashfs": true,
+        "vfat": true
+      },
+      "visibleBlockDeviceNodes": [],
+      "visibleLoopDeviceNodes": [],
+      "loopControlPresent": false,
+      "deviceNodesOpenedOrCreated": false,
+      "sharedLoopDevicesUsed": false,
+      "fuseSubstitutionUsed": false,
+      "realFilesystemQualified": [
+        "nsfs"
+      ],
+      "realFilesystemNotQualified": [
+        "squashfs",
+        "vfat"
+      ],
+      "reason": "Kernel SquashFS/VFAT image mounts need block devices. Loop devices are kernel-global, not isolated by the container mount namespace; no host/shared loop or other host block device is permitted. No automatic-loop mount attempts or FUSE stand-ins were used. Policy branches and bad/unknown ACL cases are covered by the helper unit suite, not real SquashFS/VFAT mounts here."
+    }
+  ],
+  "limits": [
+    "Qualification is the recorded Ubuntu 24.04/LinuxKit aarch64/systemd 255/Python 3.12.3 fixture environment, not every distribution or systemd version.",
+    "Real post-scan access ACL user/group read and zero-permission variants are proven on ACL-capable container-owned backing at the exact target paths. Default ACL handling and other ACL fingerprint variations are also covered by the helper fixture suite; no mocked ACL reader was used in the real post-scan case.",
+    "The container tmpfs limitation from final-17 remains a recorded environment fact; helper filesystem-specific EOPNOTSUPP policy was not changed or bypassed.",
+    "SquashFS/VFAT policy branches were unit-tested but not kernel-mounted; no host/shared loop devices, block devices or FUSE stand-ins were used.",
+    "Native authorization/operator integration, production host evidence and installed-application/runtime behavior remain separate. This report does not authorize production reset or installation."
+  ],
+  "productionAccessed": false,
+  "sshUsed": false,
+  "credentialBrokerAccessed": false,
+  "hostMountsOrNamespacesUsed": false,
+  "userAppDataAccessed": false,
+  "liveOperatorRun": false,
+  "capture": {
+    "stdoutAndStderrLog": ".outpost/linux-qualification-final-18-33p2ko8v.log",
+    "mode": "0600",
+    "bytes": 809391,
+    "sha256": "2e48bd4162af1aaf24b8372d7d690c78169b5c70e55769e54632c09a3c084c83",
+    "contents": "Complete runner stdout/stderr, real ACL refusal and owned-mount teardown evidence, before/after hashes, and appended read-only run-scoped cleanup verification."
+  }
+}

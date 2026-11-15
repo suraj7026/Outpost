@@ -3,28 +3,22 @@ import { call, nativeApp, recordedPreview } from "./api";
 import type { Connection } from "./useConnection";
 import ConnectionAdministration from "./ConnectionAdministration";
 import ProviderSettings from './agent/ProviderSettings';
-import { AppearanceSettings, type Appearance } from "./appearance";
+import type { ServerSettingsTab } from "./SettingsWorkspace";
 
-export default function ConnectionSettings({ connection, appearance }: { connection: Connection; appearance: Appearance }) {
+export default function ConnectionSettings({ connection, tab, providerSearch }: { connection: Connection; tab: ServerSettingsTab; providerSearch?: string }) {
   const [endpoint, setEndpoint] = useState(""),
     [token, setToken] = useState("");
   useEffect(() => {
     if (connection.info) setEndpoint(connection.info.endpoint);
   }, [connection.info?.endpoint]);
-  const readOnly = recordedPreview() || !nativeApp();
+  const readOnly = recordedPreview() || !nativeApp() || connection.retired || !!connection.info?.pendingError;
   return (
-    <div className="page settings-page">
-      <div className="page-heading">
+    <>
+      {tab === "models" && <ProviderSettings connection={connection} requestedProvider={providerSearch} />}
+      {tab === "setup" && connection.environmentId !== null && <section className="settings-section"><div><h2>Verified installation</h2><p>This Mac already has a saved connection. Manage verified routes in General and enroll additional devices in Devices & access.</p></div><div><code className="identity-value">{connection.environmentId}</code><p>Installation, SSH inspection and new connections are available from Settings → Servers → Add server. No setup changes are applied automatically.</p></div></section>}
+      {tab === "setup" && connection.environmentId === null && <section className="settings-section">
         <div>
-          <h1>Settings</h1>
-          <p>Your device signs requests. The agent stays on your servers.</p>
-        </div>
-      </div>
-      <ProviderSettings connection={connection} />
-      <AppearanceSettings appearance={appearance} />
-      <section className="settings-section">
-        <div>
-          <h2>Private server</h2>
+          <h2>Legacy private server</h2>
           <p>
             Localhost connects through the SSH tunnel to your cluster. Remote
             endpoints must use HTTPS.
@@ -55,8 +49,8 @@ export default function ConnectionSettings({ connection, appearance }: { connect
             Save and connect
           </button>
         </form>
-      </section>
-      <section className="settings-section">
+      </section>}
+      {tab === "devices" && <section className="settings-section">
         <div>
           <h2>Device identity</h2>
           <p>
@@ -74,8 +68,8 @@ export default function ConnectionSettings({ connection, appearance }: { connect
             {connection.info?.publicKey || "Unavailable"}
           </code>
         </div>
-      </section>
-      <section className="settings-section">
+      </section>}
+      {tab === "setup" && connection.environmentId === null && <section className="settings-section">
         <div>
           <h2>First-device pairing</h2>
           <p>
@@ -90,7 +84,7 @@ export default function ConnectionSettings({ connection, appearance }: { connect
             void connection.perform(async () => {
               await call("pair", { token });
               setToken("");
-            });
+            }, true);
           }}
         >
           <label htmlFor="pair-token">Bootstrap token</label>
@@ -104,11 +98,11 @@ export default function ConnectionSettings({ connection, appearance }: { connect
           />
           <button disabled={readOnly || !token || connection.busy || connection.info?.pending}>Pair device</button>
         </form>
-      </section>
-      <ConnectionAdministration connection={connection} />
-      <section className="settings-section">
+      </section>}
+      {(tab === "devices" || tab === "recovery") && <ConnectionAdministration connection={connection} section={tab} />}
+      {tab === "models" && connection.runtime && !connection.runtime.piManagement && <section className="settings-section">
         <div>
-          <h2>Model provider</h2>
+          <h2>Legacy Ollama models</h2>
           <p>
             Only cloud models advertised by your connected Ollama server are
             listed. Local-only models are hidden. Task, tool and page context is
@@ -126,8 +120,8 @@ export default function ConnectionSettings({ connection, appearance }: { connect
             </div>
           ))}
         </div>
-      </section>
-    </div>
+      </section>}
+    </>
   );
 }
 

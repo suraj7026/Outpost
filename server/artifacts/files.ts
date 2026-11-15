@@ -8,7 +8,7 @@ import type { Gate } from '../policy/trust.js';
 const sha = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 export class Workspace {
   readonly root: string;
-  constructor(root: string) { mkdirSync(root,{ recursive: true,mode: 0o700 }); this.root = realpathSync(root); }
+  constructor(root: string, private sharedGroup = false) { mkdirSync(root,{ recursive: true,mode: sharedGroup ? 0o2770 : 0o700 }); this.root = realpathSync(root); }
   path(name: string) {
     requireThat(name.length > 0 && !isAbsolute(name),'invalid_path');
     const path = resolve(this.root,name), rel = relative(this.root,path);
@@ -25,8 +25,8 @@ export class Workspace {
   }
   write(name: string, text: string, expectedHash: string | null) {
     const path = this.path(name); requireThat((existsSync(path) ? sha(readFileSync(path)) : null) === expectedHash,'file_changed');
-    mkdirSync(dirname(path),{ recursive: true }); const temp = `${path}.${id()}.tmp`;
-    writeFileSync(temp,text,{ flag: 'wx',mode: 0o600 }); renameSync(temp,path); return { hash: sha(Buffer.from(text)),path: name };
+    mkdirSync(dirname(path),{ recursive: true,mode: this.sharedGroup ? 0o2770 : 0o700 }); const temp = `${path}.${id()}.tmp`;
+    writeFileSync(temp,text,{ flag: 'wx',mode: this.sharedGroup ? 0o660 : 0o600 }); renameSync(temp,path); return { hash: sha(Buffer.from(text)),path: name };
   }
   register(gate: Gate) {
     const Read = z.strictObject({ path: z.string().min(1).max(1000) });

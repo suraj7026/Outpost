@@ -43,15 +43,17 @@ async function open({ width = 1320, scheme = 'dark', scenario = 'native' } = {})
       metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
       transformCallback() { return ++sequence; }, unregisterCallback() {},
       async invoke(command, args) {
+        if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: null, environments: {} }, legacy: { endpoint: null, pending: false } };
+        if (command === 'disconnect') return;
         if (command === 'set_sidebar_window_controls') return;
         if (command === 'sidebar_pointer_inside') return !!document.querySelector('#app-sidebar')?.matches(':hover') || !!document.querySelector('.sidebar-edge')?.matches(':hover');
         if (command === 'connection_info') return { endpoint: 'Synthetic transport', deviceId: 'fixture', publicKey: '', pending: false, nativeSidebar: false };
         if (command === 'query') return args.kind === 'events' ? { events: [], hasMore: false, nextCursor: 1 } : fixture[args.kind];
         if (command === 'stream_events') return new Promise(() => {});
-        if (command === 'plugin:window|set_effects') {
-          window.__effects.push(args);
+        if (command === 'set_window_blur') {
           await new Promise(resolve => setTimeout(resolve, 30));
           if (window.__failEffects) throw new Error('Synthetic native effect failure');
+          window.__effects.push(args.radius);
           return;
         }
         throw new Error(`Unexpected command: ${command}`);
@@ -65,56 +67,72 @@ async function open({ width = 1320, scheme = 'dark', scenario = 'native' } = {})
 }
 async function settings(page) {
   if (await page.locator('.web-sidebar').getAttribute('aria-hidden') === 'true') await page.keyboard.press('Meta+b');
-  await page.getByRole('button', { name: 'Connection settings', exact: true }).click();
-  await page.getByRole('heading', { name: 'Appearance', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('.settings-link-list a[href="#settings/appearance"]').click();
+  await page.getByRole('heading', { name: 'Appearance', exact: true, level: 1 }).waitFor();
 }
 const glass = (page, enabled) => page.waitForFunction(value => document.documentElement.dataset.glass === String(value), enabled);
+const blur = (page, radius) => page.waitForFunction(value => window.__effects.at(-1) === value, radius);
 const surface = (page, selector) => page.locator(selector).evaluate(node => {
   const style = getComputedStyle(node);
   const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
   const context = canvas.getContext('2d'); context.fillStyle = style.backgroundColor; context.fillRect(0, 0, 1, 1);
   return { alpha: context.getImageData(0, 0, 1, 1).data[3] / 255, opacity: style.opacity, filter: style.filter, backdrop: style.backdropFilter || style.webkitBackdropFilter || 'none', radius: style.borderRadius };
 });
-async function checkReadingComposite(page) {
-  for (const opacity of [20, 45, 80]) {
+const workspaceBackground = page => page.locator('.main-shell').evaluate(node => getComputedStyle(node).background);
+async function checkSidebarGlass(page) {
+  await page.getByRole('switch', { name: 'Collapse sidebar', exact: true }).uncheck();
+  await page.locator('#app-sidebar[data-motion="open"]').waitFor();
+  const chat = '.chat-server-threads > [data-task-id="task"]';
+  const selectors = ['.sidebar-chrome .icon-button', '.sidebar-section .icon-button', '#task-search', chat];
+  const sample = async opacity => {
     await page.locator('#glass-opacity').fill(String(opacity));
-    const result = await page.evaluate(value => {
-      const root = getComputedStyle(document.documentElement);
-      const frame = getComputedStyle(document.querySelector('.app-shell'));
-      const reading = getComputedStyle(document.querySelector('.main-shell'));
-      const tint = reading.backgroundImage.match(/linear-gradient\((color\([^)]*\)|rgba?\([^)]*\))/)?.[1];
-      if (!tint) throw new Error(`Missing reading tint: ${reading.backgroundImage}`);
-      const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
-      const context = canvas.getContext('2d');
-      const paint = (color, alpha = 1) => { context.globalAlpha = alpha; context.fillStyle = color; context.fillRect(0, 0, 1, 1); };
-      paint(root.getPropertyValue('--bg'), value / 100);
-      paint(root.getPropertyValue('--surface'), Math.max(.56, Math.min(.88, value / 100 + .28)));
-      const before = [...context.getImageData(0, 0, 1, 1).data];
-      context.clearRect(0, 0, 1, 1);
-      paint(frame.backgroundColor); paint(reading.backgroundColor); paint(tint);
-      return { before, after: [...context.getImageData(0, 0, 1, 1).data] };
-    }, opacity);
-    check(result.before.every((channel, i) => Math.abs(channel - result.after[i]) <= 2), `Reading surface composite is unchanged at ${opacity}%: ${JSON.stringify(result)}`);
+    await page.locator(chat).hover();
+    await page.waitForTimeout(170);
+    return Promise.all(selectors.map(async selector => (await surface(page, selector)).alpha));
+  };
+  const low = await sample(0);
+  const high = await sample(80);
+  for (const [i, selector] of selectors.entries()) {
+    check(low[i] < high[i] && high[i] < 1, `${selector} adapts to glass opacity (${low[i]} → ${high[i]})`);
   }
-  await page.locator('#glass-opacity').fill('20');
+  await page.locator('#glass-opacity').fill('0');
+  await page.locator(chat).click();
+  await page.locator(`${chat}[aria-current="page"]`).waitFor();
+  await page.mouse.move(800, 30);
+  await page.waitForTimeout(170);
+  const selected = await surface(page, chat);
+  check(selected.alpha > low.at(-1) && selected.alpha < 1, 'Selected chat stays distinct and translucent');
+  await settings(page);
 }
-async function checkFrostedFooter(page) {
-  const effectsBefore = await page.evaluate(() => window.__effects.length);
+async function checkFrostedFooter(page, solidBackground) {
+  await page.locator('#glass-opacity').fill('0');
+  await blur(page, 0);
+  check((await surface(page, 'html')).alpha === 0 && (await surface(page, '.app-shell')).alpha === 0,
+    'Zero opacity has no frame tint or native blur');
   await page.locator('#glass-opacity').fill('20');
+  await blur(page, 20);
   const low = await surface(page, '.app-shell');
-  check(low.alpha >= .045 && low.alpha <= .055, 'Frame/sidebar tint is reduced from 20% to 5% without changing native blur');
-  await page.locator('#glass-opacity').fill('21');
-  check(await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--glass-frame-opacity')) > 5), 'Opacity slider still responds immediately above its minimum before 8-bit pixel rounding');
-  await page.locator('#glass-opacity').fill('20');
-  await checkReadingComposite(page);
-  check(await page.evaluate(() => window.__effects.length) === effectsBefore, 'Lowering opacity never weakens or rebuilds the native blur');
+  check(Math.abs(low.alpha - .2) < .01, 'Frame opacity matches the slider');
+  for (const [opacity, radius] of [[50, 32], [99, 1], [100, 0]]) {
+    await page.locator('#glass-opacity').fill(String(opacity));
+    await blur(page, radius);
+    const workspace = await surface(page, '.main-shell');
+    check(workspace.alpha === 1 && workspace.opacity === '1' && await workspaceBackground(page) === solidBackground,
+      `Workspace keeps its solid background at ${opacity}% glass opacity`);
+  }
+  await glass(page, false);
+  check((await surface(page, 'html')).alpha === 1, '100% uses the solid background with native blur off');
+  await page.locator('#glass-opacity').fill('0');
+  await glass(page, true);
+  await blur(page, 0);
   await page.getByRole('switch', { name: 'Collapse sidebar', exact: true }).uncheck();
   await page.locator('#app-sidebar[data-motion="open"]').waitFor();
   await page.mouse.move(800, 30); await page.waitForTimeout(170);
   const selected = await surface(page, '.connection-nav');
   check(selected.alpha === 0 && selected.backdrop === 'none', 'Selected This Mac shares the sidebar glass without another tile');
   check(selected.opacity === '1' && selected.filter === 'none' && selected.radius === '8px', 'Footer text stays sharp and its original corner geometry is preserved');
-  check((await surface(page, '.profile-avatar')).alpha === 0, 'Avatar background shares exactly the sidebar transparency');
+  check(await page.locator('.connection-nav > svg').first().isVisible(), 'Unified Settings icon stays visible on glass');
   await page.locator('.connection-nav').hover(); await page.waitForTimeout(170);
   check((await surface(page, '.connection-nav')).alpha === 0, 'Selected hover adds no dark tile');
   await page.getByRole('button', { name: 'New task', exact: false }).click();
@@ -123,11 +141,12 @@ async function checkFrostedFooter(page) {
   check(normal.alpha === 0 && normal.backdrop === 'none', 'Normal This Mac shares the same glass as the sidebar');
   await page.locator('.connection-nav').hover(); await page.waitForTimeout(170);
   check((await surface(page, '.connection-nav')).alpha === 0, 'Normal hover keeps the same transparency');
-  await page.getByRole('button', { name: 'Connection settings', exact: true }).click();
+  await settings(page);
   await page.emulateMedia({ contrast: 'more' });
   await page.locator('.connection-nav').hover(); await page.waitForTimeout(170);
   const contrast = await surface(page, '.connection-nav');
   check(contrast.alpha === 1 && contrast.backdrop === 'none', 'Increased contrast independently overrides even selected/hovered glass styling');
+  check((await surface(page, '.sidebar-chrome .icon-button')).alpha === 1, 'Increased contrast keeps sidebar controls solid');
   await page.emulateMedia({ contrast: 'no-preference' });
   await page.waitForTimeout(170);
   mkdirSync('/tmp/outpost-frost', { recursive: true });
@@ -144,26 +163,34 @@ async function checkFrostedFooter(page) {
 async function geometry(page) {
   const result = await page.evaluate(() => {
     const rect = document.querySelector('.main-shell').getBoundingClientRect();
-    const header = document.querySelector('.task-active .task-heading') || document.querySelector('.topbar');
-    const button = header.getBoundingClientRect();
-    return { width: innerWidth, inset: innerWidth <= 780 ? 8 : 12, top: rect.y, right: innerWidth - rect.right, bottom: innerHeight - rect.bottom, radius: getComputedStyle(document.querySelector('.main-shell')).borderRadius, buttonLeft: button.x, rootScroll: scrollY, mainScroll: document.querySelector('.main-shell').scrollTop, bodyWidth: document.documentElement.scrollWidth };
+    const content = document.querySelector('.main-shell > .task-view, .main-shell > main, .main-shell > .settings-workspace');
+    const start = content.getBoundingClientRect();
+    const conversation = document.querySelector('.conversation')?.getBoundingClientRect();
+    const composer = document.querySelector('.reply-composer')?.getBoundingClientRect();
+    return { width: innerWidth, inset: innerWidth <= 780 ? 8 : 12, top: rect.y, right: innerWidth - rect.right, bottom: innerHeight - rect.bottom, radius: getComputedStyle(document.querySelector('.main-shell')).borderRadius, contentLeft: start.x, contentTop: start.top - rect.top, conversationTop: conversation ? conversation.top - rect.top : null, composerBottom: composer ? rect.bottom - composer.bottom : null, headers: document.querySelectorAll('.topbar, .task-heading, .task-title').length, rootScroll: scrollY, mainScroll: document.querySelector('.main-shell').scrollTop, bodyWidth: document.documentElement.scrollWidth };
   });
   for (const side of ['top', 'right', 'bottom']) check(Math.abs(result[side] - result.inset) < 1, `${side} padding remains even`);
   check(result.radius === (result.width <= 780 ? '6px' : '8px'), 'Workspace corners use the inset radius');
   check(result.bodyWidth <= result.width && !result.rootScroll && !result.mainScroll, 'Outer scrolling remains locked');
+  check(result.headers === 0, 'Global and task headers are absent from the DOM');
+  check(Math.abs(result.contentTop) <= 1, 'Current page starts at the workspace top without a reserved header row');
+  if (result.conversationTop !== null) {
+    check(result.conversationTop >= 0 && result.conversationTop <= 32, 'Task conversation starts at the top with normal padding only');
+    check(Math.abs(result.composerBottom - 12) <= 1, 'Task composer remains pinned to its 12px bottom inset');
+  }
   return result;
 }
 try {
   const config = JSON.parse(readFileSync('desktop/src-tauri/tauri.conf.json', 'utf8'));
   check(config.app.macOSPrivateApi && config.app.windows[0].transparent, 'Native transparency is enabled, not simulated with CSS');
-  check(JSON.parse(readFileSync('desktop/src-tauri/capabilities/default.json')).permissions.includes('core:window:allow-set-effects'), 'Only required native effects permission added');
+  check(config.app.windows[0].shadow === false, 'Native window shadow and its outline are disabled');
   for (const scheme of ['dark', 'light']) {
     const page = await open({ scheme });
     await geometry(page);
     await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
     await page.locator('.web-sidebar').waitFor({ state: 'hidden' });
     check(!await page.locator('.web-sidebar').isVisible(), 'Sidebar collapses on task view');
-    check((await geometry(page)).buttonLeft === 12, 'Hidden native controls no longer require a header gap');
+    check((await geometry(page)).contentLeft === 12, 'Collapsing the sidebar leaves no native-control or header gap in the content frame');
     await page.keyboard.press('Meta+b');
     check(await page.locator('.web-sidebar').isVisible(), 'Shortcut restores sidebar');
     await page.keyboard.press('Meta+b');
@@ -174,22 +201,24 @@ try {
     check(!await page.getByRole('switch', { name: 'Frosted glass', exact: true }).isChecked(), 'Solid appearance is the default');
     check(await page.locator('.appearance-toggle').first().evaluate(node => getComputedStyle(node).display === 'flex'), 'Switches align beside their labels, not under them');
     check(await page.getByRole('switch', { name: 'Frosted glass', exact: true }).evaluate(node => { const rect = node.getBoundingClientRect(); return rect.width === 44 && rect.height === 28; }), 'Switch geometry stays 44×28 despite general form input rules');
+    const solidBackground = await workspaceBackground(page);
     await page.getByRole('switch', { name: 'Frosted glass', exact: true }).check();
     await glass(page, true);
-    check(await page.evaluate(() => window.__effects.at(-1).value.effects[0] === 'underWindowBackground'), 'Uses native behind-window background material');
+    check(await page.evaluate(() => window.__effects.at(-1) === 32), 'Default opacity applies full native blur');
     check(await page.locator('html').evaluate(node => getComputedStyle(node).backgroundColor === 'rgba(0, 0, 0, 0)'), 'HTML reveals native blur');
-    check(await page.locator('.main-shell').evaluate(node => getComputedStyle(node).opacity === '1' && getComputedStyle(node).backgroundImage.includes('0.73')), 'Only background tint is translucent, not content opacity');
-    await checkFrostedFooter(page);
+    await checkSidebarGlass(page);
+    await checkFrostedFooter(page, solidBackground);
     await page.locator('#glass-opacity').fill('64');
     check(await page.locator('output[for="glass-opacity"]').innerText() === '64%', 'Slider updates immediately');
+    await page.locator('#glass-opacity').fill('0');
     await page.getByRole('switch', { name: 'Collapse sidebar', exact: true }).check();
     await page.locator('.web-sidebar').waitFor({ state: 'hidden' });
     check(!await page.locator('.web-sidebar').isVisible(), 'Settings collapse control updates layout');
     await page.reload();
-    await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
+    await page.getByRole('heading', { name: 'Appearance', exact: true, level: 1 }).waitFor();
     await glass(page, true);
     check(!await page.locator('.web-sidebar').isVisible(), 'Collapsed preference persists across reload');
-    check(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).opacity === 64, storageKey), 'Opacity persists');
+    check(await page.locator('#glass-opacity').inputValue() === '0', 'Zero opacity persists across reload');
     await settings(page);
     await page.evaluate(() => { window.__reduced = true; window.__reduceMedia.dispatchEvent(new Event('change')); });
     await glass(page, false);
@@ -216,7 +245,7 @@ try {
     await page.getByRole('switch', { name: 'Frosted glass', exact: true }).check();
     await page.getByRole('switch', { name: 'Frosted glass', exact: true }).uncheck();
     await page.waitForTimeout(180);
-    check(await page.evaluate(() => document.documentElement.dataset.glass === 'false' && window.__effects.at(-1).value.effects.length === 0), 'Rapid toggles leave native effect and CSS in the latest requested state');
+    check(await page.evaluate(() => document.documentElement.dataset.glass === 'false' && window.__effects.at(-1) === 0), 'Rapid toggles leave native effect and CSS in the latest requested state');
     await page.getByRole('switch', { name: 'Frosted glass', exact: true }).check();
     await glass(page, true);
     mkdirSync('/tmp/outpost-appearance', { recursive: true });
@@ -242,7 +271,7 @@ try {
     await settings(page);
     if (scenario === 'blocked') check(await page.getByRole('alert').filter({ hasText: 'could not be saved' }).isVisible(), 'Storage failures are visible and nonfatal');
     else if (scenario === 'preview') check(await page.getByRole('switch', { name: 'Frosted glass', exact: true }).isDisabled(), 'Browser preview never claims native blur');
-    else check(await page.locator('#glass-opacity').inputValue() === (scenario === 'clamp' ? '80' : '45'), 'Stored values validated and clamped');
+    else check(await page.locator('#glass-opacity').inputValue() === (scenario === 'clamp' ? '100' : '45'), 'Stored values validated and clamped');
     await page.close();
   }
   check(errors.length === 0, errors.join('\n'));

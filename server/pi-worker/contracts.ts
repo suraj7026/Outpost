@@ -25,7 +25,7 @@ export const ActionFailure = z.strictObject({ code: z.enum(['invalid_tool_argume
 export function actionFailureMessage(result: unknown) {
   const parsed = ActionFailure.safeParse(result);
   switch (parsed.success ? parsed.data.code : 'coordinator_action_failed') {
-    case 'invalid_tool_arguments': return 'invalid_tool_arguments: No action was executed. Use the exact inputSchema in the available tools catalogue. command.run needs argv, browser.run needs task, artifact.read_text needs artifactId; workspace paths use file.read.';
+    case 'invalid_tool_arguments': return 'invalid_tool_arguments: No action was executed. Use the exact inputSchema in the available tools catalogue. command.run needs argv, browser.open needs url, artifact.read_text needs artifactId; workspace paths use file.read.';
     case 'unavailable_tool': return 'unavailable_tool: No action was executed. Choose a tool from the available tools catalogue.';
     default: return 'coordinator_action_failed: Inspect action evidence before retrying; do not assume execution was safe to repeat.';
   }

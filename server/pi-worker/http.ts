@@ -7,6 +7,7 @@ import { WorkerRuns } from './runs.js';
 
 /** Internal loopback service. No CORS, public ingress, or unauthenticated management routes. */
 export function workerServer(management: ProviderManagement, runs: WorkerRuns, token: string) {
+  management.runsActive = () => runs.active;
   if (token.length < 32) throw new Error('worker_token_required');
   const expected = createHash('sha256').update(`Bearer ${token}`).digest();
   return createServer(async (request, response) => {

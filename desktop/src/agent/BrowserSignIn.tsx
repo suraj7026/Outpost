@@ -15,8 +15,8 @@ export default function BrowserSignIn({ url, expiresAt, manualPrompt, disabled, 
 }) {
   const [listening, setListening] = useState(false), [error, setError] = useState('');
   const alive = useRef(true), pending = useRef<string | null>(null);
-  const latest = useRef({ answer, disabled, manualPrompt });
-  latest.current = { answer, disabled, manualPrompt };
+  const latest = useRef({ disabled, manualPrompt });
+  latest.current = { disabled, manualPrompt };
   const automatic = openAILoopback(url);
   const cancel = () => {
     const id = pending.current; pending.current = null;
@@ -45,7 +45,7 @@ export default function BrowserSignIn({ url, expiresAt, manualPrompt, disabled, 
       if (!alive.current || pending.current !== id || latest.current.disabled || !latest.current.manualPrompt) return;
       if (!result.ok) throw new Error('callback_unavailable');
       // Never render, log, cache or persist the callback URL. It goes straight to the secret IPC path.
-      latest.current.answer(result.value);
+      answer(result.value);
     } catch {
       if (alive.current && pending.current === id) setError(stage === 'bind'
         ? 'Automatic return could not start. Port 1455 may be in use by another login. Close that login and retry, or open sign-in manually and paste the full redirect URL below.'

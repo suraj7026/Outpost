@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { agentRequest, call, nativeApp, recordedPreview } from '../api';
+import { call, nativeApp, recordedPreview } from '../api';
 import type { Connection } from '../useConnection';
 import type { Login, Provider, ModelRef } from './types';
 import { providerLabel } from './types';
@@ -8,6 +8,23 @@ import BrowserSignIn from './BrowserSignIn';
 import './agent.css';
 
 const activeLogin = (flow: Login | null) => !!flow && ['running', 'waiting'].includes(flow.state);
+
+function authenticationMessage(provider: Provider): string | null {
+  const status = provider.authentication;
+  if (provider.id !== 'ollama-cloud' || !status) return null;
+  const messages = {
+    missing: 'Add an Ollama Cloud API key to list models.',
+    unverified: 'API key not yet validated. Refresh models to check it.',
+    validated: status.quota === 'exhausted'
+      ? 'API key validated · Ollama reports no remaining credits. Models are listed, but requests may fail until your allowance resets or you add credits.'
+      : 'API key validated · Cloud catalogue, not per-model entitlement. Availability and limits are enforced by Ollama.',
+    invalid_key: 'Ollama rejected this API key. Replace it with a valid Ollama Cloud key.',
+    account_suspended: 'Ollama reports that this account is suspended. Check your Ollama account.',
+    rate_limited: 'Ollama rate-limited the authentication check. This does not mean the key is invalid.',
+    unavailable: 'Ollama authentication could not be checked. No inference test was sent. Try again later.',
+  };
+  return messages[status.state] + (status.retryAt ? ` Next check after ${new Date(status.retryAt).toLocaleTimeString()}.` : '');
+}
 
 function LoginPanel({ flow, busy, answer, cancel }: { flow: Login; busy: boolean; answer: (value: string) => void; cancel: () => void }) {
   const [value, setValue] = useState('');
@@ -60,9 +77,11 @@ function CompatibleForm({ save, disabled }: { save: (configuration: Record<strin
   </details>;
 }
 
-export default function ProviderSettings({ connection }: { connection: Connection }) {
+export default function ProviderSettings({ connection, requestedProvider }: { connection: Connection; requestedProvider?: string }) {
+  const agentRequest = connection.api.agentRequest;
   const catalogue = connection.agentCatalogue;
   const [search, setSearch] = useState(''), [flow, setFlow] = useState<Login | null>(null);
+  useEffect(() => { if (requestedProvider) { setSearch(requestedProvider); document.getElementById('provider-search')?.focus(); } }, [requestedProvider]);
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [confirmation, setConfirmation] = useState<{ provider: Provider; method?: 'api_key' | 'oauth' } | null>(null);
   const [defaultModel, setDefault] = useState<ModelRef | null>(null);
@@ -70,7 +89,7 @@ export default function ProviderSettings({ connection }: { connection: Connectio
   const startRequest = useRef<Record<string, unknown> | null>(null);
   latestFlow.current = flow;
   const available = !!connection.runtime?.piManagement;
-  const blocked = !available || !connection.connected || !nativeApp() || recordedPreview() || !!connection.info?.pending;
+  const blocked = connection.retired || !!connection.info?.pendingError || !available || !connection.connected || !nativeApp() || recordedPreview() || !!connection.info?.pending;
   useEffect(() => { mounted.current = true; return () => {
     mounted.current = false;
     if (activeLogin(latestFlow.current)) void agentRequest({ type: 'login.cancel', flowId: latestFlow.current!.id }).catch(() => {});
@@ -93,7 +112,7 @@ export default function ProviderSettings({ connection }: { connection: Connectio
     return () => { stopped = true; clearTimeout(timer); };
   }, [flow?.id, flow?.state, blocked, connection.refreshAgent]);
   const operate = async (action: () => Promise<void>) => {
-    if (blocked || working.current) return;
+    if (!mounted.current || blocked || working.current) return;
     working.current = true; setBusy(true); setError('');
     try { await action(); } catch { if (mounted.current) setError('Provider operation could not be confirmed. Refresh status before retrying; nothing is automatically resent.'); }
     finally { working.current = false; if (mounted.current) setBusy(false); }
@@ -110,9 +129,11 @@ export default function ProviderSettings({ connection }: { connection: Connectio
     await start({ type: 'login.start', providerId: provider.id, method, operationId: crypto.randomUUID() });
   });
   return <section className="settings-section provider-settings">
-    <div><h2>Server Pi providers</h2><p>Credentials stay in the server Pi profile. Your Mac sends signed management requests, not chat messages.</p>
+    <div><h2>Models & providers</h2><p>Credentials stay in the server Pi profile. Your Mac sends signed management requests, not chat messages.</p>
       {catalogue && <p>Pi {catalogue.piVersion}{catalogue.releaseId ? ` · ${catalogue.releaseId}` : ''}<br /><code>{catalogue.profilePath}</code><br />Configuration {catalogue.generation.slice(0, 12)}</p>}
-      <p>Only models with verified access for the current credential are selectable. Stored credentials and public catalogues are not proof of access. Providers or authentication methods without an approved verifier stay blocked—even after saving a key.</p>
+      <p>{catalogue?.providers.some(provider => provider.id === 'ollama-cloud' && provider.authentication)
+        ? 'Models must pass their provider’s access policy. Ollama validates your API key and lists its cloud catalogue; it does not verify entitlement to each model. Other providers without an approved access verifier stay blocked—even after saving a key.'
+        : 'Only models with verified access for the current credential are selectable. Stored credentials and public catalogues are not proof of access. Providers or authentication methods without an approved verifier stay blocked—even after saving a key.'}</p>
     </div>
     <div className="agent-settings-body">
       {!available ? <p>Server update required: provider management is not enabled on this connection. Existing Ollama tasks remain available.</p> : <>
@@ -138,7 +159,9 @@ export default function ProviderSettings({ connection }: { connection: Connectio
           <label htmlFor="provider-search">Add or manage a provider</label><input id="provider-search" type="search" value={search} placeholder="Search supported providers" onChange={e => setSearch(e.target.value)} />
           <div className="provider-list">
             {catalogue.providers.filter(provider => `${provider.name} ${provider.id}`.toLowerCase().includes(search.toLowerCase())).map(provider => <div className="provider-row" key={provider.id}>
-              <div><strong>{provider.name}</strong><small>{provider.id} · {provider.storedMethod ? 'Credential stored' : provider.configured ? 'Configured on server' : 'Not configured'}</small>{(provider.configured || provider.storedMethod) && !catalogue.models.some(model => model.providerId === provider.id) ? <small>No verified models · selection blocked</small> : null}</div>
+              <div><strong>{provider.name}</strong><small>{provider.id} · {provider.storedMethod ? 'Credential stored' : provider.configured ? 'Configured on server' : 'Not configured'}</small>
+                {authenticationMessage(provider) && <small role="status">{authenticationMessage(provider)}</small>}
+                {(provider.configured || provider.storedMethod) && !catalogue.models.some(model => model.providerId === provider.id) ? <small>{provider.authentication ? 'No selectable models · check authentication and refresh the catalogue' : 'No verified models · selection blocked'}</small> : null}</div>
               <div className="button-row">{provider.methods.map(method => <button key={method.type} disabled={blocked || busy || activeLogin(flow) || !!startRequest.current}
                 onClick={() => provider.storedMethod ? setConfirmation({ provider, method: method.type }) : begin(provider, method.type)}>
                 {method.label}{method.subscription ? ' · Subscription' : ''}</button>)}
@@ -155,7 +178,7 @@ export default function ProviderSettings({ connection }: { connection: Connectio
           <CompatibleForm disabled={blocked || busy || activeLogin(flow)} save={configuration => void operate(async () => {
             await agentRequest({ type: 'provider.configure', operationId: crypto.randomUUID(), expectedGeneration: catalogue.generation, configuration }); await connection.refreshAgent();
           })} />
-          <p>OpenAI browser sign-in supports automatic return through this Mac. Other providers use their supplied device-code or manual-return steps. Ollama uses the managed pi-ollama-cloud provider; enter its Cloud API key here, then refresh models. General package installation is not enabled. Browser automation keeps its own model configuration.</p>
+          <p>OpenAI browser sign-in supports automatic return through this Mac. Other providers use their supplied device-code or manual-return steps. Ollama uses the managed pi-ollama-cloud provider; enter its Cloud API key here, then refresh models. General package installation is not enabled. Pi controls Camoufox directly using the task’s selected model. There is no separate browser-agent model or credential configuration.</p>
         </>}
       </>}
     </div>

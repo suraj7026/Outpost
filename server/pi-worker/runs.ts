@@ -9,6 +9,7 @@ import type { RecordValue } from '../core/contracts.js';
 import { managementError } from '../pi-management/contracts.js';
 import { PiProfile } from '../pi-management/profile.js';
 import { refreshSubscriptionModels } from '../pi-management/subscription-models.js';
+import { refreshOllamaModels } from '../pi-management/ollama-access.js';
 import { actionFailureMessage, Projection, RunStart, type RunPoll, type ActionRequest } from './contracts.js';
 
 interface PendingAction { input: ActionRequest; resolve: (value: unknown) => void; reject: (error: Error) => void }
@@ -22,7 +23,7 @@ const finished = (run: Run) => ['finished','failed','cancelled'].includes(run.st
 export class WorkerRuns {
   private runs = new Map<string, Run>();
   private timer: ReturnType<typeof setInterval>;
-  constructor(readonly profile: PiProfile, private workspaceRoot: string, private sessionRoot: string) {
+  constructor(readonly profile: PiProfile, private workspaceRoot: string, private sessionRoot: string, private sharedWorkspaces = false) {
     if (!isAbsolute(workspaceRoot) || !isAbsolute(sessionRoot)) throw managementError('absolute_worker_roots_required');
     mkdirSync(workspaceRoot, { recursive: true, mode: 0o700 }); mkdirSync(sessionRoot, { recursive: true, mode: 0o700 });
     this.workspaceRoot = realpathSync(workspaceRoot); this.sessionRoot = realpathSync(sessionRoot);
@@ -37,7 +38,7 @@ export class WorkerRuns {
   async close() { clearInterval(this.timer); await Promise.all([...this.runs.keys()].map(id => this.abort(id))); }
   private directory(root: string, taskId: string) {
     const path = join(root, taskId);
-    mkdirSync(path, { recursive: true, mode: 0o700 });
+    mkdirSync(path, { recursive: true, mode: root === this.workspaceRoot && this.sharedWorkspaces ? 0o2770 : 0o700 });
     const actual = realpathSync(path), suffix = relative(root, actual);
     if (!suffix || suffix.startsWith('..') || isAbsolute(suffix)) throw managementError('worker_path_denied');
     return actual;
@@ -47,7 +48,9 @@ export class WorkerRuns {
     if (!run) throw managementError('worker_run_unavailable');
     run.seen = Date.now(); return run;
   }
+  get active() { return [...this.runs.values()].some(run => !finished(run)); }
   start(input: unknown) {
+    if (this.profile.maintenance) throw managementError('maintenance_in_progress');
     const request = RunStart.parse(input), fingerprint = createHash('sha256').update(JSON.stringify(request)).digest('hex');
     const existing = this.runs.get(request.runId);
     if (existing) {
@@ -75,6 +78,7 @@ export class WorkerRuns {
     if (lstatSync(sessions).isSymbolicLink()) throw managementError('worker_path_denied');
     const modelRuntime = await this.profile.runtime();
     if (selection.providerId === 'openai') await refreshSubscriptionModels(modelRuntime);
+    if (selection.providerId === 'ollama-cloud') await refreshOllamaModels(modelRuntime);
     const model = (await modelRuntime.getAvailable(selection.providerId, { signal: AbortSignal.timeout(10000) }))
       .find(candidate => candidate.id === selection.modelId);
     if (!model) throw managementError('model_not_available');

@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { TransferRequest } from './transfer-contracts.js';
+import { UpdateRequest } from './update-contracts.js';
 
 export const managementProtocol = 1;
 const identifier = z.string().min(1).max(128).regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/)
@@ -51,7 +53,7 @@ export const CompatibleProvider = z.strictObject({
     context.addIssue({ code: 'custom', message: 'Model IDs must be unique within a provider.' });
 });
 export type CompatibleProvider = z.infer<typeof CompatibleProvider>;
-export const ManagementRequest = z.discriminatedUnion('type',[
+export const ProviderRequest = z.discriminatedUnion('type',[
   z.strictObject({ type: z.literal('catalogue') }),
   z.strictObject({ type: z.literal('refresh'), providerId: identifier.optional() }),
   z.strictObject({ type: z.literal('login.start'), operationId: z.uuid(), providerId: identifier, method: AuthMethod }),
@@ -62,11 +64,17 @@ export const ManagementRequest = z.discriminatedUnion('type',[
   z.strictObject({ type: z.literal('provider.configure'), operationId: z.uuid(), expectedGeneration: z.string().length(64), configuration: CompatibleProvider }),
   z.strictObject({ type: z.literal('default.set'), operationId: z.uuid(), expectedGeneration: z.string().length(64), model: ModelRef }),
 ]);
+export const ManagementRequest = z.discriminatedUnion('type', [...ProviderRequest.options, ...TransferRequest.options, ...UpdateRequest.options]);
 export type ManagementRequest = z.infer<typeof ManagementRequest>;
+export interface OllamaAuthentication {
+  state: 'missing' | 'unverified' | 'validated' | 'invalid_key' | 'account_suspended' | 'rate_limited' | 'unavailable';
+  quota?: 'available' | 'exhausted'; checkedAt?: number; retryAt?: number;
+}
 export interface ProviderView {
   id: string; name: string;
   methods: { type: 'api_key' | 'oauth'; label: string; subscription: boolean; interactive: boolean }[];
   configured: boolean; storedMethod: 'api_key' | 'oauth' | null;
+  authentication?: OllamaAuthentication;
 }
 export interface ModelView extends ModelRef {
   name: string; reasoning: boolean; input: readonly string[]; contextWindow: number; maxTokens: number;
@@ -75,7 +83,7 @@ export interface Catalogue {
   protocolVersion: number; piVersion: string; releaseId: string; profilePath: string; generation: string;
   providers: ProviderView[]; models: ModelView[]; defaultModel: ModelRef | null;
   refreshedAt: number | null; refreshErrors: string[];
-  capabilities: { providerPackages: boolean; callbackRelay: boolean };
+  capabilities: { providerPackages: boolean; callbackRelay: boolean; providerTransfer?: boolean };
 }
 export class ManagementError extends Error {
   constructor(readonly code: string) { super(code); }

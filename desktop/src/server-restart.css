@@ -1,0 +1,27 @@
+.server-setup-dialog .identity-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px 12px; }
+.server-setup-dialog .identity-actions .text-button { font-size: 12px; }
+.server-setup-dialog .restart-candidates { margin: 20px 0; }
+.server-setup-dialog .restart-candidate { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.server-setup-dialog .restart-candidate label { flex: 1; min-width: 0; }
+.server-setup-dialog .restart-candidate small { display: block; color: var(--faint); overflow-wrap: anywhere; }
+.server-setup-dialog .restart-scope dd > code, .server-setup-dialog .restart-scope dd > span { display: block; }
+.server-setup-dialog .restart-scope { margin-bottom: 24px; }
+.server-setup-dialog .restart-blockers > div, .server-setup-dialog .setup-error > div { min-width: 0; }
+
+.server-setup-dialog .restart-blockers ul { margin: 12px 0; padding-left: 20px; }
+.server-setup-dialog .restart-blockers li + li { margin-top: 8px; }
+.server-setup-dialog .restart-blockers li, .server-setup-dialog .setup-error-details { white-space: pre-wrap; overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; }
+.server-setup-dialog .restart-authorization { margin-top: 24px; }
+.server-setup-dialog .restart-authorization p { font-size: 12px; }
+.server-setup-dialog .restart-confirmation { display: grid; gap: 18px; }
+.server-setup-dialog .restart-confirmation > p { margin: 0; }
+.server-setup-dialog .restart-refresh { margin-top: 18px; }
+.server-setup-dialog .setup-footer { flex-wrap: wrap; }
+.server-setup-dialog .footer-actions { flex-wrap: wrap; min-width: 0; max-width: 100%; justify-content: flex-end; margin-left: auto; }
+.server-setup-dialog .footer-actions button { white-space: normal; text-align: center; }
+@media (max-width: 580px) {
+  .server-setup-dialog .identity { align-items: flex-start; }
+  .server-setup-dialog .identity-actions { max-width: 50%; gap: 2px; }
+  .server-setup-dialog .identity-actions .badge { white-space: normal; }
+  .server-setup-dialog .setup-footer { padding-top: 10px; padding-bottom: 10px; gap: 8px; }
+}

@@ -19,7 +19,7 @@ const directory = required('PI_CODING_AGENT_DIR');
 const release = runtimeRelease(required('OUTPOST_PI_RELEASE_FILE'), directory);
 const profile = new PiProfile(directory, release.id);
 const management = new ProviderManagement(profile);
-const runs = new WorkerRuns(profile, required('OUTPOST_PI_WORKSPACES'), required('OUTPOST_PI_SESSIONS'));
+const runs = new WorkerRuns(profile, required('OUTPOST_PI_WORKSPACES'), required('OUTPOST_PI_SESSIONS'), process.env.OUTPOST_WORKSPACE_SHARED === 'true');
 const token = readFileSync(required('OUTPOST_PI_WORKER_TOKEN_FILE'), 'utf8').trim();
 const server = workerServer(management, runs, token);
 server.requestTimeout = 20000; server.headersTimeout = 10000;

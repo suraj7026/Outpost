@@ -2,6 +2,26 @@
 extern "C" {
     fn outpost_set_window_controls(window: *mut std::ffi::c_void, visible: bool, x: f64, y: f64);
     fn outpost_sidebar_pointer_inside(window: *mut std::ffi::c_void, width: f64) -> bool;
+    fn outpost_set_window_blur(window: *mut std::ffi::c_void, radius: u32) -> bool;
+}
+
+#[tauri::command]
+pub async fn set_window_blur(window: tauri::WebviewWindow, radius: u32) -> Result<(), String> {
+    if radius > 32 {
+        return Err("Invalid window blur radius".into());
+    }
+    #[cfg(target_os = "macos")]
+    return on_main(window, move |pointer| unsafe {
+        outpost_set_window_blur(pointer, radius)
+    })
+    .await?
+    .then_some(())
+    .ok_or_else(|| "Window blur is unavailable".into());
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = window;
+        Err("Window frost requires macOS".into())
+    }
 }
 
 // Called only from Tauri's main-thread setup, before the first window paint.

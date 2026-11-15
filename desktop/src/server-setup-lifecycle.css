@@ -1,0 +1,29 @@
+.server-setup-dialog .setup-lifecycle-confirm { margin-bottom: 20px; padding: 16px; border: 1px solid var(--control); border-radius: var(--radius); background: var(--well); overflow-wrap: anywhere; }
+.server-setup-dialog .setup-lifecycle-confirm h3 { margin-bottom: 8px; }
+.server-setup-dialog .setup-lifecycle-confirm p { font-size: 13px; line-height: 1.6; }
+.server-setup-dialog .setup-lifecycle-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.server-setup-dialog .setup-lifecycle-note { margin-bottom: 18px; font-size: 13px; }
+.server-setup-dialog .setup-history-link { justify-content: flex-start; margin-top: 8px; text-align: left; flex: none; }
+.server-setup-dialog .setup-history-link[aria-current='true'] { color: var(--text); background: var(--raised); }
+.server-setup-dialog .setup-history-actions { flex: none; padding: 8px 24px; border-top: 1px solid var(--line); max-height: min(36dvh, 300px); overflow: auto; }
+.server-setup-dialog .setup-history-actions > p { padding: 0 10px; font-size: 12px; overflow-wrap: anywhere; }
+.server-setup-dialog .setup-history-actions .setup-lifecycle-confirm { margin: 8px 0; }
+.server-setup-dialog .setup-history-actions button { white-space: normal; text-align: left; }
+.server-setup-dialog .setup-archived-list { list-style: none; padding: 0; margin: 20px 0; }
+.server-setup-dialog .setup-archived-list li { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.server-setup-dialog .setup-archived-list li > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.server-setup-dialog .setup-archived-list li > p { flex-basis: 100%; overflow-wrap: anywhere; }
+.server-setup-dialog .setup-archived-list li > div p { font-size: 12px; margin-top: 4px; }
+.server-setup-dialog .setup-history-error { flex: none; max-height: 100px; overflow: auto; }
+@media (max-width: 900px) {
+  .server-setup-dialog .footer-actions { flex-wrap: wrap; justify-content: flex-end; }
+}
+@media (max-width: 850px) {
+  .server-setup-dialog .setup-sidebar { flex-wrap: wrap; max-height: 28dvh; overflow: auto; }
+  .server-setup-dialog .server-sessions { flex: 1; min-width: 0; overflow-x: auto; }
+  .server-setup-dialog .setup-history-link { margin-top: 0; }
+}
+@media (max-width: 580px) {
+  .server-setup-dialog .setup-history-actions { padding: 6px 16px; }
+  .server-setup-dialog .setup-history-link { font-size: 12px; padding: 8px; }
+}

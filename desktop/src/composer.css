@@ -1,0 +1,277 @@
+.composer-stack {
+  container-type: inline-size;
+  min-width: 0;
+  width: 100%;
+}
+.reply-composer-stack {
+  flex-shrink: 0;
+  max-width: 660px;
+  margin: 8px auto 0;
+}
+.composer-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 60px;
+  margin: 0 12px -16px;
+  padding: 6px 12px 22px;
+  background: var(--bg);
+  border-radius: 24px 24px 0 0;
+}
+.environment-navigation {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+}
+.environment-picker-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  max-width: calc(100% - 60px);
+  min-height: 32px;
+  border-radius: 6px;
+  color: var(--text);
+}
+.environment-picker-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.environment-picker-field select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  opacity: 0;
+  cursor: pointer;
+}
+.environment-picker-field:hover { background: var(--active); }
+
+.environment-status {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--subtle);
+}
+.environment-status.online { background: var(--positive); }
+.environment-history { --icon-button-size: 30px; --icon-glyph-size: 16px; margin-left: auto; }
+.environment-error { flex-basis: 100%; margin: 0; color: var(--danger); font-size: 12px; overflow-wrap: anywhere; }
+.composer-connection-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+.composer-settings, .composer-reconnect { --icon-button-size: 30px; --icon-glyph-size: 16px; }
+.composer-stack > .composer,
+.composer-stack > .reply-composer {
+  position: relative;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 18px 18px 12px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--raised);
+}
+
+.composer-stack textarea { font-size: 14px; line-height: 1.6; }
+.composer-stack .reply-composer textarea { height: 64px; }
+.composer-stack .composer-toolbar { gap: 10px; padding: 6px 0 0; }
+.composer-permission {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: 0;
+  gap: 4px;
+  color: var(--warning);
+}
+.composer-stack .composer-permission select {
+  color: inherit;
+  max-width: 145px;
+  font-size: 12px;
+  padding: 7px 0;
+}
+.composer-model-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+  min-width: 0;
+  margin-left: auto;
+}
+.composer-stack .composer-model-control select,
+.composer-stack .model-picker-trigger {
+  max-width: 100%;
+  min-width: 0;
+  font-size: 12px;
+  background: transparent;
+  border: 0;
+  padding: 7px 4px;
+}
+.composer-stack .composer-model { max-width: 100%; font-size: 12px; }
+.composer-stack .send-button {
+  flex: none;
+  margin: 0;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 50%;
+  padding: 8px;
+}
+.composer-stack .composer-toolbar > .icon-button { --icon-button-size: 34px; }
+@container (max-width: 420px) {
+  .composer-context { margin-inline: 8px; padding-inline: 10px; gap: 4px; }
+  .composer-stack > .composer,
+  .composer-stack > .reply-composer { padding: 14px 14px 10px; border-radius: 24px; }
+  .composer-stack .composer-toolbar { flex-wrap: wrap; gap: 6px; }
+  .composer-model-control { order: 1; flex-basis: calc(100% - 44px); justify-content: flex-start; }
+  .composer-stack .send-button { order: 2; }
+  .composer-stack .composer-model { margin-left: 0; }
+}
+
+/* Task-only context bar; the home/new-task settings controls retain their styles. */
+.composer-context-run {
+  --bg: #101112;
+  --raised: #1d1e21;
+  --text: #ededef;
+  --muted: #a1a3a8;
+  --subtle: #999ca2;
+  --active: #27292c;
+  --line: #303235;
+  --positive: #a3bda9;
+  --warning: #d6b78b;
+  --danger: #f3a49e;
+  --keyboard-focus-bg: #3b3e43;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.5fr) 30px;
+  align-items: center;
+  column-gap: 12px;
+  color-scheme: dark;
+  color: var(--text);
+  background: var(--bg);
+}
+.composer-context-identity { grid-area: 1 / 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.composer-context-identity > .environment-navigation { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; flex: 0 1 auto; min-height: 32px; }
+.composer-context-identity .environment-navigation > p { grid-column: 1 / -1; margin: 0; font-size: 12px; color: var(--danger); overflow-wrap: anywhere; }
+.composer-context-run .environment-navigation > span:not(.environment-status) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-context-run .composer-terminal { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
+.composer-context-run .composer-terminal:is(:hover, [aria-expanded="true"]) { background: var(--active); color: var(--text); }
+.composer-context-run .composer-run-status {
+  grid-area: 1 / 2;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  height: 32px;
+  color: var(--muted);
+  font-size: 12px;
+  opacity: 1;
+  transition: opacity 160ms linear;
+}
+.composer-context-run .composer-run-status[data-visible="false"] {
+  opacity: 0;
+  pointer-events: none;
+}
+.composer-context-run .composer-run-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-context-run .composer-run-mark {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--subtle);
+}
+.composer-context-run .composer-run-status:is([data-kind="running"], [data-kind="success"]) .composer-run-mark { background: var(--positive); }
+.composer-context-run .composer-run-status[data-kind="review"] .composer-run-mark { background: var(--warning); }
+.composer-context-run .composer-run-status[data-kind="error"] .composer-run-mark { background: var(--danger); }
+.composer-context-run .review-shortcut {
+  flex: none;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--raised);
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.composer-context-run .composer-stop-slot {
+  display: flex;
+  align-items: center;
+  flex: 0 0 56px;
+  height: 32px;
+}
+.composer-context-run .composer-run-stop {
+  width: 56px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 6px;
+  gap: 6px;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  font-size: 12px;
+}
+.composer-context-run .composer-run-stop[hidden] { display: none; }
+.composer-context-run .composer-run-stop:hover:not([aria-disabled="true"]) { color: var(--text); background: var(--active); }
+.composer-context-run .composer-run-stop:focus-visible:not([aria-disabled="true"]) { color: var(--text); }
+.composer-context-run .composer-run-stop[aria-disabled="true"] { color: var(--subtle); cursor: default; }
+.composer-context-run .composer-follow {
+  --icon-button-size: 30px;
+  --icon-glyph-size: 17px;
+  position: relative;
+  grid-area: 1 / 3;
+  justify-self: end;
+  margin: 0;
+  background: var(--active);
+  color: var(--text);
+}
+.composer-context-run .composer-follow[aria-disabled="true"] { color: var(--subtle); cursor: default; }
+.composer-context-run .composer-follow:is([data-active="true"], [data-unseen="true"])::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--positive);
+}
+.composer-context-run :is(.composer-follow, .composer-run-stop)[aria-disabled="true"]:active { transform: none; }
+@container (max-width: 560px) {
+  .composer-context-run {
+    grid-template-columns: minmax(0, 1fr) 44px;
+    grid-template-rows: 44px 44px;
+    gap: 0 8px;
+  }
+  .composer-context-run .composer-terminal { width: 44px; height: 44px; }
+  .composer-context-run .composer-follow { --icon-button-size: 44px; grid-area: 1 / 2; }
+  .composer-context-run .composer-run-status {
+    grid-area: 2 / 1 / 3 / -1;
+    justify-content: flex-start;
+    height: 44px;
+  }
+  .composer-context-run .composer-stop-slot { height: 44px; margin-left: auto; }
+  .composer-context-run .composer-run-stop { height: 44px; min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .composer-context-run .composer-run-status,
+  .composer-context-run :is(.composer-follow, .composer-run-stop) { transition: none; }
+  .composer-context-run :is(.composer-follow, .composer-run-stop):active { transform: none; }
+}

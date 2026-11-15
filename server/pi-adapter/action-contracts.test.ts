@@ -13,17 +13,17 @@ import { actionFailureMessage } from '../pi-worker/contracts.js';
 
 test('advertised schemas match real action validation; commands and files succeed without sudo or path escape', async () => {
   const root = mkdtempSync(join(tmpdir(), 'outpost-action-contracts-')), db = new Ledger(join(root, 'ledger.sqlite'));
-  const coordinator = new Coordinator(db, root, { executables: ['/bin/ls'], browserPython: '/fixture/never-executed',
+  const coordinator = new Coordinator(db, root, { executables: ['/bin/ls'], browser: {},
     inference: InferenceConfiguration.parse({ baseUrl: 'http://127.0.0.1:11434/v1', model: 'fixture' }),
     hosts: { token: 'fixture-host-token', endpoints: { surajhomeserver: 'http://127.0.0.1:1', surajhomeserver2: 'http://127.0.0.1:1' } } });
   try {
     const task = coordinator.tasks.create(randomUUID(), { goal: 'Fixture', profile: 'code', mode: 'full_control' });
     const gate = coordinator.gate(task.id), catalogue = gate.catalogue();
-    for (const [name, field] of [['command.run','argv'],['browser.run','task'],['artifact.read_text','artifactId'],['file.read','path'],['file.write','expectedHash'],['host.execute','host']]) {
+    for (const [name, field] of [['command.run','argv'],['browser.open','url'],['artifact.read_text','artifactId'],['file.read','path'],['file.write','expectedHash'],['host.execute','host']]) {
       const schema = catalogue.find(t => t.name === name)?.inputSchema;
       assert.ok(schema); assert.ok(Array.isArray(schema.required) && schema.required.includes(field));
     }
-    for (const [name, input] of [['command.run',{ command: 'ls -la' }],['browser.run',{}],['artifact.read_text',{ path: 'STATUS.md' }]] as const)
+    for (const [name, input] of [['command.run',{ command: 'ls -la' }],['browser.open',{}],['artifact.read_text',{ path: 'STATUS.md' }]] as const)
       await assert.rejects(gate.propose(task.id, name, input));
     assert.equal(db.list('action').length, 0, 'Invalid arguments never dispatch');
     const command = await gate.propose(task.id, 'command.run', { argv: ['/bin/ls','-la'], cwd: '.' });

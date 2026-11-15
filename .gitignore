@@ -1,14 +1,17 @@
-mock/.build/
-mock/build/
+
 .DS_Store
 node_modules/
+.build/
 .outpost/
+.taste-skill/
+.superpowers/
 .env
 .env.*
 !.env.example
-clients/.build/
-clients/build/
-*.xcuserstate
-xcuserdata/
+
 coverage/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
 
