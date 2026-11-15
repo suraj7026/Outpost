@@ -26,9 +26,9 @@ export type WorkspacePage = 'automations' | 'memory' | 'chats' | 'approvals';
 type SampleServer = { id: string; label: string; detail: string; connected: boolean };
 
 const sampleServers: SampleServer[] = [
-  { id: 'studio-mac', label: 'Studio Mac', detail: 'macOS · sample' },
-  { id: 'lab-linux', label: 'Lab Linux', detail: 'Ubuntu · sample' },
-  { id: 'field-notebook', label: 'Field Notebook', detail: 'Debian · sample · offline' },
+  { id: 'studio-mac', label: 'Studio Mac', detail: 'macOS · sample', connected: true },
+  { id: 'lab-linux', label: 'Lab Linux', detail: 'Ubuntu · sample', connected: true },
+  { id: 'field-notebook', label: 'Field Notebook', detail: 'Debian · sample · offline', connected: false },
 ];
 
 const serverById = (id: string | null) => sampleServers.find(server => server.id === id);
@@ -357,7 +357,7 @@ function MemoryPage() {
     ? notes.filter(note => note.scope === 'shared')
     : notes.filter(note => note.scope === 'server' && note.serverId === serverId);
   const offline = sampleServers.filter(server => !server.connected);
-  const sharedWhere = server => offline.length
+  const sharedWhere = () => offline.length
     ? `Saved on ${sampleServers.length - offline.length} of ${sampleServers.length} servers · waiting for ${offline.map(item => item.label).join(', ')}`
     : `Saved on all ${sampleServers.length} servers`;
 
@@ -387,7 +387,7 @@ function MemoryPage() {
             <span className="workspace-review-item-icon"><NotebookPen size={18} /></span>
             <div className="grow">
               <p className="workspace-review-item-text workspace-review-note-text">{note.text}</p>
-              <div className="detail-text">{sharedWhere(note)} · edited {relativeTime(note.updatedAt, now)}</div>
+              <div className="detail-text">{sharedWhere()} · edited {relativeTime(note.updatedAt, now)}</div>
             </div>
             <div className="inline workspace-review-item-actions">
               <IconButton label="Edit note" onClick={() => setDialog({ note })}><Pencil size={18} /></IconButton>
