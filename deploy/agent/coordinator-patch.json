@@ -21,12 +21,12 @@
               { "name": "OUTPOST_OLLAMA_BASE_URL", "value": "http://192.168.1.37:11434/v1" },
               { "name": "OUTPOST_OLLAMA_MODEL", "value": "glm-5.3-flash:cloud" },
               { "name": "OUTPOST_FULL_CONTROL", "value": "true" },
-              { "name": "OUTPOST_BROWSER_PYTHON", "value": "/home/node/server/browser-use/.venv/bin/python" },
+              { "name": "OUTPOST_CAMOUFOX_PYTHON", "value": "/home/node/server/browser-engine/.venv/bin/python" },
+              { "name": "OUTPOST_BROWSER_ENABLED", "value": "true" },
               { "name": "OUTPOST_HOST_MAIN", "value": "http://host-main.outpost-hosts.svc.cluster.local:4319" },
               { "name": "OUTPOST_HOST_WORKER", "value": "http://host-worker.outpost-hosts.svc.cluster.local:4319" },
               { "name": "OUTPOST_HOST_TOKEN", "valueFrom": { "secretKeyRef": { "name": "outpost-runtime", "key": "host-token" } } },
-              { "name": "OUTPOST_PAIRING_TOKEN", "valueFrom": { "secretKeyRef": { "name": "outpost-runtime", "key": "pairing-token" } } },
-              { "name": "ANONYMIZED_TELEMETRY", "value": "false" }
+              { "name": "OUTPOST_PAIRING_TOKEN", "valueFrom": { "secretKeyRef": { "name": "outpost-runtime", "key": "pairing-token" } } }
             ],
             "securityContext": { "allowPrivilegeEscalation": false, "readOnlyRootFilesystem": true, "capabilities": { "drop": ["ALL"] } },
             "resources": {

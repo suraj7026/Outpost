@@ -1,0 +1,555 @@
+/* Outpost design review — composer mock styles (GLM-5.3 Flash).
+   Scoped to composer-review-* classes only; consumes shared tokens from the
+   coordinator shell. Metrics mirror the app composer: 18/18/12 padding,
+   radius 28, 36px controls, 8px spacing system. */
+
+.composer-review {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 320px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.composer-review-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: min(720px, 100%);
+  margin-inline: auto;
+  padding: 0 24px;
+}
+
+/* ---- Top bar ------------------------------------------------------------ */
+
+.composer-review-topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 14px 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.composer-review-identity {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.composer-review-identity .outpost-mark {
+  width: 19px;
+  height: 21px;
+  color: var(--text);
+  flex: none;
+}
+
+.composer-review-identity-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.composer-review-identity-text strong {
+  font-size: 14px;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-review-identity-text small {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-review-topbar-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---- Scroll body / transcript ------------------------------------------- */
+
+.composer-review-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.composer-review-transcript {
+  display: grid;
+  gap: 30px;
+  align-content: start;
+  padding: 26px 0 18px;
+}
+
+.composer-review-empty {
+  display: grid;
+  place-items: center;
+  padding: 40px 0;
+}
+
+.composer-review-pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.composer-review-pending::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+/* ---- Messages: plain text, owner right / Outpost left, no bubbles ------- */
+
+.composer-review-message {
+  display: flex;
+  align-items: flex-start;
+}
+
+.composer-review-owner {
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.composer-review-owner-body {
+  display: grid;
+  gap: 8px;
+  max-width: min(78%, 520px);
+  text-align: right;
+}
+
+.composer-review-byline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.composer-review-byline strong,
+.composer-review-byline-name {
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text);
+}
+
+.composer-review-message-avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--active);
+  color: var(--text);
+}
+
+.composer-review-message-avatar > svg {
+  width: 15px;
+  height: 15px;
+}
+
+.composer-review-reply {
+  display: block;
+}
+
+.composer-review-reply-byline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.composer-review-reply-logo {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  color: var(--text);
+}
+
+.composer-review-reply-logo .outpost-mark {
+  width: 18px;
+  height: 20px;
+}
+
+.composer-review-reply-content {
+  display: grid;
+  gap: 10px;
+  margin-left: 42px;
+  max-width: min(100%, 560px);
+}
+
+.composer-review-preview-note {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.composer-review-text {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.composer-review-entry {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.composer-review-entry > svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--positive);
+}
+
+/* ---- New-task profile tabs (understated) -------------------------------- */
+
+.composer-review-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.composer-review-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.composer-review-tab > svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.composer-review-tab:hover {
+  color: var(--text);
+}
+
+.composer-review-tab[aria-pressed='true'] {
+  background: var(--raised);
+  color: var(--text);
+}
+
+.composer-review-tab:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: 2px;
+}
+
+/* ---- Shared composer dock ------------------------------------------------ */
+
+.composer-review-dock {
+  flex: none;
+  padding: 8px 0 24px;
+}
+
+/* Comfortable, centered new-task placement. */
+.composer-review-new .composer-review-dock {
+  padding: 20px 0 44px;
+}
+
+.composer-review-composer {
+  padding: 18px 18px 12px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--raised);
+}
+
+.composer-review-composer:focus-within {
+  border-color: var(--muted);
+}
+
+.composer-review-textarea {
+  display: block;
+  width: 100%;
+  min-height: 64px;
+  max-height: 224px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: none;
+}
+
+.composer-review-textarea:focus {
+  outline: none;
+}
+
+.composer-review-textarea::placeholder {
+  color: var(--muted);
+}
+
+.composer-review-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.composer-review-cell {
+  display: flex;
+  min-width: 0;
+}
+
+.composer-review-cell > * {
+  min-width: 0;
+}
+
+.composer-review-cell-permission {
+  flex: none;
+}
+
+.composer-review-cell-model {
+  flex: 0 1 auto;
+  max-width: 300px;
+  margin-left: auto;
+}
+
+.composer-review-cell-model > * {
+  max-width: 100%;
+}
+
+.composer-review-send {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 8px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--bg);
+  cursor: pointer;
+}
+
+.composer-review-send > svg {
+  width: 17px;
+  height: 17px;
+}
+
+.composer-review-send:hover:not(:disabled) {
+  background: var(--muted);
+}
+
+.composer-review-send:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.composer-review-send:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: 2px;
+}
+
+/* ---- Static terminal preview --------------------------------------------- */
+
+.composer-review-terminal {
+  flex: none;
+  padding: 4px 0 18px;
+  border-top: 1px solid var(--line);
+}
+
+.composer-review-terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  padding: 12px 0;
+}
+
+.composer-review-terminal-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.composer-review-terminal-identity > svg {
+  flex: none;
+  color: var(--text);
+}
+
+.composer-review-terminal-identity strong {
+  flex: none;
+  padding-right: 12px;
+  border-right: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.composer-review-terminal-host {
+  min-width: 0;
+}
+
+.composer-review-terminal-host span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.composer-review-terminal-host small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.composer-review-terminal-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.composer-review-terminal-state {
+  flex: none;
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.composer-review-terminal-frame {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.composer-review-screen {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: 12px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.composer-review-line {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.composer-review-line-comment,
+.composer-review-line-input {
+  color: var(--muted);
+}
+
+.composer-review-screen:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: -2px;
+}
+
+.composer-review-terminal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--line);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* ---- Reboot confirmation modal ------------------------------------------- */
+
+.composer-review-modal-copy {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* ---- Narrow composer: model control wraps to its own row ----------------- */
+
+@container (max-width: 500px) {
+  .composer-review-column {
+    padding: 0 16px;
+  }
+
+  .composer-review-identity-text small {
+    display: none;
+  }
+
+  .composer-review-composer {
+    padding: 14px 14px 10px;
+    border-radius: 24px;
+  }
+
+  .composer-review-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .composer-review-cell-model {
+    order: 1;
+    flex-basis: calc(100% - 60px);
+    margin-left: 0;
+  }
+
+  .composer-review-send {
+    order: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-review-body {
+    scroll-behavior: auto;
+  }
+}

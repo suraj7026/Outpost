@@ -1,0 +1,97 @@
+/* Focus is a surface change, never a perimeter highlight. Keep normal borders intact. */
+:root {
+  --focus-surface: color-mix(in srgb, var(--active) 94%, var(--text));
+  --focus-composer: color-mix(in srgb, var(--raised) 96%, var(--text));
+}
+
+:focus { outline: none; }
+
+:root :focus-visible:not([tabindex="-1"]) {
+  background-color: var(--keyboard-focus-bg, var(--focus-surface));
+}
+
+:root :is(.primary, .send-button) {
+  --keyboard-focus-bg: color-mix(in srgb, var(--text) 84%, var(--surface));
+}
+
+:root :is(.composer, .reply-composer) textarea { --keyboard-focus-bg: transparent; }
+:root :is(.composer, .reply-composer):has(textarea:focus-visible) { background-color: var(--focus-composer); }
+:root .environment-picker-field:has(select:focus-visible) { background-color: var(--focus-surface); }
+
+:root label:has(> :is(input[type="checkbox"], input[type="radio"]):focus-visible) {
+  background-color: var(--focus-surface);
+}
+.appearance-settings input[type="checkbox"] { --keyboard-focus-bg: var(--raised); }
+.appearance-settings input[type="checkbox"]:checked { --keyboard-focus-bg: var(--text); }
+
+/* Keep image pixels unchanged; their surrounding controls carry keyboard focus. */
+.browser-page-input { --keyboard-focus-bg: transparent; }
+.image-stage { --keyboard-focus-bg: var(--bg); }
+:is(.browser-viewer, .browser-viewer-dialog):has(.browser-page-input:focus-visible) .browser-toolbar,
+.image-viewer:has(.image-stage:focus-visible) .image-viewer-toolbar {
+  background-color: var(--focus-surface);
+}
+
+/* Sidebar chrome has its own opacity rules, including a normally transparent account row. */
+:root[data-glass="true"] .web-sidebar :is(button, a, input, [tabindex]):focus-visible,
+html:root[data-glass="true"] .web-sidebar :is(.sidebar-chrome, .sidebar-section) .icon-button:focus-visible {
+  background-color: var(--keyboard-focus-bg, color-mix(in srgb, var(--focus-surface) var(--sidebar-selection-opacity), transparent));
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --focus-surface: color-mix(in srgb, var(--surface) 70%, var(--raised));
+    --focus-composer: color-mix(in srgb, var(--raised) 70%, var(--surface));
+  }
+}
+
+@media (forced-colors: active) {
+  :root { --focus-surface: Highlight; --focus-composer: Highlight; }
+  :root :focus-visible:not([tabindex="-1"]) {
+    --keyboard-focus-bg: Highlight;
+    --text: HighlightText;
+    --muted: HighlightText;
+    --subtle: HighlightText;
+    --faint: HighlightText;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+  :root :is(.composer, .reply-composer):has(textarea:focus-visible),
+  :root label:has(> :is(input[type="checkbox"], input[type="radio"]):focus-visible) {
+    --text: HighlightText;
+    --muted: HighlightText;
+    --subtle: HighlightText;
+    --faint: HighlightText;
+    --warning: HighlightText;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+  :root :is(.composer, .reply-composer):has(textarea:focus-visible) :is(button, select) {
+    background-color: ButtonFace;
+    color: ButtonText;
+  }
+  :root :is(.composer, .reply-composer):has(textarea:focus-visible) :is(.primary, .send-button) {
+    background-color: ButtonText;
+    color: ButtonFace;
+  }
+  :root :is(.composer, .reply-composer) textarea:focus-visible { --keyboard-focus-bg: transparent; }
+  :root .browser-page-input:focus-visible { --keyboard-focus-bg: transparent; color: CanvasText; }
+  :root .image-stage:focus-visible { --keyboard-focus-bg: Canvas; color: CanvasText; }
+
+  :is(.browser-viewer, .browser-viewer-dialog):has(.browser-page-input:focus-visible) .browser-toolbar,
+  .image-viewer:has(.image-stage:focus-visible) .image-viewer-toolbar {
+    --text: HighlightText;
+    --muted: HighlightText;
+    --subtle: HighlightText;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+  :is(.browser-viewer:has(.browser-page-input:focus-visible), .browser-viewer-dialog:has(.browser-page-input:focus-visible), .image-viewer:has(.image-stage:focus-visible)) :is(.browser-toolbar, .image-viewer-toolbar) button {
+    background-color: ButtonFace;
+    color: ButtonText;
+  }
+  :is(.browser-viewer:has(.browser-page-input:focus-visible), .browser-viewer-dialog:has(.browser-page-input:focus-visible), .image-viewer:has(.image-stage:focus-visible)) :is(.browser-toolbar, .image-viewer-toolbar) button[aria-pressed="true"] {
+    background-color: Highlight;
+    color: HighlightText;
+  }
+}

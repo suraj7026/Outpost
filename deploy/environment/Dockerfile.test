@@ -1,0 +1,15 @@
+# Native-architecture QEMU runner; the guest is an unmodified x86 Ubuntu VM.
+# No privileged container, host mounts, published ports or Docker socket.
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils openssh-client curl ca-certificates python3
+RUN mkdir -p /vm && cd /vm \
+    && curl --fail --location --retry 2 -o SHA256SUMS https://cloud-images.ubuntu.com/noble/current/SHA256SUMS \
+    && curl --fail --location --retry 2 -o noble-server-cloudimg-amd64.img https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img \
+    && grep -E ' [*]?noble-server-cloudimg-amd64.img$' SHA256SUMS | sha256sum --check --strict \
+    && mv noble-server-cloudimg-amd64.img root.qcow2 \
+    && qemu-img resize root.qcow2 20G
+COPY . /test/
+RUN chmod 600 /test/id_ed25519 /test/host_ed25519 /test/device.pem \
+    && cloud-localds /vm/seed.img /test/user-data /test/meta-data
+CMD ["qemu-system-x86_64", "-accel", "tcg,thread=multi", "-cpu", "max", "-smp", "2", "-m", "4096", "-nographic", "-drive", "file=/vm/root.qcow2,if=virtio,format=qcow2", "-drive", "file=/vm/seed.img,format=raw,media=cdrom,readonly=on", "-netdev", "user,id=n0,hostfwd=tcp:127.0.0.1:2222-:22", "-device", "virtio-net-pci,netdev=n0"]

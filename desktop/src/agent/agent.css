@@ -1,0 +1,33 @@
+/* Preserve Studio's existing shell, shared typography and neutral surfaces. */
+.agent-settings-body { min-width: 0; display: grid; gap: 16px; }
+.agent-settings-body code { overflow-wrap: anywhere; }
+.provider-settings > div:first-child { min-width: 0; }
+.provider-settings > div:first-child code { overflow-wrap: anywhere; }
+.provider-settings h3 { font-size: 14px; font-weight: 600; margin: 0; }
+.agent-settings-body small { display: block; color: var(--muted); font-size: 12px; }
+.provider-list { max-height: 360px; overflow: auto; overscroll-behavior: contain; }
+.provider-row { padding: 14px 0; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
+.provider-row strong { font-size: 14px; font-weight: 500; }
+.provider-row .button-row { flex-wrap: wrap; }
+.provider-login, .provider-confirm, .provider-default { display: grid; gap: 12px; padding: 16px; background: var(--raised); border-radius: 8px; }
+.agent-settings-body p { margin: 0; }
+.agent-settings-body form { margin-top: 12px; }
+.agent-settings-body select { min-height: 38px; width: 100%; }
+.agent-settings-body summary { cursor: pointer; font-size: 14px; padding: 8px 0; }
+.agent-settings-body .agent-check { display: flex; align-items: center; gap: 8px; }
+.agent-settings-body .agent-check input { min-height: 0; width: auto; }
+
+.model-picker-trigger { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 300px; }
+.model-picker-trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-picker-trigger svg { flex: none; }
+.agent-dialog { width: min(540px, calc(100vw - 40px)); max-height: min(650px, calc(100dvh - 48px)); padding: 24px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: auto; }
+.agent-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.agent-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.agent-dialog h2 { font-size: 16px; margin: 0; }
+.agent-dialog p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.agent-dialog input { width: 100%; min-height: 38px; margin: 8px 0 12px; }
+.model-results { display: grid; max-height: 340px; overflow: auto; overscroll-behavior: contain; }
+.model-results button { display: flex; text-align: left; justify-content: space-between; gap: 12px; padding: 12px; border: 0; border-radius: 4px; background: transparent; }
+.model-results button[aria-pressed="true"] { background: var(--raised); }
+.model-results small { display: block; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+@media (max-width: 780px) { .model-picker-trigger { max-width: 190px; } .agent-dialog { padding: 16px; } .provider-row button { min-height: 44px; } }

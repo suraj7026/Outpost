@@ -1,15 +1,27 @@
 import { spawn } from 'node:child_process';
+import { access, constants } from 'node:fs/promises';
+import { join } from 'node:path';
 import { z } from 'zod';
 import { requireThat } from '../core/contracts.js';
 import type { Gate } from '../policy/trust.js';
 import { Workspace } from '../artifacts/files.js';
 export const CommandInput = z.strictObject({ argv: z.array(z.string().max(8192)).min(1).max(128), cwd: z.string().default('.'), timeoutMs: z.number().int().min(100).max(300000).default(30000) });
+const commandPath = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+export async function resolveExecutable(name: string): Promise<string> {
+  if (name.startsWith('/')) return name;
+  requireThat(!name.includes('/') && name.length > 0,'absolute_executable_required');
+  for (const directory of commandPath.split(':')) {
+    const path = join(directory,name);
+    try { await access(path,constants.X_OK); return path; } catch { /* Try the next fixed PATH entry. */ }
+  }
+  throw new Error(`executable_not_found: ${name}`);
+}
 export interface CommandResult { exitCode: number | null; signal: string | null; stdout: string; stderr: string; timedOut: boolean; cancelled: boolean; outputLimitReached: boolean }
 export async function execute(argv: string[], cwd: string, signal: AbortSignal, timeoutMs = 30000, outputLimit = 2*1024*1024): Promise<CommandResult> {
   requireThat(argv.length > 0 && argv[0]?.startsWith('/'),'absolute_executable_required');
   requireThat(!signal.aborted,'cancelled');
   return new Promise((resolve,reject) => {
-    const child = spawn(argv[0]!,argv.slice(1),{ cwd,env: { PATH: '/usr/local/bin:/usr/bin:/bin',HOME: cwd,LANG: 'C.UTF-8' },detached: true,stdio: ['ignore','pipe','pipe'] });
+    const child = spawn(argv[0]!,argv.slice(1),{ cwd,env: { PATH: commandPath,HOME: cwd,LANG: 'C.UTF-8' },detached: true,stdio: ['ignore','pipe','pipe'] });
     let stdout = '', stderr = '', bytes = 0, timedOut = false, cancelled = false, outputLimitReached = false;
     let killTimer: NodeJS.Timeout | undefined;
     const kill = (name: NodeJS.Signals) => { if (child.pid) { try { process.kill(-child.pid,name); } catch { /* Process group already exited. */ } } };
@@ -29,10 +41,11 @@ export async function execute(argv: string[], cwd: string, signal: AbortSignal, 
   });
 }
 export function registerCommands(gate: Gate, workspace: Workspace, executables: Set<string>, unrestricted = false) {
-  gate.register('command.run',{ version: 1,effects: ['unknown'],parse: value => CommandInput.parse(value),target: args => `workspace:${String(args.cwd)}`,
+  gate.register('command.run',{ version: 1,effects: ['unknown'],inputSchema: z.toJSONSchema(CommandInput),description: 'Runs argv in the task workspace as the non-root coordinator user. In full-control installations bare executable names resolve against a fixed system PATH. For shell syntax use argv ["/bin/bash", "-lc", "your shell command"] and cwd ".". This is not root host execution; use host.execute for Docker, system services and host filesystem operations.',parse: value => CommandInput.parse(value),target: args => `workspace:${String(args.cwd)}`,
     execute: async (args,signal) => {
       const input = CommandInput.parse(args); requireThat(unrestricted || executables.has(input.argv[0]!), 'executable_not_enrolled');
       const cwd = input.cwd === '.' ? workspace.root : workspace.path(input.cwd);
-      return { ...await execute(input.argv,cwd,signal,input.timeoutMs) };
+      const argv = unrestricted ? [await resolveExecutable(input.argv[0]!),...input.argv.slice(1)] : input.argv;
+      return { ...await execute(argv,cwd,signal,input.timeoutMs) };
     } });
 }

@@ -49,35 +49,51 @@ export async function call<T>(
       };
     else
       throw new Error(
-        "Read-only recorded preview. Open Outpost Desktop to execute actions.",
+        "Read-only recorded preview. Open Outpost to execute actions.",
       );
     return value as T;
   }
   throw new Error(
-    "Open the installed Outpost Desktop app to connect securely to your servers.",
+    "Open the installed Outpost app to connect securely to your servers.",
   );
 }
-export const query = <T>(kind: string, payload: Record<string, Json> = {}) =>
-  call<T>("query", { kind, payload });
-export const send = (
-  kind: string,
-  id: string,
-  revision: number,
-  payload: Record<string, Json> = {},
-) => call<ServerRecord>("send_command", { kind, id, revision, payload });
+// The immutable owner is captured before any await (including file reads/hashing).
+export type EnvironmentId = string | null; // null is the explicit, unbound legacy slot.
+type ServerCall = "connection_info" | "query" | "send_command" | "retry_command" |
+  "agent_request" | "browser_request" | "enroll_device" | "disconnect" | "connection_policy" | "stream_events" | "artifact" | "save_artifact";
+export function environmentApi(environmentId: EnvironmentId) {
+  const request = <T>(command: ServerCall, args: Record<string, unknown> = {}) =>
+    call<T>(environmentId === null ? command : `environment_${command}`,
+      environmentId === null ? args : { ...args, environmentId });
+  const send = (kind: string, id: string, revision: number, payload: Record<string, Json> = {}) =>
+    request<ServerRecord>("send_command", { kind, id, revision, payload });
+  return {
+    environmentId,
+    call: request,
+    query: <T>(kind: string, payload: Record<string, Json> = {}) => request<T>("query", { kind, payload }),
+    agentRequest: <T>(payload: Record<string, unknown>) => {
+      if (recordedPreview() || !nativeApp()) return Promise.reject(new Error("Provider management requires the connected desktop app."));
+      return request<T>("agent_request", { payload });
+    },
+    browserRequest: <T>(payload: Record<string, unknown>) => {
+      if (recordedPreview() || !nativeApp()) return Promise.reject(new Error("Browser control requires the connected desktop app."));
+      return request<T>("browser_request", { payload });
+    },
+    send,
+    disconnect: (pause = false) => !nativeApp() || recordedPreview() ? Promise.resolve() : request<void>("disconnect", pause && environmentId !== null ? { pause: true } : {}),
+    upload: (file: File, taskId: string) => upload(send, file, taskId),
+  };
+}
+export type EnvironmentApi = ReturnType<typeof environmentApi>;
 
-export async function upload(file: File, taskId: string) {
+async function upload(send: EnvironmentApi["send"], file: File, taskId: string) {
   if (file.size > 64 * 1024 * 1024)
     throw new Error("Attachments must be 64 MiB or smaller.");
   const bytes = new Uint8Array(await file.arrayBuffer());
   const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+    .map((byte) => byte.toString(16).padStart(2, "0")).join("");
   const entry = await send("artifact.begin", taskId, 0, {
-    name: file.name,
-    mime: file.type || "application/octet-stream",
-    size: bytes.length,
-    hash,
+    name: file.name, mime: file.type || "application/octet-stream", size: bytes.length, hash,
   });
   for (let offset = 0; offset < bytes.length; offset += 512 * 1024) {
     const chunk = bytes.subarray(offset, offset + 512 * 1024);

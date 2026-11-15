@@ -1,8 +1,8 @@
 import { createRoot } from "react-dom/client";
-import "@fontsource/geist/400.css";
-import "@fontsource/geist/500.css";
-import "@fontsource/geist/600.css";
-import App from "./App";
+import App from "./Environments";
 import "./styles.css";
+import "./studio.css";
+import "./composer.css";
+import "./focus.css";
 
 createRoot(document.getElementById("root")!).render(<App />);

@@ -22,13 +22,19 @@ export interface ConnectionInfo {
   deviceId: string;
   publicKey: string;
   pending: boolean;
+  pendingError?: string | null;
   nativeSidebar: boolean;
+  lifecycle?: { state: "connecting" | "connected" | "retrying" | "paused" | "needs_attention"; error: string | null } | null;
 }
 export interface RuntimeInfo {
+  sharedMemory?: boolean;
+  piManagement?: boolean;
   configured: boolean;
   model: string | null;
   hostAdministration: boolean;
-  browserUse: boolean;
+  browserEngine?: 'camoufox' | null;
+  browserDirect?: boolean;
+  browserTakeover?: boolean;
   unrestrictedCommands: boolean;
 }
 export interface ModelCatalogue {
@@ -50,5 +56,12 @@ export const object = (value: Json | undefined): Record<string, Json> =>
   value !== null && typeof value === "object" && !Array.isArray(value)
     ? value
     : {};
+export const actionNeedsReview = (record: ServerRecord) => {
+  const state = text(record, "state");
+  const result = object(record.data.result);
+  return state === "unknown" || state === "failed" ||
+    (typeof result.exitCode === "number" && result.exitCode !== 0) ||
+    result.agent_reported_success === false;
+};
 export const labelState = (value: string) =>
   value === "verifying" ? "Ready for your review" : value.replaceAll("_", " ");

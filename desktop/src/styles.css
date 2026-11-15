@@ -1,25 +1,27 @@
-/* Ink: flat, quiet surfaces. AppKit owns the macOS sidebar and window chrome. */
+@import "./fonts.css";
+
+/* Ink foundation. Studio owns the app UI; macOS retains native window chrome. */
 :root {
-  font-family:
-    Geist,
-    -apple-system,
-    BlinkMacSystemFont,
-    sans-serif;
+  font-family: var(--font-sans);
+  font-optical-sizing: auto;
   color-scheme: dark light;
   font-synthesis: none;
   font-weight: 400;
-  --bg: #101011;
-  --surface: #171718;
-  --raised: #202022;
-  --sidebar: #161617;
-  --line: #2a2a2d;
-  --text: #eeeef0;
-  --muted: #a0a0a6;
-  --subtle: #85858c;
-  --active: #29292c;
-  --positive: #91bb98;
+  --bg: #0f1011;
+  --surface: #16171a;
+  --raised: #1c1d21;
+  --sidebar: #0f1011;
+  --line: #26282c;
+  --control: #44464b;
+  --text: #ededef;
+  --muted: #a1a3a8;
+  --subtle: #999ca2;
+  --active: #26282c;
+  --positive: #a3bda9;
+  --warning: #d6b78b;
   --danger: #f3a49e;
-  --focus: #c8c8d0;
+
+  --ease: cubic-bezier(.2, .8, .2, 1);
   color: var(--text);
   background: var(--bg);
   font-size: 14px;
@@ -27,8 +29,20 @@
 * {
   box-sizing: border-box;
 }
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: clip;
+  overscroll-behavior: none;
+}
 body {
   margin: 0;
+}
+#root {
+  position: fixed;
+  inset: 0;
 }
 button,
 input,
@@ -63,15 +77,7 @@ button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
-button:focus-visible,
-a:focus-visible,
-summary:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 3px;
-}
+
 input,
 select,
 textarea {
@@ -118,8 +124,10 @@ a {
   text-underline-offset: 3px;
 }
 pre,
-code {
-  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+code,
+kbd,
+samp {
+  font-family: var(--font-sans);
   font-size: 12px;
 }
 pre {
@@ -136,6 +144,10 @@ pre {
 svg {
   flex-shrink: 0;
   stroke-width: 1.7;
+}
+.lucide {
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 time {
   font-variant-numeric: tabular-nums;
@@ -154,12 +166,36 @@ time {
   white-space: nowrap;
 }
 .icon-button {
-  padding: 6px;
+  --icon-button-bg: color-mix(in srgb, var(--raised) 94%, var(--text));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--icon-button-size, 34px);
+  height: var(--icon-button-size, 34px);
+  min-width: var(--icon-button-size, 34px);
+  min-height: var(--icon-button-size, 34px);
+  padding: 0;
   border: 0;
-  background: transparent;
-  min-width: 30px;
-  min-height: 30px;
-  color: var(--muted);
+  border-radius: 50%;
+  background: var(--icon-button-bg);
+  color: color-mix(in srgb, var(--text) 78%, var(--muted));
+}
+.icon-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--raised) 86%, var(--text));
+  color: var(--text);
+}
+.icon-button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--raised) 80%, var(--text));
+}
+.icon-button:disabled {
+  background: var(--icon-button-bg);
+  color: var(--subtle);
+}
+.icon-button > svg,
+.send-button > svg {
+  width: var(--icon-glyph-size, 18px);
+  height: var(--icon-glyph-size, 18px);
 }
 .primary,
 .send-button {
@@ -177,9 +213,12 @@ time {
   gap: 8px;
 }
 .app-shell {
-  height: 100dvh;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   display: grid;
-  overflow: hidden;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: clip;
 }
 .web-shell {
   grid-template-columns: 232px minmax(0, 1fr);
@@ -187,35 +226,30 @@ time {
 .native-shell {
   grid-template-columns: minmax(0, 1fr);
 }
+.main-shell,
+.task-view,
+.task-columns,
+.conversation-column,
+.web-sidebar {
+  overflow: clip;
+  overscroll-behavior: none;
+}
+.conversation,
+.evidence-column,
+.sidebar-sessions,
+.home,
+.page,
+.action-body pre,
+.thinking-block pre {
+  overscroll-behavior: contain;
+}
 .main-shell {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
 }
-.topbar {
-  height: 53px;
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 25px;
-  font-size: 13px;
-  gap: 12px;
-}
-.topbar-leading {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.topbar-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 12px;
-}
+
 .status-dot {
   width: 6px;
   height: 6px;
@@ -360,7 +394,6 @@ time {
 }
 .profile-tabs button[aria-pressed="true"] {
   background: var(--raised);
-  border-color: var(--line);
   color: var(--text);
 }
 .composer {
@@ -369,9 +402,7 @@ time {
   background: var(--surface);
   padding: 15px 16px 10px;
 }
-.composer:focus-within {
-  border-color: var(--subtle);
-}
+
 .composer textarea {
   border: 0;
   background: transparent;
@@ -535,7 +566,13 @@ time {
   padding: 40px 40px 60px;
   overflow-y: auto;
   flex: 1;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
+}
+.registry-page {
+  height: 100%;
+  overflow-wrap: anywhere;
 }
 .page-heading {
   display: flex;
@@ -614,10 +651,7 @@ time {
   color: var(--text);
   font-weight: 400;
 }
-.settings-page {
-  max-width: 1200px;
-  width: 100%;
-}
+
 .settings-section {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) minmax(250px, 1.1fr);
@@ -670,32 +704,7 @@ time {
   display: flex;
   flex-direction: column;
 }
-.task-heading {
-  padding: 22px 26px 19px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  border-bottom: 1px solid var(--line);
-}
-.task-heading > div:first-child {
-  min-width: 0;
-}
-.task-heading h1 {
-  font-size: 17px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  letter-spacing: -0.02em;
-}
-.task-heading p {
-  font-size: 11px;
-  margin: 7px 0 0;
-}
-.task-heading select {
-  font-size: 11px;
-  max-width: 135px;
-}
+
 .task-columns {
   display: grid;
   grid-template-columns: minmax(340px, 1fr) minmax(280px, 350px);
@@ -709,6 +718,7 @@ time {
   min-width: 0;
 }
 .conversation {
+  min-height: 0;
   overflow-y: auto;
   flex: 1;
   padding: 25px 30px;
@@ -802,9 +812,7 @@ time {
   padding: 12px 12px 9px;
   background: var(--surface);
 }
-.reply-composer:focus-within {
-  border-color: var(--subtle);
-}
+
 .reply-composer textarea {
   width: 100%;
   height: 64px;
@@ -862,9 +870,6 @@ time {
   font-size: 11px;
   display: flex;
   align-items: center;
-}
-.action-failed summary {
-  color: var(--danger);
 }
 .action-body {
   padding: 0 0 13px 22px;
@@ -934,18 +939,20 @@ time {
 }
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #fafafa;
-    --surface: #f2f2f3;
-    --raised: #eaeaec;
-    --sidebar: #f0f0f1;
-    --line: #dcdce0;
-    --text: #222226;
-    --muted: #64646b;
-    --subtle: #73737a;
-    --active: #e0e0e5;
-    --positive: #47744f;
+    --bg: #f0f1f2;
+    --surface: #fafafa;
+    --raised: #e9eaec;
+    --sidebar: #f0f1f2;
+    --line: #dcdee1;
+    --control: #b3b5bc;
+    --text: #202125;
+    --muted: #62646a;
+    --subtle: #686a70;
+    --active: #dedfe2;
+    --positive: #40674c;
+    --warning: #77551f;
     --danger: #ab3932;
-    --focus: #555560;
+
   }
   .composer {
     border-color: #c8c8cd;
@@ -970,12 +977,7 @@ time {
   .conversation {
     padding: 22px;
   }
-  .task-heading {
-    padding: 20px;
-  }
-  .topbar {
-    padding: 0 20px;
-  }
+
   .settings-section {
     gap: 28px;
   }
@@ -1029,12 +1031,7 @@ time {
   .mobile-tabs button[aria-pressed="true"] {
     background: var(--raised);
   }
-  .task-heading .button-row {
-    gap: 2px;
-  }
-  .task-heading select {
-    max-width: 110px;
-  }
+
   .settings-section {
     grid-template-columns: 1fr;
     gap: 15px;
@@ -1066,12 +1063,7 @@ time {
     font-size: 11px;
     max-width: 85px;
   }
-  .topbar-status > span:nth-child(2) {
-    max-width: 115px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+
 }
 @media (max-width: 590px) {
   .web-shell {
@@ -1090,9 +1082,6 @@ time {
   }
   .web-shell .mobile-menu {
     display: inline-flex;
-  }
-  .topbar {
-    padding: 0 20px;
   }
   .home {
     padding: 32px 20px;
@@ -1132,19 +1121,7 @@ time {
   .home-footer button {
     padding-left: 0;
   }
-  .task-heading {
-    gap: 10px;
-    padding: 17px 16px;
-  }
-  .task-heading h1 {
-    font-size: 15px;
-  }
-  .task-heading select {
-    display: none;
-  }
-  .task-heading .button-row {
-    flex-shrink: 0;
-  }
+
   .connection-error {
     padding: 10px 15px;
     gap: 8px;
@@ -1167,3 +1144,14 @@ time {
     animation: none !important;
   }
 }
+
+.administration-list { min-width: 0; }
+.administration-record { padding: 0 0 18px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+.administration-record h3 { font-size: 13px; }
+.administration-record summary { font-size: 12px; cursor: pointer; }
+.administration-confirmation { margin-top: 12px; border-left: 2px solid var(--line); padding-left: 12px; }
+.settings-section .administration-check { display: flex; align-items: flex-start; gap: 8px; line-height: 1.6; }
+.settings-section .administration-check input { width: auto; flex: none; margin-top: 3px; }
+
+.environment-settings code { overflow-wrap: anywhere; }
+.environment-settings form { margin: 12px 0; }

@@ -28,6 +28,8 @@ export interface Action {
 }
 export interface Tool {
   version: number; effects: string[];
+  inputSchema?: Record<string, unknown>;
+  description?: string;
   parse(input: unknown): Data;
   target(args: Data): string;
   execute(args: Data, signal: AbortSignal): Promise<Json>;
@@ -41,7 +43,7 @@ export class Gate {
   private running = new Map<string,AbortController>();
   constructor(readonly db: Ledger, private reviewer?: Reviewer, private allowHostAdministration = false) {}
   register(name: string, tool: Tool) { requireThat(!this.tools.has(name),'duplicate_tool'); this.tools.set(name,tool); }
-  catalogue() { return [...this.tools].map(([name,tool]) => ({ name, version: tool.version, effects: tool.effects })); }
+  catalogue() { return [...this.tools].map(([name,tool]) => ({ name, version: tool.version, effects: tool.effects, ...(tool.inputSchema ? { inputSchema: tool.inputSchema } : {}), ...(tool.description ? { description: tool.description } : {}) })); }
   policy(taskId: string) { return this.db.need<Policy>('policy',taskId); }
   changePolicy(taskId: string, expected: number, mode: unknown) { return this.db.put('policy',taskId,expected,{ mode: Mode.parse(mode) }); }
   private current(action: Action) {

@@ -1,0 +1,66 @@
+.settings-review-pages {
+  width: 100%;
+  max-width: 960px;
+  min-width: 0;
+  color: var(--text);
+}
+
+.settings-review-pages > .stack { gap: 32px; }
+.settings-review-pages p { margin: 0; }
+.settings-review-pages .settings-review-row { gap: 16px; }
+.settings-review-row .detail-text { margin-top: 4px; max-width: 66ch; }
+.settings-review-row-actions { flex-shrink: 0; justify-content: flex-end; }
+.settings-review-icon { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 36px; color: var(--muted); }
+.settings-review-provider-letter { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: var(--raised); color: var(--text); font-size: 14px; font-weight: 550; }
+.settings-review-section-action { padding-top: 16px; }
+.settings-review-name-form, .settings-review-route-form { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; padding: 16px 0; }
+.settings-review-name-form > :first-child { flex: 1 1 240px; max-width: 400px; }
+.settings-review-route-form > :first-child { flex: 1 1 280px; max-width: 480px; }
+.settings-review-field-width { max-width: 480px; padding-top: 16px; }
+.settings-review-provider-footer { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding-top: 12px; }
+.settings-review-inline-status { display: flex; gap: 8px; align-items: center; color: var(--positive); font-size: 12px; padding: 8px 0; }
+.settings-review-inline-status > svg { flex-shrink: 0; }
+
+.settings-review-details { margin-top: 16px; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.settings-review-details > summary { cursor: pointer; width: fit-content; max-width: 100%; border-radius: 4px; padding: 8px 0; color: var(--muted); }
+.settings-review-details > summary:hover { color: var(--text); }
+.settings-review-details > summary:focus-visible { outline: 2px solid var(--muted); outline-offset: 4px; }
+.settings-review-details > p { max-width: 76ch; margin: 8px 0 12px; }
+.settings-review-facts { display: grid; grid-template-columns: minmax(100px, 160px) minmax(0, 1fr); gap: 12px 24px; margin: 12px 0 16px; font-size: 12px; }
+.settings-review-facts dt { color: var(--muted); }
+.settings-review-facts dd { margin: 0; color: var(--text); overflow-wrap: anywhere; user-select: text; }
+.settings-review-callout { display: flex; align-items: flex-start; gap: 12px; background: var(--raised); border-radius: 8px; padding: 16px; margin-top: 16px; font-size: 12px; color: var(--muted); line-height: 1.65; }
+.settings-review-callout > svg { flex-shrink: 0; margin-top: 2px; color: var(--warning); }
+.settings-review-callout .list-title { color: var(--text); }
+.settings-review-callout .detail-text { margin-top: 4px; }
+.settings-review-callout > button { align-self: center; }
+.settings-review-dialog { min-width: 0; }
+.settings-review-dialog p { margin: 0; overflow-wrap: anywhere; }
+.settings-review-dialog .settings-review-callout { margin-top: 0; }
+.settings-review-dialog .dialog-actions { flex-wrap: wrap; }
+.settings-review-check { display: flex; gap: 12px; align-items: flex-start; color: var(--text); font-size: 13px; cursor: pointer; line-height: 1.65; }
+.settings-review-check > input { appearance: auto; width: 16px; height: 16px; min-height: 16px; flex: 0 0 16px; margin: 3px 0 0; padding: 0; accent-color: var(--positive); cursor: pointer; }
+.settings-review-check > input:focus-visible { outline: 2px solid var(--muted); outline-offset: 3px; }
+.settings-review-provider-results { display: grid; gap: 4px; max-height: 320px; overflow-y: auto; }
+.settings-review-provider-results > button { width: 100%; height: auto; min-height: 64px; text-align: left; padding: 12px; justify-content: space-between; }
+.settings-review-provider-results .detail-text { display: block; margin-top: 4px; font-weight: 400; }
+.settings-review-scenario { max-width: 360px; }
+.settings-review-recovery-state { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+.settings-review-recovery-state > svg { color: var(--positive); flex-shrink: 0; }
+.settings-review-recovery-held > svg { color: var(--warning); }
+.settings-review-recovery-state h3 { margin: 0 0 4px; font-size: 16px; font-weight: 550; line-height: 1.5; }
+.settings-review-recovery-state p { max-width: 66ch; color: var(--muted); font-size: 13px; }
+
+@media (max-width: 640px) {
+  .settings-review-pages .settings-review-row { flex-wrap: wrap; gap: 12px; }
+  .settings-review-row > .grow { flex-basis: calc(100% - 48px); }
+  .settings-review-row-actions { width: 100%; justify-content: flex-start; }
+  .settings-review-row:has(> .settings-review-icon) > .settings-review-row-actions { padding-left: 44px; }
+  .settings-review-facts { grid-template-columns: 1fr; gap: 4px; }
+  .settings-review-facts dd { margin-bottom: 12px; }
+  .settings-review-callout { flex-wrap: wrap; }
+  .settings-review-callout > .grow { flex-basis: calc(100% - 32px); }
+  .settings-review-callout > button { margin-left: 30px; }
+  .settings-review-provider-footer { gap: 8px; }
+  .settings-review-recovery-state > .grow { flex-basis: calc(100% - 40px); }
+}

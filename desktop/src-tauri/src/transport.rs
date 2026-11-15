@@ -16,10 +16,80 @@ use std::{
 use tauri::Manager;
 use uuid::Uuid;
 
+#[path = "environments.rs"]
+pub mod environments;
+#[path = "provider_transfer.rs"]
+pub mod provider_transfer;
+#[path = "server_setup.rs"]
+pub mod server_setup;
+static IDENTITY_LOCK: Mutex<()> = Mutex::new(());
+
 #[derive(Serialize, Deserialize)]
 struct StoredIdentity {
     id: String,
     key: String,
+}
+trait IdentityStore: Send + Sync {
+    fn read(&self) -> Result<Option<Vec<u8>>, String>;
+    fn write(&self, bytes: &[u8]) -> Result<(), String>;
+}
+struct KeychainIdentityStore;
+impl IdentityStore for KeychainIdentityStore {
+    fn read(&self) -> Result<Option<Vec<u8>>, String> {
+        #[cfg(target_os = "macos")]
+        match security_framework::passwords::get_generic_password("dev.outpost.identity", "device")
+        {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(error) if error.code() == -25300 => Ok(None),
+            Err(error) => Err(format!(
+                "Allow Outpost to access its existing device identity in Keychain: {error}"
+            )),
+        }
+        #[cfg(not(target_os = "macos"))]
+        Err("This build currently requires macOS Keychain".into())
+    }
+    fn write(&self, bytes: &[u8]) -> Result<(), String> {
+        #[cfg(target_os = "macos")]
+        {
+            security_framework::passwords::set_generic_password(
+                "dev.outpost.identity",
+                "device",
+                bytes,
+            )
+            .map_err(|e| format!("Keychain: {e}"))
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = bytes;
+            Err("This build currently requires macOS Keychain".into())
+        }
+    }
+}
+fn load_identity(store: &dyn IdentityStore) -> Result<Identity, String> {
+    let _guard = IDENTITY_LOCK.lock().map_err(|_| "Identity lock failed")?;
+    let stored: StoredIdentity = match store.read()? {
+        Some(bytes) => serde_json::from_slice(&bytes).map_err(|e| e.to_string())?,
+        None => {
+            let mut key = [0u8; 32];
+            OsRng.fill_bytes(&mut key);
+            let stored = StoredIdentity {
+                id: Uuid::new_v4().to_string(),
+                key: STANDARD.encode(key),
+            };
+            store.write(&serde_json::to_vec(&stored).map_err(|e| e.to_string())?)?;
+            stored
+        }
+    };
+    Uuid::parse_str(&stored.id).map_err(|_| "Invalid device identity")?;
+    let key: [u8; 32] = STANDARD
+        .decode(stored.key)
+        .map_err(|e| e.to_string())?
+        .try_into()
+        .map_err(|_| "Invalid signing key")?;
+    Ok(Identity {
+        id: stored.id,
+        key: SigningKey::from_bytes(&key),
+    })
 }
 struct Identity {
     id: String,
@@ -34,6 +104,13 @@ pub struct State {
     client: Mutex<Client>,
     http: reqwest::Client,
     directory: PathBuf,
+    environment_id: Option<String>,
+    mutation: std::sync::Arc<tokio::sync::Mutex<()>>,
+    stream: Mutex<Option<tokio::sync::watch::Sender<bool>>>,
+    removed: std::sync::atomic::AtomicBool,
+    route_available: std::sync::atomic::AtomicBool,
+    #[cfg(test)]
+    identity_store: Option<std::sync::Arc<dyn IdentityStore>>,
 }
 
 fn now() -> u64 {
@@ -42,11 +119,43 @@ fn now() -> u64 {
         .unwrap_or_default()
         .as_millis() as u64
 }
+#[cfg(test)]
+thread_local! {
+    static DIRECTORY_SYNC_HOOK: std::cell::RefCell<Option<Box<dyn FnMut(&std::path::Path) -> Result<(), String>>>> = std::cell::RefCell::new(None);
+}
+fn sync_directory(path: &std::path::Path) -> Result<(), String> {
+    #[cfg(test)]
+    DIRECTORY_SYNC_HOOK.with(|hook| -> Result<(), String> {
+        if let Some(hook) = hook.borrow_mut().as_mut() {
+            hook(path)?;
+        }
+        Ok(())
+    })?;
+    fs::File::open(path)
+        .and_then(|file| file.sync_all())
+        .map_err(|e| e.to_string())
+}
+// Sync even an existing link: a prior mkdir may have succeeded before a failed barrier.
+fn durable_directory(path: &std::path::Path) -> Result<bool, String> {
+    let mut builder = fs::DirBuilder::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    let fresh = match builder.create(path) {
+        Ok(()) => true,
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && path.is_dir() => false,
+        Err(e) => return Err(e.to_string()),
+    };
+    sync_directory(path.parent().ok_or("Missing directory parent")?)?;
+    Ok(fresh)
+}
 fn private_write(path: &PathBuf, bytes: &[u8]) -> Result<(), String> {
     use std::io::Write;
-    let temp = path.with_extension("tmp");
+    let temp = path.with_extension(format!("{}.tmp", Uuid::new_v4()));
     let mut options = fs::OpenOptions::new();
-    options.create(true).truncate(true).write(true);
+    options.create_new(true).write(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
@@ -55,7 +164,8 @@ fn private_write(path: &PathBuf, bytes: &[u8]) -> Result<(), String> {
     let mut file = options.open(&temp).map_err(|e| e.to_string())?;
     file.write_all(bytes).map_err(|e| e.to_string())?;
     file.sync_all().map_err(|e| e.to_string())?;
-    fs::rename(temp, path).map_err(|e| e.to_string())
+    fs::rename(temp, path).map_err(|e| e.to_string())?;
+    sync_directory(path.parent().ok_or("Missing parent directory")?)
 }
 
 fn validate_endpoint(value: &str) -> Result<String, String> {
@@ -72,15 +182,26 @@ fn validate_endpoint(value: &str) -> Result<String, String> {
     {
         return Err("Use HTTPS or localhost HTTP, without embedded credentials".into());
     }
-    Ok(value.trim_end_matches('/').to_string())
+    Ok(url.as_str().trim_end_matches('/').to_string())
+}
+
+fn legacy_endpoint(directory: &std::path::Path) -> Result<String, String> {
+    match fs::read_to_string(directory.join("endpoint")) {
+        Ok(value) if value.is_empty() => Ok(String::new()),
+        Ok(value) => validate_endpoint(value.trim()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Ok("http://127.0.0.1:4318".into())
+        }
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 impl State {
+    pub fn mutation_gate(&self) -> std::sync::Arc<tokio::sync::Mutex<()>> {
+        self.mutation.clone()
+    }
     pub fn new(directory: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
-        let endpoint = fs::read_to_string(directory.join("endpoint"))
-            .ok()
-            .and_then(|s| validate_endpoint(s.trim()).ok())
-            .unwrap_or_else(|| "http://127.0.0.1:4318".into());
+        let endpoint = legacy_endpoint(&directory)?;
         Ok(Self {
             client: Mutex::new(Client {
                 endpoint,
@@ -92,58 +213,138 @@ impl State {
                 .redirect(reqwest::redirect::Policy::none())
                 .build()?,
             directory,
+            environment_id: None,
+            mutation: std::sync::Arc::new(tokio::sync::Mutex::new(())),
+            stream: Mutex::new(None),
+            removed: std::sync::atomic::AtomicBool::new(false),
+            route_available: std::sync::atomic::AtomicBool::new(true),
+            #[cfg(test)]
+            identity_store: None,
         })
     }
     fn identity(&self, client: &mut Client) -> Result<(), String> {
         if client.identity.is_some() {
             return Ok(());
         }
-        #[cfg(target_os = "macos")]
-        {
-            use security_framework::passwords::{get_generic_password, set_generic_password};
-            let stored: StoredIdentity = match get_generic_password("dev.outpost.identity", "device") {
-                Ok(bytes) => serde_json::from_slice(&bytes).map_err(|e| e.to_string())?,
-                Err(error) if error.code() == -25300 => {
-                    let mut key = [0u8; 32]; OsRng.fill_bytes(&mut key);
-                    let identity = StoredIdentity { id: Uuid::new_v4().to_string(), key: STANDARD.encode(key) };
-                    set_generic_password("dev.outpost.identity", "device", &serde_json::to_vec(&identity).map_err(|e| e.to_string())?).map_err(|e| format!("Keychain: {e}"))?;
-                    identity
-                },
-                Err(error) => return Err(format!("Allow Outpost Desktop to access its existing device identity in Keychain: {error}")),
-            };
-            Uuid::parse_str(&stored.id).map_err(|_| "Invalid device identity")?;
-            let key: [u8; 32] = STANDARD
-                .decode(stored.key)
-                .map_err(|e| e.to_string())?
-                .try_into()
-                .map_err(|_| "Invalid signing key")?;
-            let identity = Identity {
-                id: stored.id,
-                key: SigningKey::from_bytes(&key),
-            };
-            if let Ok(bytes) = fs::read(self.directory.join("pending.enc")) {
-                if bytes.len() < 12 {
-                    return Err("Pending command file is invalid; do not retry blindly".into());
-                }
-                let cipher = Self::cipher(&identity);
-                let clear = cipher
-                    .decrypt(Nonce::from_slice(&bytes[..12]), &bytes[12..])
-                    .map_err(|_| {
-                        "Cannot decrypt pending command; inspect before sending new commands"
-                    })?;
-                let pending: Value = serde_json::from_slice(&clear).map_err(|e| e.to_string())?;
-                if pending["endpoint"].as_str() != Some(&client.endpoint) {
-                    return Err("Pending command belongs to another server".into());
-                }
-                client.pending = Some(pending["command"].clone());
+        #[cfg(test)]
+        if let Some(store) = &self.identity_store {
+            client.identity = Some(load_identity(store.as_ref())?);
+            return Ok(());
+        }
+        client.identity = Some(load_identity(&KeychainIdentityStore)?);
+        Ok(())
+    }
+    fn allow_mutation(&self) -> Result<(), String> {
+        if self.environment_id.is_none() {
+            environments::allow_legacy_mutation(&self.directory)?;
+        }
+        Ok(())
+    }
+    fn load_pending(&self, client: &mut Client) -> Result<(), String> {
+        self.identity(client)?;
+        let bytes = match fs::read(self.directory.join("pending.enc")) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                client.pending = None;
+                return Ok(());
             }
-            client.identity = Some(identity);
-            Ok(())
+            Err(error) => return Err(format!("Cannot read pending command: {error}")),
+        };
+        if bytes.len() < 12 {
+            return Err("Invalid pending command file".into());
         }
-        #[cfg(not(target_os = "macos"))]
+        let clear = Self::cipher(client.identity.as_ref().unwrap())
+            .decrypt(Nonce::from_slice(&bytes[..12]), &bytes[12..])
+            .map_err(|_| "Cannot decrypt pending command; inspect before sending new commands")?;
+        let envelope: Value =
+            serde_json::from_slice(&clear).map_err(|_| "Invalid pending envelope")?;
+        let expected_fields = if self.environment_id.is_some() {
+            ["environmentId", "command"]
+        } else {
+            ["endpoint", "command"]
+        };
+        if envelope
+            .as_object()
+            .is_none_or(|v| v.len() != 2 || expected_fields.iter().any(|k| !v.contains_key(*k)))
         {
-            Err("This build currently requires macOS Keychain".into())
+            return Err("Invalid pending envelope fields".into());
         }
+        let command = &envelope["command"];
+        if let Some(id) = &self.environment_id {
+            if envelope["environmentId"].as_str() != Some(id)
+                || command["environmentId"].as_str() != Some(id)
+                || command["protocolVersion"] != 2
+            {
+                return Err("Pending command environment binding mismatch".into());
+            }
+        } else if validate_endpoint(
+            envelope["endpoint"]
+                .as_str()
+                .ok_or("Invalid legacy pending endpoint")?,
+        )? != validate_endpoint(&client.endpoint)?
+            || command["protocolVersion"] != 1
+        {
+            return Err("Legacy pending command belongs to another server; resolve on its original endpoint".into());
+        }
+        self.validate_command(command)?;
+        client.pending = Some(command.clone());
+        Ok(())
+    }
+    fn validate_command(&self, command: &Value) -> Result<(), String> {
+        let fields = [
+            "protocolVersion",
+            "commandId",
+            "idempotencyKey",
+            "aggregateId",
+            "expectedRevision",
+            "type",
+            "payload",
+        ];
+        if command.as_object().is_none_or(|v| {
+            v.len() != fields.len() + usize::from(self.environment_id.is_some())
+                || fields.iter().any(|k| !v.contains_key(*k))
+        }) {
+            return Err("Invalid pending command fields".into());
+        }
+        for field in ["commandId", "idempotencyKey"] {
+            environments::validate_id(
+                command[field]
+                    .as_str()
+                    .ok_or("Invalid pending command ID")?,
+            )?;
+        }
+        if command["expectedRevision"].as_u64().is_none()
+            || !command["payload"].is_object()
+            || command["aggregateId"].as_str().is_none()
+            || command["type"].as_str().is_none()
+        {
+            return Err("Invalid pending command".into());
+        }
+        Ok(())
+    }
+    fn bind(&self, value: &mut Value) {
+        if let Some(id) = &self.environment_id {
+            value["protocolVersion"] = json!(2);
+            value["environmentId"] = json!(id);
+        }
+    }
+    fn verify_response(&self, response: &reqwest::Response) -> Result<(), String> {
+        if let Some(id) = &self.environment_id {
+            if response
+                .headers()
+                .get("x-outpost-environment-id")
+                .and_then(|v| v.to_str().ok())
+                != Some(id.as_str())
+                || response
+                    .headers()
+                    .get("x-outpost-protocol-version")
+                    .and_then(|v| v.to_str().ok())
+                    != Some("2")
+            {
+                return Err("Server identity/protocol mismatch; response rejected".into());
+            }
+        }
+        Ok(())
     }
     fn cipher(identity: &Identity) -> Aes256Gcm {
         let mut hash = Sha256::new();
@@ -158,9 +359,11 @@ impl State {
                 .identity
                 .as_ref()
                 .ok_or("Device identity unavailable")?;
-            let clear =
-                serde_json::to_vec(&json!({ "endpoint": client.endpoint, "command": command }))
-                    .map_err(|e| e.to_string())?;
+            let clear = serde_json::to_vec(&match &self.environment_id {
+                Some(id) => json!({ "environmentId": id, "command": command }),
+                None => json!({ "endpoint": client.endpoint, "command": command }),
+            })
+            .map_err(|e| e.to_string())?;
             let mut nonce = [0u8; 12];
             OsRng.fill_bytes(&mut nonce);
             let encrypted = Self::cipher(identity)
@@ -170,20 +373,41 @@ impl State {
             bytes.extend(encrypted);
             private_write(&path, &bytes)
         } else {
-            if path.exists() {
-                fs::remove_file(path).map_err(|e| e.to_string())?;
+            match fs::remove_file(&path) {
+                Ok(()) => {
+                    fs::File::open(&self.directory)
+                        .and_then(|f| f.sync_all())
+                        .map_err(|e| e.to_string())?;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e.to_string()),
             }
             Ok(())
         }
     }
-    async fn request(
+    fn prepare_request(
         &self,
         path: &str,
         mut value: Value,
         signed: bool,
-    ) -> Result<reqwest::Response, String> {
+    ) -> Result<reqwest::RequestBuilder, String> {
+        if self.removed.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err("Environment removed".into());
+        }
+        if !self.route_available.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err("Private SSH connection is unavailable; automatic recovery is managing this route.".into());
+        }
+        self.bind(&mut value);
+        let path = if self.environment_id.is_some() {
+            path.replacen("v1/", "v2/", 1)
+        } else {
+            path.to_string()
+        };
         let (endpoint, body, signature) = {
             let mut client = self.client.lock().map_err(|_| "Connection lock failed")?;
+            if client.endpoint.is_empty() {
+                return Err("No server connection is configured".into());
+            }
             self.identity(&mut client)?;
             let identity = client
                 .identity
@@ -200,19 +424,131 @@ impl State {
             .post(format!("{endpoint}/{path}"))
             .header("content-type", "application/json")
             .body(body);
-        if path == "v1/stream" {
+        if path.ends_with("/stream") {
             request = request.timeout(Duration::from_secs(90));
         }
         if signed {
             request = request.header("x-outpost-signature", signature);
         }
-        request
+        Ok(request)
+    }
+    async fn request(
+        &self,
+        path: &str,
+        value: Value,
+        signed: bool,
+    ) -> Result<reqwest::Response, String> {
+        self.send_request(self.prepare_request(path, value, signed)?)
+            .await
+    }
+    async fn send_request(
+        &self,
+        request: reqwest::RequestBuilder,
+    ) -> Result<reqwest::Response, String> {
+        let response = request
             .send()
             .await
-            .map_err(|e| format!("Cannot reach your server. Check the private SSH tunnel. {e}"))
+            .map_err(|e| format!("Cannot reach your server. Check the private SSH tunnel. {e}"))?;
+        self.verify_response(&response)?;
+        Ok(response)
     }
+    // Credential operations must never touch pending.enc or replayable commands.
+    async fn agent_request(&self, payload: Value) -> Result<Value, String> {
+        let _legacy_mutation = if self.environment_id.is_none() {
+            Some(self.mutation.lock().await)
+        } else {
+            None
+        };
+        self.allow_mutation()?;
+        let response = self
+            .request(
+                "v1/agent",
+                json!({ "type": "agent", "payload": payload }),
+                true,
+            )
+            .await
+            .map_err(|_| "Provider request interrupted. Check status before trying again.")?;
+        let status = response.status();
+        if !status.is_success() {
+            // Never reflect provider/HTTP error bodies into desktop diagnostics.
+            return Err(format!(
+                "Provider request failed (HTTP {}). Refresh status before retrying.",
+                status.as_u16()
+            ));
+        }
+        response
+            .json()
+            .await
+            .map_err(|_| "Invalid provider response".into())
+    }
+    // Browser keystrokes are transient, never persisted or automatically retried.
+    async fn browser_request(&self, mut payload: Value) -> Result<Value, String> {
+        let _legacy_mutation = if self.environment_id.is_none() {
+            Some(self.mutation.lock().await)
+        } else {
+            None
+        };
+        self.allow_mutation()?;
+        if !payload.is_object() { return Err("Invalid browser request".into()); }
+        payload["requestId"] = json!(Uuid::new_v4().to_string());
+        let request = self.prepare_request("v1/browser", json!({ "type": "browser", "payload": payload }), true)?
+            .timeout(Duration::from_secs(30));
+        let response = self.send_request(request).await
+            .map_err(|_| "Browser reply lost. Inspect the current page before acting again.")?;
+        if !response.status().is_success() {
+            return Err("Browser request rejected. Refresh the view and check control ownership before acting again.".into());
+        }
+        response.json().await.map_err(|_| "Invalid browser response. Inspect the current page before acting again.".into())
+    }
+    async fn enroll_device(
+        &self,
+        device_id: String,
+        name: String,
+        public_key: String,
+    ) -> Result<Value, String> {
+        let _mutation = self.mutation.lock().await;
+        self.allow_mutation()?;
+        Uuid::parse_str(&device_id).map_err(|_| "Enter the other device's UUID")?;
+        if name.trim().is_empty() || name.chars().count() > 80 {
+            return Err("Device name must contain 1–80 characters".into());
+        }
+        let key = STANDARD
+            .decode(&public_key)
+            .map_err(|_| "Enter a base64 public pairing key")?;
+        if key.len() != 32 {
+            return Err("Public pairing key must contain 32 bytes".into());
+        }
+        {
+            let mut client = self.client.lock().map_err(|_| "Connection lock failed")?;
+            self.load_pending(&mut client)?;
+            if client.pending.is_some() {
+                return Err(
+                    "Resolve the unknown pending command before enrolling another device".into(),
+                );
+            }
+        }
+        // The outer deviceId is the Keychain signer; the payload is the new device.
+        // This endpoint has no command receipt: never automatically retry enrollment.
+        let response = self.request("v1/pair-device", json!({ "type": "pair", "payload": {
+            "deviceId": device_id, "name": name.trim(), "publicKey": public_key
+        }}), true).await.map_err(|_| "Enrollment outcome unknown. Refresh trusted devices and verify the ID and key before trying again.")?;
+        let status = response.status();
+        let body: Value = response.json().await.map_err(|_| {
+            "Enrollment response incomplete. Refresh trusted devices before trying again."
+        })?;
+        if !status.is_success() {
+            return Err(format!(
+                "Enrollment not confirmed: {}. Refresh trusted devices before trying again.",
+                body["message"]
+                    .as_str()
+                    .unwrap_or("Server rejected enrollment")
+            ));
+        }
+        Ok(body)
+    }
+
     async fn submit(&self, command: Value) -> Result<Value, String> {
-        let response = self.request("v1/commands", command, true).await?;
+        let response = self.request("v1/commands", command.clone(), true).await?;
         let status = response.status();
         let body = response
             .json::<Value>()
@@ -220,6 +556,11 @@ impl State {
             .map_err(|e| format!("Response incomplete; retry the same command. {e}"))?;
         if status.is_success() || status.is_client_error() {
             let mut client = self.client.lock().map_err(|_| "Connection lock failed")?;
+            if client.pending.is_some()
+                && client.pending.as_ref().map(|v| &v["commandId"]) != Some(&command["commandId"])
+            {
+                return Err("Pending command changed; response cannot clear it".into());
+            }
             let pending = client.pending.take();
             if let Err(error) = self.persist_pending(&client) {
                 client.pending = pending;
@@ -239,27 +580,58 @@ impl State {
 #[tauri::command]
 pub fn connection_info(state: tauri::State<'_, State>) -> Result<Value, String> {
     let mut client = state.client.lock().map_err(|_| "Connection lock failed")?;
-    state.identity(&mut client)?;
+    state.load_pending(&mut client)?;
     let identity = client
         .identity
         .as_ref()
         .ok_or("Device identity unavailable")?;
     Ok(
-        json!({ "endpoint": client.endpoint, "deviceId": identity.id, "publicKey": STANDARD.encode(identity.key.verifying_key().to_bytes()), "pending": client.pending.is_some(), "nativeSidebar": cfg!(target_os = "macos") }),
+        json!({ "endpoint": client.endpoint, "deviceId": identity.id, "publicKey": STANDARD.encode(identity.key.verifying_key().to_bytes()), "pending": client.pending.is_some(), "nativeSidebar": false }),
     )
 }
 
 #[tauri::command]
-pub fn set_endpoint(state: tauri::State<'_, State>, endpoint: String) -> Result<(), String> {
-    let endpoint = validate_endpoint(&endpoint)?;
-    let mut client = state.client.lock().map_err(|_| "Connection lock failed")?;
-    state.identity(&mut client)?;
-    if client.pending.is_some() {
-        return Err("Resolve the pending command before switching servers".into());
+pub async fn set_endpoint(state: tauri::State<'_, State>, endpoint: String) -> Result<(), String> {
+    state.set_endpoint(endpoint).await
+}
+
+#[tauri::command]
+pub async fn clear_legacy_endpoint(state: tauri::State<'_, State>) -> Result<(), String> {
+    state.clear_legacy_endpoint().await
+}
+
+impl State {
+    async fn clear_legacy_endpoint(&self) -> Result<(), String> {
+        let _mutation = self.mutation.lock().await;
+        {
+            let mut client = self.client.lock().map_err(|_| "Connection lock failed")?;
+            self.load_pending(&mut client)?;
+            if client.pending.is_some() {
+                return Err("Resolve the pending command before deleting this connection".into());
+            }
+            // An empty file records an explicit removal and suppresses the default route.
+            private_write(&self.directory.join("endpoint"), b"")?;
+            client.endpoint.clear();
+        }
+        self.cancel_stream()
     }
-    private_write(&state.directory.join("endpoint"), endpoint.as_bytes())?;
-    client.endpoint = endpoint;
-    Ok(())
+
+    async fn set_endpoint(&self, endpoint: String) -> Result<(), String> {
+        let _mutation = self.mutation.lock().await;
+        self.allow_mutation()?;
+        let endpoint = validate_endpoint(&endpoint)?;
+        let mut client = self.client.lock().map_err(|_| "Connection lock failed")?;
+        self.load_pending(&mut client)?;
+        if client.pending.is_some() {
+            return Err("Resolve the pending command before switching servers".into());
+        }
+        if endpoint != client.endpoint && environments::has_saved_environments(&self.directory)? {
+            return Err("Legacy endpoint changes are disabled after registering an environment; use verified environment registration for route changes".into());
+        }
+        private_write(&self.directory.join("endpoint"), endpoint.as_bytes())?;
+        client.endpoint = endpoint;
+        Ok(())
+    }
 }
 
 #[tauri::command]
@@ -267,23 +639,36 @@ pub async fn stream_events(
     state: tauri::State<'_, State>,
     channel: tauri::ipc::Channel<Value>,
 ) -> Result<(), String> {
-    let mut response = state
-        .request(
-            "v1/stream",
-            json!({ "type": "subscribe", "payload": {} }),
-            true,
-        )
-        .await?;
-    if !response.status().is_success() {
-        return Err(format!("Live stream rejected ({})", response.status()));
-    }
-    let mut decoder = crate::sse::Decoder::default();
-    while let Some(bytes) = response.chunk().await.map_err(|e| e.to_string())? {
-        for frame in decoder.push(&bytes)? {
-            channel.send(frame).map_err(|e| e.to_string())?;
-        }
+    state.bound_stream(channel).await
+}
+
+#[tauri::command]
+pub fn disconnect(state: tauri::State<'_, State>) -> Result<(), String> {
+    state.cancel_stream()
+}
+
+// Transfer packets and maintenance approval stay in the native broker, not generic React IPC.
+fn public_management_request(payload: &Value) -> Result<(), String> {
+    let kind = payload["type"].as_str().unwrap_or("");
+    if matches!(kind, "transfer.prepare" | "transfer.export" | "transfer.apply")
+        || (kind.starts_with("maintenance.") && kind != "maintenance.status") {
+        return Err("Use the reviewed native server operation".into());
     }
     Ok(())
+}
+// Ephemeral credential path: never use persist_pending or command retry storage here.
+#[tauri::command]
+pub async fn agent_request(
+    state: tauri::State<'_, State>,
+    payload: Value,
+) -> Result<Value, String> {
+    public_management_request(&payload)?;
+    state.agent_request(payload).await
+}
+
+#[tauri::command]
+pub async fn browser_request(state: tauri::State<'_, State>, payload: Value) -> Result<Value, String> {
+    state.browser_request(payload).await
 }
 
 #[tauri::command]
@@ -318,70 +703,127 @@ pub async fn send_command(
     revision: u64,
     payload: Value,
 ) -> Result<Value, String> {
-    let command = {
-        let mut client = state.client.lock().map_err(|_| "Connection lock failed")?;
-        state.identity(&mut client)?;
-        if client.pending.is_some() {
-            return Err(
-                "A previous command has an unknown outcome. Retry that command first.".into(),
-            );
-        }
-        let command = json!({ "protocolVersion": 1, "commandId": Uuid::new_v4(), "idempotencyKey": Uuid::new_v4(), "aggregateId": id, "expectedRevision": revision, "type": kind, "payload": payload });
-        client.pending = Some(command.clone());
-        if let Err(error) = state.persist_pending(&client) {
-            client.pending = None;
-            return Err(format!(
-                "Command was not sent: could not save its encrypted retry envelope. {error}"
-            ));
-        }
-        command
-    };
-    state.submit(command).await
+    state.send_command(kind, id, revision, payload).await
 }
 
 #[tauri::command]
 pub async fn retry_command(state: tauri::State<'_, State>) -> Result<Value, String> {
-    let command = {
-        let mut client = state.client.lock().map_err(|_| "Connection lock failed")?;
-        state.identity(&mut client)?;
-        client
-            .pending
-            .clone()
-            .ok_or("There is no pending command")?
-    };
-    state.submit(command).await
+    state.retry_command().await
+}
+
+#[tauri::command]
+pub async fn enroll_device(
+    state: tauri::State<'_, State>,
+    device_id: String,
+    name: String,
+    public_key: String,
+) -> Result<Value, String> {
+    state.enroll_device(device_id, name, public_key).await
+}
+
+impl State {
+    async fn send_command(
+        &self,
+        kind: String,
+        id: String,
+        revision: u64,
+        payload: Value,
+    ) -> Result<Value, String> {
+        let _mutation = self
+            .mutation
+            .try_lock()
+            .map_err(|_| "A command operation is already in progress")?;
+        self.allow_mutation()?;
+        if self.removed.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err("Environment removed".into());
+        }
+        let command = {
+            let mut client = self.client.lock().map_err(|_| "Connection lock failed")?;
+            if client.endpoint.is_empty() {
+                return Err("No server connection is configured".into());
+            }
+            self.load_pending(&mut client)?;
+            if client.pending.is_some() {
+                return Err(
+                    "A previous command has an unknown outcome. Retry that command first.".into(),
+                );
+            }
+            let mut command = json!({ "protocolVersion": 1, "commandId": Uuid::new_v4(), "idempotencyKey": Uuid::new_v4(), "aggregateId": id, "expectedRevision": revision, "type": kind, "payload": payload });
+            self.bind(&mut command);
+            self.validate_command(&command)?;
+            client.pending = Some(command.clone());
+            if let Err(error) = self.persist_pending(&client) {
+                client.pending = None;
+                return Err(format!(
+                    "Command was not sent: could not save its encrypted retry envelope. {error}"
+                ));
+            }
+            command
+        };
+        self.submit(command).await
+    }
+
+    async fn retry_command(&self) -> Result<Value, String> {
+        let _mutation = self
+            .mutation
+            .try_lock()
+            .map_err(|_| "A command operation is already in progress")?;
+        self.allow_mutation()?;
+        if self.removed.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err("Environment removed".into());
+        }
+        let command = {
+            let mut client = self.client.lock().map_err(|_| "Connection lock failed")?;
+            self.load_pending(&mut client)?;
+            client
+                .pending
+                .clone()
+                .ok_or("There is no pending command")?
+        };
+        self.submit(command).await
+    }
 }
 
 #[tauri::command]
 pub async fn pair(state: tauri::State<'_, State>, token: String) -> Result<(), String> {
-    let body = {
-        let mut client = state.client.lock().map_err(|_| "Connection lock failed")?;
-        state.identity(&mut client)?;
-        let identity = client
-            .identity
-            .as_ref()
-            .ok_or("Device identity unavailable")?;
-        json!({ "deviceId": identity.id, "name": "Outpost Desktop", "publicKey": STANDARD.encode(identity.key.verifying_key().to_bytes()), "token": token.trim() })
-    };
-    // Bootstrap has a strict schema and deliberately does not include issuedAt.
-    let endpoint = state
-        .client
-        .lock()
-        .map_err(|_| "Connection lock failed")?
-        .endpoint
-        .clone();
-    let response = state
-        .http
-        .post(format!("{endpoint}/v1/pair"))
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-    if !response.status().is_success() {
-        let body: Value = response.json().await.map_err(|e| e.to_string())?;
-        return Err(body["message"].as_str().unwrap_or("Pairing failed").into());
+    state.pair(token).await
+}
+impl State {
+    async fn pair(&self, token: String) -> Result<(), String> {
+        let _mutation = self.mutation.lock().await;
+        self.allow_mutation()?;
+        let mut body = {
+            let mut client = self.client.lock().map_err(|_| "Connection lock failed")?;
+            self.identity(&mut client)?;
+            let identity = client
+                .identity
+                .as_ref()
+                .ok_or("Device identity unavailable")?;
+            json!({ "deviceId": identity.id, "name": "Outpost", "publicKey": STANDARD.encode(identity.key.verifying_key().to_bytes()), "token": token.trim() })
+        };
+        self.bind(&mut body);
+        let version = if self.environment_id.is_some() { 2 } else { 1 };
+        // Bootstrap has a strict schema and deliberately does not include issuedAt.
+        let endpoint = self
+            .client
+            .lock()
+            .map_err(|_| "Connection lock failed")?
+            .endpoint
+            .clone();
+        let response = self
+            .http
+            .post(format!("{endpoint}/v{version}/pair"))
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        self.verify_response(&response)?;
+        if !response.status().is_success() {
+            let body: Value = response.json().await.map_err(|e| e.to_string())?;
+            return Err(body["message"].as_str().unwrap_or("Pairing failed").into());
+        }
+        Ok(())
     }
-    Ok(())
 }
 
 async fn artifact_bytes(state: &State, id: &str, hash: &str) -> Result<Vec<u8>, String> {
@@ -452,6 +894,224 @@ pub fn open_url(url: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Loopback-only fixtures use a fixed ephemeral identity, never macOS Keychain.
+    fn fixture(status: &str, reply: Value) -> (State, std::thread::JoinHandle<(String, Value)>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+        let status = status.to_string();
+        let handle = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0; 4096];
+            let (header_end, length) = loop {
+                let count = socket.read(&mut buffer).unwrap();
+                assert!(count > 0);
+                bytes.extend_from_slice(&buffer[..count]);
+                if let Some(end) = bytes.windows(4).position(|part| part == b"\r\n\r\n") {
+                    let headers = String::from_utf8_lossy(&bytes[..end]);
+                    let length: usize = headers
+                        .lines()
+                        .find_map(|line| {
+                            line.to_lowercase()
+                                .strip_prefix("content-length: ")
+                                .map(str::to_owned)
+                        })
+                        .unwrap()
+                        .parse()
+                        .unwrap();
+                    break (end + 4, length);
+                }
+            };
+            while bytes.len() < header_end + length {
+                let count = socket.read(&mut buffer).unwrap();
+                assert!(count > 0);
+                bytes.extend_from_slice(&buffer[..count]);
+            }
+            let headers = String::from_utf8(bytes[..header_end].to_vec()).unwrap();
+            let body = &bytes[header_end..header_end + length];
+            let signature = headers
+                .lines()
+                .find_map(|line| line.strip_prefix("x-outpost-signature: "))
+                .unwrap();
+            let signature =
+                ed25519_dalek::Signature::from_slice(&STANDARD.decode(signature).unwrap()).unwrap();
+            SigningKey::from_bytes(&[7; 32])
+                .verifying_key()
+                .verify_strict(body, &signature)
+                .unwrap();
+            let value = serde_json::from_slice(body).unwrap();
+            let reply = reply.to_string();
+            write!(socket, "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{reply}", reply.len()).unwrap();
+            (headers, value)
+        });
+        let directory =
+            std::env::temp_dir().join(format!("outpost-administration-test-{}", Uuid::new_v4()));
+        fs::create_dir(&directory).unwrap();
+        let state = State::new(directory).unwrap();
+        {
+            let mut client = state.client.lock().unwrap();
+            client.endpoint = endpoint;
+            client.identity = Some(Identity {
+                id: "11111111-1111-4111-8111-111111111111".into(),
+                key: SigningKey::from_bytes(&[7; 32]),
+            });
+        }
+        (state, handle)
+    }
+
+    #[test]
+    fn enrollment_uses_authenticated_pair_device_route_and_distinct_target() {
+        tauri::async_runtime::block_on(async {
+            let target = "22222222-2222-4222-8222-222222222222";
+            let (state, request) = fixture(
+                "200 OK",
+                json!({ "id": target, "kind": "device", "revision": 1 }),
+            );
+            let result = state
+                .enroll_device(target.into(), "Other Mac".into(), STANDARD.encode([9; 32]))
+                .await
+                .unwrap();
+            assert_eq!(result["id"], target);
+            let (headers, body) = request.join().unwrap();
+            assert!(headers.starts_with("POST /v1/pair-device HTTP/1.1"));
+            assert_eq!(body["deviceId"], "11111111-1111-4111-8111-111111111111");
+            assert_eq!(body["type"], "pair");
+            assert_eq!(
+                body["payload"],
+                json!({ "deviceId": target, "name": "Other Mac", "publicKey": STANDARD.encode([9; 32]) })
+            );
+            assert!(body["issuedAt"].as_u64().is_some());
+            fs::remove_dir_all(state.directory).unwrap();
+        });
+    }
+
+    #[test]
+    fn enrollment_rejection_does_not_report_success() {
+        tauri::async_runtime::block_on(async {
+            for message in ["revoked_device", "revision_conflict"] {
+                let (state, request) = fixture("409 Conflict", json!({ "message": message }));
+                let error = state
+                    .enroll_device(
+                        Uuid::new_v4().to_string(),
+                        "Other Mac".into(),
+                        STANDARD.encode([9; 32]),
+                    )
+                    .await
+                    .unwrap_err();
+                assert!(error.contains(message));
+                request.join().unwrap();
+                fs::remove_dir_all(state.directory).unwrap();
+            }
+        });
+    }
+
+    #[test]
+    fn administration_commands_sign_expected_revision_and_preserve_unknown_pending() {
+        tauri::async_runtime::block_on(async {
+            for (kind, payload, status) in [
+                ("device.revoke", json!({}), "409 Conflict"),
+                (
+                    "recovery.resume",
+                    json!({"acknowledged": true}),
+                    "500 Internal Server Error",
+                ),
+            ] {
+                let (state, request) = fixture(status, json!({"message": "revision_conflict"}));
+                let command = json!({ "protocolVersion": 1, "commandId": Uuid::new_v4(), "idempotencyKey": Uuid::new_v4(), "type": kind, "aggregateId": if kind == "recovery.resume" { "server" } else { "22222222-2222-4222-8222-222222222222" }, "expectedRevision": 7, "payload": payload });
+                state.client.lock().unwrap().pending = Some(command.clone());
+                assert!(state.submit(command.clone()).await.is_err());
+                let (headers, body) = request.join().unwrap();
+                assert!(headers.starts_with("POST /v1/commands HTTP/1.1"));
+                assert_eq!(body["type"], kind);
+                assert_eq!(body["aggregateId"], command["aggregateId"]);
+                assert_eq!(body["expectedRevision"], 7);
+                assert_eq!(body["payload"], payload);
+                assert_eq!(body["idempotencyKey"], command["idempotencyKey"]);
+                if status.starts_with("500") {
+                    assert_eq!(state.client.lock().unwrap().pending, Some(command));
+                    state
+                        .persist_pending(&state.client.lock().unwrap())
+                        .unwrap();
+                    let error = state
+                        .enroll_device(
+                            Uuid::new_v4().to_string(),
+                            "Other Mac".into(),
+                            STANDARD.encode([9; 32]),
+                        )
+                        .await
+                        .unwrap_err();
+                    assert!(error.contains("pending command"));
+                } else {
+                    assert!(state.client.lock().unwrap().pending.is_none());
+                }
+                fs::remove_dir_all(state.directory).unwrap();
+            }
+        });
+    }
+
+    #[test]
+    fn provider_requests_are_signed_ephemeral_and_errors_do_not_echo_credentials() {
+        tauri::async_runtime::block_on(async {
+            for status in ["200 OK", "400 Bad Request", "500 Internal Server Error"] {
+                let (state, request) = fixture(
+                    status,
+                    if status.starts_with("200") {
+                        json!({ "state": "running" })
+                    } else {
+                        json!({ "message": "synthetic-secret-never-persist" })
+                    },
+                );
+                let pending = json!({ "idempotencyKey": "unrelated-task" });
+                state.client.lock().unwrap().pending = Some(pending.clone());
+                let payload = json!({ "type": "login.answer", "flowId": "synthetic", "promptId": "step", "value": "synthetic-secret-never-persist" });
+                let result = state.agent_request(payload.clone()).await;
+                if status.starts_with("200") {
+                    assert_eq!(result.unwrap()["state"], "running");
+                } else {
+                    assert!(!result
+                        .unwrap_err()
+                        .contains("synthetic-secret-never-persist"));
+                }
+                let (headers, body) = request.join().unwrap();
+                assert!(headers.starts_with("POST /v1/agent HTTP/1.1"));
+                assert_eq!(body["type"], "agent");
+                assert_eq!(body["payload"], payload);
+                assert!(body["issuedAt"].as_u64().is_some());
+                assert_eq!(state.client.lock().unwrap().pending, Some(pending));
+                assert_eq!(fs::read_dir(&state.directory).unwrap().count(), 0);
+                fs::remove_dir_all(state.directory).unwrap();
+            }
+        });
+    }
+
+    #[test]
+    fn browser_input_is_signed_transient_and_never_echoes_private_text() {
+        tauri::async_runtime::block_on(async {
+            for status in ["200 OK", "409 Conflict", "500 Internal Server Error"] {
+                let secret = "synthetic-browser-input-not-for-logs";
+                let (state, request) = fixture(status, json!({ "applied": true, "message": secret }));
+                let pending = json!({ "idempotencyKey": "unrelated-task" });
+                state.client.lock().unwrap().pending = Some(pending.clone());
+                let result = state.browser_request(json!({ "type": "input", "taskId": Uuid::new_v4(),
+                    "epoch": Uuid::new_v4(), "leaseId": Uuid::new_v4(), "frameId": Uuid::new_v4(),
+                    "input": { "action": "text", "text": secret } })).await;
+                if status.starts_with("200") { assert_eq!(result.unwrap()["applied"], true); }
+                else { assert!(!result.unwrap_err().contains(secret)); }
+                let (headers, body) = request.join().unwrap();
+                assert!(headers.starts_with("POST /v1/browser HTTP/1.1"));
+                assert_eq!(body["payload"]["input"]["text"], secret);
+                assert!(Uuid::parse_str(body["payload"]["requestId"].as_str().unwrap()).is_ok());
+                assert_eq!(state.client.lock().unwrap().pending, Some(pending));
+                assert_eq!(fs::read_dir(&state.directory).unwrap().count(), 0);
+                fs::remove_dir_all(state.directory).unwrap();
+            }
+        });
+    }
+
     #[test]
     fn private_endpoint_validation() {
         assert!(validate_endpoint("http://127.0.0.1:4318").is_ok());

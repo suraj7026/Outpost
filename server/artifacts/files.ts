@@ -8,7 +8,7 @@ import type { Gate } from '../policy/trust.js';
 const sha = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 export class Workspace {
   readonly root: string;
-  constructor(root: string) { mkdirSync(root,{ recursive: true,mode: 0o700 }); this.root = realpathSync(root); }
+  constructor(root: string, private sharedGroup = false) { mkdirSync(root,{ recursive: true,mode: sharedGroup ? 0o2770 : 0o700 }); this.root = realpathSync(root); }
   path(name: string) {
     requireThat(name.length > 0 && !isAbsolute(name),'invalid_path');
     const path = resolve(this.root,name), rel = relative(this.root,path);
@@ -17,17 +17,22 @@ export class Workspace {
     for (const part of rel.split('/')) { cursor = join(cursor,part); if (existsSync(cursor)) requireThat(!lstatSync(cursor).isSymbolicLink(),'symlink_forbidden'); }
     return path;
   }
-  read(name: string) { const path = this.path(name); requireThat(statSync(path).size <= 1_048_576,'file_too_large'); return readFileSync(path,'utf8'); }
+  read(name: string) {
+    requireThat(!['.','./'].includes(name),'file_required_use_command_run_for_listing');
+    const path = this.path(name), info = statSync(path);
+    requireThat(info.isFile(),'file_required_use_command_run_for_listing');
+    requireThat(info.size <= 1_048_576,'file_too_large'); return readFileSync(path,'utf8');
+  }
   write(name: string, text: string, expectedHash: string | null) {
     const path = this.path(name); requireThat((existsSync(path) ? sha(readFileSync(path)) : null) === expectedHash,'file_changed');
-    mkdirSync(dirname(path),{ recursive: true }); const temp = `${path}.${id()}.tmp`;
-    writeFileSync(temp,text,{ flag: 'wx',mode: 0o600 }); renameSync(temp,path); return { hash: sha(Buffer.from(text)),path: name };
+    mkdirSync(dirname(path),{ recursive: true,mode: this.sharedGroup ? 0o2770 : 0o700 }); const temp = `${path}.${id()}.tmp`;
+    writeFileSync(temp,text,{ flag: 'wx',mode: this.sharedGroup ? 0o660 : 0o600 }); renameSync(temp,path); return { hash: sha(Buffer.from(text)),path: name };
   }
   register(gate: Gate) {
     const Read = z.strictObject({ path: z.string().min(1).max(1000) });
     const Write = Read.extend({ text: z.string().max(1_048_576),expectedHash: z.string().regex(/^[a-f0-9]{64}$/).nullable() });
-    gate.register('file.read',{ version: 1,effects: ['workspace.read'],parse: value => Read.parse(value),target: args => String(args.path),execute: async args => this.read(String(args.path)) });
-    gate.register('file.write',{ version: 1,effects: ['workspace.write'],parse: value => Write.parse(value),target: args => String(args.path),execute: async args => { const data = Write.parse(args); return this.write(data.path,data.text,data.expectedHash); } });
+    gate.register('file.read',{ version: 1,effects: ['workspace.read'],inputSchema: z.toJSONSchema(Read),description: 'Reads a relative file path inside the task workspace, for example STATUS.md. Not an artifact ID or directory listing. To list the workspace use command.run with argv ["/bin/ls", "-la"] and cwd ".".',parse: value => Read.parse(value),target: args => String(args.path),execute: async args => this.read(String(args.path)) });
+    gate.register('file.write',{ version: 1,effects: ['workspace.write'],inputSchema: z.toJSONSchema(Write),description: 'Writes a relative workspace file. expectedHash must be null for a new file or the current SHA-256 for an existing file.',parse: value => Write.parse(value),target: args => String(args.path),execute: async args => { const data = Write.parse(args); return this.write(data.path,data.text,data.expectedHash); } });
   }
 }
 interface Upload { taskId: string; name: string; mime: string; size: number; hash: string; offset: number; state: string }

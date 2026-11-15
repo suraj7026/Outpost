@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Outpost Desktop",
+  "productName": "Outpost",
   "version": "0.1.0",
   "identifier": "dev.outpost.desktop",
   "build": {
@@ -10,6 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "main",
@@ -18,7 +19,11 @@
         "height": 850,
         "minWidth": 900,
         "minHeight": 600,
-        "titleBarStyle": "Visible"
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "shadow": false,
+        "transparent": true,
+        "backgroundColor": "#00000000"
       }
     ],
     "security": {
@@ -29,6 +34,7 @@
     "active": true,
     "targets": ["app"],
     "category": "DeveloperTool",
+    "resources": { "resources/host-release.tar.gz": "host-release.tar.gz", "resources/host-release.json": "host-release.json" },
     "icon": ["icons/icon.icns", "icons/icon.png"],
     "shortDescription": "Your private agent workspace",
     "macOS": { "minimumSystemVersion": "14.0" }

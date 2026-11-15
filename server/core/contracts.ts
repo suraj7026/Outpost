@@ -11,6 +11,9 @@ export const Command = z.strictObject({
   payload: z.record(z.string(), z.json()), issuedAt: z.number().int().nonnegative(),
 });
 export type Command = z.infer<typeof Command>;
+export const EnvironmentCommand = Command.extend({ protocolVersion: z.literal(2), environmentId: z.uuid() });
+export const ClientCommand = z.discriminatedUnion('protocolVersion', [Command, EnvironmentCommand]);
+export type ClientCommand = z.infer<typeof ClientCommand>;
 export type Json = z.infer<ReturnType<typeof z.json>>;
 export type Data = Record<string, Json>;
 export interface RecordValue<T = Data> { id: string; kind: string; revision: number; data: T; updatedAt: string }

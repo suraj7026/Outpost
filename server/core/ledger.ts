@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { canonical, digest, id, now, requireThat } from './contracts.js';
-import type { Command, Data, Event, Json, RecordValue } from './contracts.js';
+import type { ClientCommand, Data, Event, Json, RecordValue } from './contracts.js';
 
 export class Ledger {
   readonly db: DatabaseSync;
@@ -53,7 +53,7 @@ export class Ledger {
   enqueue(topic: string, payload: Json, key: string = id()) {
     this.db.prepare('INSERT OR IGNORE INTO outbox(id,topic,payload,created_at) VALUES(?,?,?,?)').run(key,topic,canonical(payload),now()); return key;
   }
-  accept(command: Command, apply: () => Json): Json {
+  accept(command: ClientCommand, apply: () => Json): Json {
     return this.transaction(() => {
       const hash = digest({ type: command.type, aggregateId: command.aggregateId, expectedRevision: command.expectedRevision, payload: command.payload });
       const previous = this.db.prepare('SELECT digest,result FROM commands WHERE device_id=? AND key=?').get(command.deviceId,command.idempotencyKey);
