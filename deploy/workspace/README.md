@@ -6,7 +6,7 @@ Separate infrastructure from the Outpost application. No Outpost source, deploym
 
 - Entry point: `surajadmin@surajhomeserver`, using its existing kubeconfig.
 - Execution: one non-root Kubernetes pod pinned to `surajhomeserver2`.
-- Tools: Node 24, Pi 1.4.0, Git, build tools, Python 3, tmux, Playwright 1.64.1 and Chromium. npm dependencies are locked in `package-lock.json`.
+- Source tools: Node 24, Pi 1.5.2, bundled pi-subagents 0.88.1, Git, build tools, Python 3, tmux, Playwright 1.64.1 and Chromium. npm dependencies are locked in `package-lock.json`. The standalone workspace CLI is separate from Outpost's managed worker; native extension activation there follows its own Pi configuration. These pins do not update an existing image or running pod.
 - CPU: request 2, limit 4. RAM: request 4 GiB, limit 8 GiB, including browser and memory-backed shared memory.
 - Persistent home: `/home/node`, backed by `/srv/remotejobs/pi-workspace` on server 2. `/workspace` is a symlink to `/home/node/projects`.
 - Static local PV has `Retain` reclaim policy. Its 30 GiB capacity is a scheduling declaration, **not an enforced disk quota**. Monitor the underlying disk.
@@ -87,8 +87,8 @@ No public ingress or LAN listener is created. Use `kubectl -n pi-workspace cp` o
 Build on server 1 from this directory:
 
 ```bash
-docker build -t homelab-pi-workspace:1.4.0-1 .
-docker save homelab-pi-workspace:1.4.0-1 -o image.tar
+docker build -t homelab-pi-workspace:1.5.2-1 .
+docker save homelab-pi-workspace:1.5.2-1 -o image.tar
 sha256sum image.tar > image.tar.sha256
 ```
 

@@ -37,7 +37,7 @@ async function open(width = 1440, legacy = false, colorScheme = 'dark') {
     let flow = null, pointerX = -1, pointerY = -1;
     const rows = [], row = (kind, id, data) => ({ kind, id, data, revision: 1, updatedAt: new Date().toISOString() });
     document.addEventListener('pointermove', event => { pointerX = event.clientX; pointerY = event.clientY; });
-    window.__TAURI_INTERNALS__ = { transformCallback: () => 1, unregisterCallback() {}, async invoke(command, args) {
+    window.__TAURI_INTERNALS__ = { metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } }, transformCallback: () => 1, unregisterCallback() {}, async invoke(command, args) {
         if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: null, environments: {} }, legacy: { endpoint: null, pending: false } };
       if (command === 'disconnect') return;
       if (command === 'set_sidebar_window_controls') return;
@@ -111,6 +111,16 @@ async function open(width = 1440, legacy = false, colorScheme = 'dark') {
   await page.getByRole('textbox', { name: 'Task goal' }).waitFor();
   return page;
 }
+async function findProvider(page, query) {
+  await page.getByRole('button', { name: 'Add provider', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add provider', exact: true });
+  await dialog.getByRole('searchbox', { name: 'Search providers' }).fill(query);
+  return dialog;
+}
+async function manageProvider(page, name) {
+  await page.locator('.configured-provider-row').filter({ hasText: name }).getByRole('button', { name: 'Manage', exact: true }).click();
+  return page.getByRole('dialog', { name, exact: true });
+}
 try {
   const page = await open();
   await page.getByRole('button', { name: 'alpha · org/model:v1', exact: true }).click();
@@ -130,8 +140,18 @@ try {
   await page.waitForFunction(() => __commands.length === 2);
   check(await page.evaluate(() => __commands[1].payload.modelRef.providerId === 'alpha'), 'Follow-up sends next-instruction selection');
   await openSettings(page, { tab: 'models' });
-  await page.getByRole('searchbox', { name: 'Add or manage a provider' }).fill('alpha');
-  await page.getByRole('button', { name: 'API key', exact: true }).click();
+  check(await page.locator('.configured-provider-list .configured-provider-row').count() === 2, 'Only configured providers appear before Add provider');
+  check(await page.locator('.configured-provider-list button').count() === 2, 'Each configured provider has only one Manage action');
+  check(await page.locator('.configured-provider-list').getByText(/1 selectable model/).count() === 2, 'Configured rows show model counts without claiming entitlement');
+  check(await page.getByRole('searchbox', { name: 'Search providers' }).count() === 0, 'Provider discovery stays in the Add provider dialog');
+  const startsBeforeSearch = await page.evaluate(() => __management.filter(request => request.type === 'login.start').length);
+  const discovery = await findProvider(page, 'beta');
+  check(await discovery.locator('.provider-result').count() === 1, 'Add provider search isolates the requested provider');
+  check(await discovery.getByRole('button', { name: 'Sign in · Subscription' }).count() === 0, 'Search results do not expose authentication until a provider is selected');
+  check(await page.evaluate(() => __management.filter(request => request.type === 'login.start').length) === startsBeforeSearch, 'Opening and searching Add provider does not start authentication');
+  await discovery.getByRole('button', { name: 'Done', exact: true }).click();
+  const alphaDialog = await manageProvider(page, 'Alpha API');
+  await alphaDialog.getByRole('button', { name: 'API key', exact: true }).click();
   check(await page.getByRole('region', { name: 'Confirm credential change' }).isVisible(), 'Stored credential replacement requires confirmation');
   await page.getByRole('button', { name: 'Confirm', exact: true }).click();
   await page.getByLabel('Synthetic API credential').fill('synthetic-secret-never-persist');
@@ -140,10 +160,13 @@ try {
   check(await page.evaluate(() => __secretSeen), 'Secret travels through dedicated IPC');
   check(!(await page.content()).includes('synthetic-secret-never-persist'), 'Secret cleared from rendered document');
   check(await page.evaluate(() => !JSON.stringify([localStorage, sessionStorage, __commands]).includes('synthetic-secret-never-persist')), 'Secret excluded from storage and task payloads');
-  await page.getByRole('button', { name: 'Remove credential' }).click();
-  check(await page.getByText(/does not revoke the provider account/).isVisible(), 'Removal consequences explained');
-  await page.getByRole('button', { name: 'Keep credential' }).click();
-  await page.getByText('Compatible endpoint', { exact: true }).click();
+  const removalDialog = await manageProvider(page, 'Alpha API');
+  await removalDialog.getByRole('button', { name: 'Remove credential…', exact: true }).click();
+  check(await removalDialog.getByRole('region', { name: 'Confirm credential change' }).getByText(/does not revoke the provider account/).isVisible(), 'Removal consequences explained');
+  await removalDialog.getByRole('button', { name: 'Keep credential' }).click();
+  await removalDialog.getByRole('button', { name: 'Done', exact: true }).click();
+  const compatibleDialog = await findProvider(page, 'private-api');
+  await compatibleDialog.getByText('Compatible endpoint', { exact: true }).click();
   await page.getByLabel('Provider ID', { exact: true }).fill('private-api');
   await page.getByLabel('Base URL', { exact: true }).fill('http://192.0.2.1:11434/v1');
   await page.getByLabel('Exact model ID', { exact: true }).fill('namespace/model:cloud');
@@ -151,12 +174,21 @@ try {
   await page.getByRole('button', { name: 'Save endpoint' }).click();
   await page.waitForFunction(() => !!window.__configuration);
   check(await page.evaluate(() => __configuration.models[0].id === 'namespace/model:cloud' && __configuration.allowInsecureHttp), 'Compatible endpoint preserves exact ID and HTTP consent');
-  await page.getByRole('searchbox', { name: 'Add or manage a provider' }).fill('beta');
-  check(await page.getByRole('button', { name: 'Sign in · Subscription' }).isVisible(), 'Runtime subscription method is not presented as an API key');
-  await page.getByRole('button', { name: 'Sign in · Subscription' }).click();
+  const betaSearch = await findProvider(page, 'beta');
+  await betaSearch.locator('.provider-result').click();
+  const betaDialog = page.getByRole('dialog', { name: 'Add Beta subscription', exact: true });
+  check(await betaDialog.getByRole('button', { name: 'Sign in · Subscription' }).isVisible(), 'Runtime subscription method is not presented as an API key');
+  check(await page.evaluate(() => __management.filter(request => request.type === 'login.start').length) === startsBeforeSearch + 1, 'Selecting a provider alone does not start authentication');
+  await betaDialog.getByRole('button', { name: 'Sign in · Subscription' }).click();
+  check(await page.getByRole('dialog').count() === 0, 'Provider menu closes while LoginPanel remains live');
   await page.getByRole('button', { name: 'Open provider sign-in', exact: true }).click();
   await page.waitForFunction(() => __callbackEvents.includes('open'));
   check(await page.evaluate(() => __callbackEvents.slice(0, 3).join(',') === 'bind,wait,open'), 'Bind the Mac listener before opening the provider browser');
+  const cancellationsBeforeMenu = await page.evaluate(() => __callbackEvents.filter(event => event === 'cancel').length);
+  const duringLogin = await manageProvider(page, 'Alpha API');
+  check(await duringLogin.getByRole('button', { name: 'API key', exact: true }).isDisabled(), 'Another provider cannot start authentication during an active login');
+  await duringLogin.getByRole('button', { name: 'Done', exact: true }).click();
+  check(await page.evaluate(() => __callbackEvents.filter(event => event === 'cancel').length) === cancellationsBeforeMenu, 'Closing Manage does not unmount the live OAuth callback listener');
   await page.evaluate(() => __finishCallback());
   await page.getByLabel('Save this credential to the shared server Pi profile?').waitFor();
   check(await page.evaluate(() => __callbackAnswerMatches), 'Complete callback including issued client ID reaches secret management IPC');
@@ -166,6 +198,7 @@ try {
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByText('Credential saved.', { exact: false }).waitFor();
 
+  await manageProvider(page, 'Beta subscription');
   await page.getByRole('button', { name: 'Sign in · Subscription' }).click();
   await page.getByRole('button', { name: 'Confirm', exact: true }).click();
   await page.getByRole('button', { name: 'Open provider sign-in', exact: true }).click();
@@ -177,6 +210,7 @@ try {
   await page.waitForTimeout(100);
   check(await page.evaluate(() => __management.filter(r => r.type === 'login.answer').length) === answersBeforeCancel, 'Cancelled flow cannot submit a late callback');
 
+  await manageProvider(page, 'Beta subscription');
   await page.getByRole('button', { name: 'Sign in · Subscription' }).click();
   await page.getByRole('button', { name: 'Confirm', exact: true }).click();
   await page.evaluate(() => window.__busyPort = true);
@@ -190,7 +224,7 @@ try {
   await page.getByRole('button', { name: 'Refresh models' }).click();
   await page.getByText(/ChatGPT models are unavailable until account verification succeeds/).waitFor();
   check(await page.getByText(/ChatGPT models are unavailable until account verification succeeds/).isVisible(), 'Account discovery failure is explained without claiming subscription access');
-  check(await page.getByText('No verified models · selection blocked').first().isVisible(), 'Stored credentials without verified models are visibly blocked');
+  check(await page.getByText('Access unverified', { exact: true }).first().isVisible(), 'Stored credentials without verified models are visibly blocked');
   await page.evaluate(() => window.__failCatalogue = true);
   await page.getByRole('button', { name: 'Refresh models' }).click();
   await page.getByText('Provider catalogue unavailable.', { exact: false }).waitFor();
@@ -198,6 +232,20 @@ try {
   await page.getByRole('textbox', { name: 'Task goal' }).fill('Must not silently fallback');
   check(await page.getByRole('button', { name: 'Start task' }).isDisabled(), 'Failed catalogue blocks submission instead of legacy fallback');
   await page.close();
+
+  const unmount = await open();
+  await openSettings(unmount, { tab: 'models' });
+  const unmountSearch = await findProvider(unmount, 'beta');
+  await unmountSearch.locator('.provider-result').click();
+  await unmount.getByRole('button', { name: 'Sign in · Subscription' }).click();
+  await unmount.getByRole('button', { name: 'Open provider sign-in', exact: true }).click();
+  await unmount.getByRole('button', { name: 'Waiting for browser sign-in…' }).waitFor();
+  await unmount.getByRole('link', { name: 'Pi & extensions', exact: true }).click();
+  await unmount.waitForFunction(() => __management.some(request => request.type === 'login.cancel') && __callbackEvents.includes('cancel'));
+  await unmount.evaluate(() => __finishCallback());
+  await unmount.waitForTimeout(100);
+  check(await unmount.evaluate(() => !__management.some(request => request.type === 'login.answer')), 'Unmount cancels server login and rejects a late native callback');
+  await unmount.close();
 
   const cloud = await open();
   await cloud.getByRole('button', { name: 'alpha · org/model:v1', exact: true }).click();
@@ -210,8 +258,10 @@ try {
   await cloud.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
   check(await cloud.evaluate(() => __commands[0].payload.modelRef.providerId === 'ollama-cloud'), 'Display name does not rewrite exact provider identity');
   await openSettings(cloud, { tab: 'models' });
-  await cloud.getByRole('searchbox', { name: 'Add or manage a provider' }).fill('ollama');
-  check(await cloud.locator('.provider-row strong').textContent() === 'Ollama', 'Settings names the provider Ollama');
+  const ollamaDialog = await manageProvider(cloud, 'Ollama');
+  check(await ollamaDialog.getByRole('heading', { name: 'Ollama', exact: true }).isVisible(), 'Settings names the provider Ollama');
+  await ollamaDialog.getByRole('button', { name: 'Done', exact: true }).click();
+  await cloud.getByText('Credential storage & model access', { exact: true }).click();
   check(await cloud.getByText(/Only models with verified access for the current credential/).isVisible(), 'Older servers are not described as supporting the new Ollama policy');
   for (const [state, quota, message] of [
     ['validated', 'available', 'Cloud catalogue, not per-model entitlement'],
@@ -223,17 +273,19 @@ try {
   ]) {
     await cloud.evaluate(({ state, quota }) => { window.__ollamaAuthentication = { state, quota, retryAt: state === 'rate_limited' ? Date.now() + 120000 : undefined }; }, { state, quota });
     await cloud.getByRole('button', { name: 'Refresh models' }).click();
-    await cloud.getByText(message, { exact: false }).waitFor();
+    const manage = await manageProvider(cloud, 'Ollama');
+    await manage.getByText(message, { exact: false }).waitFor();
     check(await cloud.getByText(message, { exact: false }).isVisible(), `Ollama ${state}/${quota} is explained without a false entitlement claim`);
+    if (state === 'rate_limited') check(await manage.getByText(/Next check after/).isVisible(), 'Balance throttling shows a retry time');
+    await manage.getByRole('button', { name: 'Done', exact: true }).click();
     if (state === 'validated' && quota === 'available') check(await cloud.getByText(/it does not verify entitlement to each model/).isVisible(), 'Key validation is explicitly distinct from model entitlement');
-    if (state === 'rate_limited') check(await cloud.getByText(/Next check after/).isVisible(), 'Balance throttling shows a retry time');
   }
   await cloud.close();
   mkdirSync('/tmp/outpost-providers', { recursive: true });
   for (const [width, scheme] of [[1440, 'dark'], [900, 'light'], [390, 'dark']]) {
     const page = await open(width, false, scheme);
     await openSettings(page, { tab: 'models' });
-    await page.getByRole('heading', { name: 'Models & providers', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Configured providers', exact: true }).waitFor();
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `No page overflow at ${width}`);
     await page.screenshot({ path: `/tmp/outpost-providers/${engine.name()}-${width}-${scheme}.png` });
     await page.close();

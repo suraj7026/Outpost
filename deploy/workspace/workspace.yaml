@@ -101,7 +101,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: workspace
-          image: docker.io/library/homelab-pi-workspace:1.4.0-1
+          image: docker.io/library/homelab-pi-workspace:1.5.2-1
           imagePullPolicy: Never
           workingDir: /home/node
           env:

@@ -1,0 +1,25 @@
+/* Keep icon geometry and hit targets; soften only rectangular Lucide glyphs. */
+.app-shell svg.lucide {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.app-shell :is(
+  .lucide-panel-left,
+  .lucide-panel-left-close,
+  .lucide-panel-left-open,
+  .lucide-panels-top-left,
+  .lucide-square,
+  .lucide-square-check,
+  .lucide-square-check-big,
+  .lucide-files,
+  .lucide-monitor,
+  .lucide-laptop,
+  .lucide-calendar,
+  .lucide-calendar-clock,
+  .lucide-notebook-pen
+) > rect {
+  rx: 3px;
+  ry: 3px;
+}
+.app-shell .lucide-server > rect { rx: 3px; ry: 3px; }
+.app-shell .lucide-square-terminal > rect { rx: 5px; ry: 5px; }

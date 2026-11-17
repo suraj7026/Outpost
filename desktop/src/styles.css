@@ -4,7 +4,7 @@
 :root {
   font-family: var(--font-sans);
   font-optical-sizing: auto;
-  color-scheme: dark light;
+  color-scheme: dark;
   font-synthesis: none;
   font-weight: 400;
   --bg: #0f1011;
@@ -937,26 +937,23 @@ time {
 .record-row h2 {
   font-size: 15px;
 }
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f0f1f2;
-    --surface: #fafafa;
-    --raised: #e9eaec;
-    --sidebar: #f0f1f2;
-    --line: #dcdee1;
-    --control: #b3b5bc;
-    --text: #202125;
-    --muted: #62646a;
-    --subtle: #686a70;
-    --active: #dedfe2;
-    --positive: #40674c;
-    --warning: #77551f;
-    --danger: #ab3932;
-
-  }
-  .composer {
-    border-color: #c8c8cd;
-  }
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f1f2f4;
+  --surface: #ffffff;
+  --raised: #f1f2f4;
+  --sidebar: #f1f2f4;
+  --line: #dde0e5;
+  --control: #b9bec7;
+  --text: #24272d;
+  --muted: #5c626d;
+  --subtle: #646b76;
+  --active: #e4e6ea;
+  --positive: #37694b;
+  --warning: #805a1c;
+  --danger: #ad3c36;
+  --composer-context-bg: #e6e8ec;
+  --composer-context-active: #d9dde3;
 }
 @media (max-width: 1050px) {
   .home {

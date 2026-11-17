@@ -74,8 +74,10 @@ try {
       const terminalOutput = Array.from({ length: 160 }, (_, i) => `Terminal output line ${i}`).join('\r\n') + '\r\n';
       window.isTauri = true;
       window.__TAURI_INTERNALS__ = {
+        metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
         transformCallback(fn) { const id = ++sequence; callbacks.set(id, fn); return id; }, unregisterCallback(id) { callbacks.delete(id); },
         async invoke(command, args) {
+          if (command === 'plugin:window|set_theme' && args?.label === 'main' && [null, 'light', 'dark'].includes(args.value)) return;
         const environmentId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
         const bound = command.startsWith('environment_');
         if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: environmentId, environments: { [environmentId]: { environmentId, label: 'Stream fixture', activeRoute: 'https://fixture.example', routes: ['https://fixture.example'] } } }, legacy: { endpoint: null, pending: false } };

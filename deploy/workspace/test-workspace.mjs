@@ -34,6 +34,11 @@ try {
     const result = spawnSync('bash', ['-n', fileURLToPath(new URL(script, import.meta.url))]);
     check(result.status === 0, `${script}: valid Bash syntax`);
   }
+  const manifest = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
+  const verification = readFileSync(new URL('./verify-workspace.sh', import.meta.url), 'utf8');
+  check(verification.includes(`test "$(pi --version)" = ${manifest.dependencies['@earendil-works/pi-coding-agent']}`), 'live verification expects the pinned Pi version');
+  const workspace = readFileSync(new URL('./workspace.yaml', import.meta.url), 'utf8');
+  check(workspace.includes(`homelab-pi-workspace:${manifest.dependencies['@earendil-works/pi-coding-agent']}-1`), 'workspace image tag matches the pinned Pi version');
   let result = run(['help']);
   check(result.status === 0 && result.calls.length === 0, 'help is offline');
   result = run([]);

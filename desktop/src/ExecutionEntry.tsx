@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { ChevronRight, Globe, Shield, Terminal } from 'lucide-react';
+import { ChevronRight, Globe, Shield, SquareTerminal as Terminal } from 'lucide-react';
 import { actionLabel } from './conversation-model';
+import { useConversationDisclosure } from './conversation-detail';
 import { EvidenceTime } from './LiveContent';
 import OutcomeDot from './OutcomeDot';
 import { actionNeedsReview, labelState, object, text, type ServerRecord } from './types';
@@ -16,7 +17,7 @@ export default function ExecutionEntry({ record, streams = [], onReview }: {
   streams?: ServerRecord[];
   onReview: (record: ServerRecord) => void;
 }) {
-  const [expanded, setExpanded] = useState(() => executionIsActive(record));
+  const { open: expanded, setOpen: setExpanded } = useConversationDisclosure();
   const [copied, setCopied] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
   const stream = record.kind === 'tool_stream';

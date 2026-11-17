@@ -54,8 +54,10 @@ async function open(width, scenario = 'live', colorScheme = 'dark', reducedMotio
     document.addEventListener('pointermove', event => { pointerX = event.clientX; pointerY = event.clientY; });
     window.isTauri = true;
     window.__TAURI_INTERNALS__ = {
+      metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
       transformCallback() { return ++sequence; }, unregisterCallback() {},
       async invoke(command, args) {
+        if (command === 'plugin:window|set_theme' && args?.label === 'main' && [null, 'light', 'dark'].includes(args.value)) return;
         if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: null, environments: {} }, legacy: { endpoint: null, pending: false } };
         if (command === 'disconnect') return;
         if (command === 'set_sidebar_window_controls') return;
@@ -218,7 +220,7 @@ try {
       const byline = node.querySelector(':scope > .run-byline.message-byline');
       return node.firstElementChild === byline && byline.nextElementSibling?.matches('.run-content');
     }), `Run content follows its avatar byline at ${width}`);
-    check(await run.locator(':scope > .run-content').evaluate(node => getComputedStyle(node).marginLeft) === `${width <= 620 ? 40 : 48}px`, `Assistant content has the responsive avatar inset at ${width}`);
+    check(await run.locator(':scope > .run-content').evaluate(node => getComputedStyle(node).marginLeft) === '0px', `Assistant content uses the full column at ${width}`);
     const owner = page.locator('.conversation .owner');
     check(await owner.locator(':scope > .message-avatar.owner-avatar').count() === 1, `Owner has a direct avatar at ${width}`);
     check(await owner.locator(':scope > .owner-content > .message-byline > span').textContent() === 'You' && await owner.locator(':scope > .owner-content > .message-byline > time').count() === 1, `Owner content retains its name and timestamp at ${width}`);

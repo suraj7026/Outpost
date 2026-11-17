@@ -38,6 +38,11 @@ test('advertised schemas match real action validation; commands and files succee
     const prompt = outpostSystemPrompt(catalogue);
     assert.match(prompt, /inputSchema/); assert.match(prompt, /artifactId/); assert.match(prompt, /non-root/);
     assert.match(prompt, /owner-authorized root path/);
+    assert.match(prompt, /recovery\.inspect/);
+    assert.match(prompt, /malformed record fails closed/);
+    assert.match(prompt, /Runtime configured is not proof of health/);
+    assert.match(prompt, /Never fabricate or create recovery records, enable dispatch, reset pairing, replay uncertain effects, or delete data/);
+    assert.match(prompt, /manual inspection commands/);
     assert.ok(!prompt.includes('fixture-host-token'));
     assert.ok(!actionFailureMessage({ code: 'untrusted-secret-body', message: 'private-value' }).includes('private-value'));
   } finally { coordinator.live.close(); db.close(); rmSync(root, { recursive: true, force: true }); }

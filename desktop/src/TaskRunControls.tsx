@@ -9,12 +9,13 @@ export interface TaskRunControlsProps {
   onJump: () => void;
   onStop: () => void;
   review?: ReactNode;
+  terminal?: ReactNode;
   canStop: boolean;
   /** Gates the server mutation, not local navigation to the latest output. */
   disabled: boolean;
 }
 
-export default function TaskRunControls({ status, following, unseen, onJump, onStop, review, canStop, disabled }: TaskRunControlsProps) {
+export default function TaskRunControls({ status, following, unseen, onJump, onStop, review, terminal, canStop, disabled }: TaskRunControlsProps) {
   const stop = useRef<HTMLButtonElement>(null);
   const follow = useRef<HTMLButtonElement>(null);
   const retires = status.transient && (status.kind === 'success' || status.kind === 'stopped');
@@ -44,10 +45,10 @@ export default function TaskRunControls({ status, following, unseen, onJump, onS
 
   return <>
     <div className="composer-run-status" data-kind={status.kind} data-visible={visible} aria-hidden={!visible} inert={!visible}>
-      <span className="composer-run-mark" aria-hidden="true" />
+      <span className="composer-run-mark" data-active={status.active} aria-hidden="true" />
       <span className="composer-run-label" role="status" aria-live="polite" aria-atomic="true" title={status.label}>{status.label}</span>
       {review}
-      <span className="composer-stop-slot">
+      <span className="composer-stop-slot" hidden={!stopVisible}>
         <button ref={stop} type="button" className="composer-run-stop" hidden={!stopVisible}
           aria-label="Stop task" title="Stop task" aria-disabled={disabled || !showStop}
           onClick={() => { if (!disabled && showStop) onStop(); }}>
@@ -55,11 +56,12 @@ export default function TaskRunControls({ status, following, unseen, onJump, onS
         </button>
       </span>
     </div>
+    {terminal}
     <button ref={follow} type="button" className="icon-button composer-follow"
       aria-label={followLabel} title={followLabel} aria-disabled={following}
-      data-active={status.active} data-unseen={hasUnseen}
+      data-unseen={hasUnseen}
       onClick={() => { if (!following) onJump(); }}>
-      <ArrowDown size={17} aria-hidden="true" />
+      <ArrowDown size={18} aria-hidden="true" />
     </button>
   </>;
 }

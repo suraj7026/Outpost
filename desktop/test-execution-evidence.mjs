@@ -36,7 +36,7 @@ try {
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.addInitScript(records => {
       window.isTauri = true; window.__mutations = [];
-      window.__TAURI_INTERNALS__ = { transformCallback: () => 1, unregisterCallback() {}, async invoke(command, args) {
+      window.__TAURI_INTERNALS__ = { metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } }, transformCallback: () => 1, unregisterCallback() {}, async invoke(command, args) {
         if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: null, environments: {} }, legacy: { endpoint: null, pending: false } };
         if (command === 'disconnect') return;
         if (command === 'set_sidebar_window_controls') return;

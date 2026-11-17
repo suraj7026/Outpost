@@ -93,6 +93,7 @@ function installTransport({ A, B, collapsed, registryError, registry, states, ca
     async invoke(command, args = {}) {
       if (command === 'sidebar_pointer_inside') return pointerX >= 0 && pointerX <= args.width && pointerY >= 0 && pointerY <= innerHeight;
       control.calls.push({ command, args: structuredClone(args) });
+      if (command === 'plugin:window|set_theme' && args?.label === 'main' && [null, 'light', 'dark'].includes(args.value)) return;
       if (['set_sidebar_window_controls', 'update_sidebar'].includes(command)) return;
       if (command === 'plugin:event|listen') return ++sequence;
       if (command === 'plugin:event|unlisten') return;

@@ -50,9 +50,10 @@ export function useSidebar(appearance: Appearance, narrow: boolean) {
     let current = true, revision = 0, lastRequest = "";
     const update = () => {
       const row = panel.current?.querySelector('.sidebar-chrome')?.getBoundingClientRect();
-      const show = visible && motion.settled && !!row;
+      const newTask = panel.current?.querySelector('.new-task-button')?.getBoundingClientRect();
+      const show = visible && motion.settled && !!row && !!newTask;
       const x = row && show ? Math.max((panel.current?.getBoundingClientRect().left ?? 0) + 12, row.left) : 24;
-      const y = row && show ? row.top + row.height / 2 : 35;
+      const y = newTask && show ? newTask.top / 2 : 35;
       const key = `${show}:${x}:${y}`;
       if (key === lastRequest) return;
       lastRequest = key;

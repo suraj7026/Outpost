@@ -19,6 +19,7 @@ import { profileCSV } from '../data/analysis.js';
 import { renderHTML } from '../documents/documents.js';
 import { MemoryStore } from '../memory/memory.js';
 import { Scheduler } from '../scheduler/scheduler.js';
+import { registerAutomationTools } from '../scheduler/tools.js';
 import { Notifications } from '../notifier/apns.js';
 import type { InferenceConfiguration } from '../models/inference.js';
 import { registerHosts } from '../operations/hosts.js';
@@ -32,6 +33,7 @@ import { registerDirectBrowser } from '../browser/direct.js';
 import { Maintenance } from '../environment/maintenance.js';
 import { Installation } from '../environment/installation.js';
 import type { EnvironmentOptions } from '../environment/contracts.js';
+import { collectRecoveryDiagnostics, RecoveryInput, RecoveryInvestigationInput, recoveryAllowsDispatch, recoveryInvestigationGoal, recoveryStatus } from '../diagnostics/recovery.js';
 
 export const publicKinds = ['task','policy','message','action','artifact','inbox','automation','memory','identity','capability','browser','browser_control','workflow','source','citation','deployment_evidence','operation','device','recovery','tool_stream'];
 const wire = (value: unknown): Json => z.json().parse(value);
@@ -66,15 +68,20 @@ export class Coordinator {
     for (const operation of db.list('operation')) if (operation.data.state === 'running') db.put('operation',operation.id,operation.revision,{ ...operation.data,state: 'unknown',error: 'Coordinator restarted; reconcile before retry' });
     for (const action of db.list<Action>('action')) if (action.data.state === 'dispatching') db.put('action',action.id,action.revision,{ ...action.data,state: 'unknown',result: { error: 'Coordinator restarted; reconcile before retry' } });
   }
-  get dispatchEnabled() { return this.db.get('recovery','server')?.data.dispatchEnabled !== false; }
+  get dispatchEnabled() { return recoveryAllowsDispatch(recoveryStatus(this.db)); }
   gate(taskId: string) {
     const task = this.db.need<Task>('task',taskId); z.uuid().parse(taskId);
     let gate = this.gates.get(taskId); if (gate) return gate;
     const reviewer = this.options.apiKey && this.options.roles ? cloudReviewer(this.options.apiKey,this.options.roles) : undefined;
     gate = new Gate(this.db,reviewer,!!this.options.hosts); const workspace = new Workspace(join(this.options.workspaceRoot ?? join(this.root,'workspaces'),taskId),this.options.sharedWorkspaces);
     workspace.register(gate); registerInventory(gate); registerCommands(gate,workspace,new Set(this.options.executables ?? []),this.options.unrestrictedCommands);
+    registerAutomationTools(gate,this.scheduler,taskId,{ workerAvailable: !!this.options.worker, assertWritable: () => {
+      requireThat(!this.maintenance.holding,'maintenance_in_progress');
+      requireThat(this.dispatchEnabled,'recovery_dispatch_disabled');
+    } });
     if (this.options.hosts) registerHosts(gate,this.options.hosts,taskId);
     if (this.browsers) registerDirectBrowser(gate,this.browsers,this.artifacts,taskId);
+    gate.register('recovery.inspect',{ version: 1,effects: ['machine.read'],inputSchema: z.toJSONSchema(RecoveryInput),description: 'Reads bounded authoritative recovery diagnostics for this environment. Configuration is not proof of runtime health. Does not repair, create records or release holds.',parse: input => RecoveryInput.parse(input),target: () => 'environment recovery',execute: async () => wire(this.recoveryDiagnostics()) });
     const ArtifactRead = z.strictObject({ artifactId: z.uuid() });
     gate.register('artifact.read_text',{ version: 1,effects: ['workspace.read'],inputSchema: z.toJSONSchema(ArtifactRead),description: 'Reads a published text artifact by its UUID artifactId. For workspace paths such as STATUS.md use file.read instead.',parse: input => ArtifactRead.parse(input),target: args => String(args.artifactId),execute: async args => {
       const artifact = this.db.need('artifact',String(args.artifactId)); requireThat(artifact.data.taskId === taskId,'artifact_scope_denied');
@@ -94,13 +101,23 @@ export class Coordinator {
   }
   command(input: unknown) {
     const command = ClientCommand.parse(input);
-    if (this.maintenance.holding) requireThat(this.maintenance.status().state === 'draining' && ['task.pause', 'task.cancel', 'approval.decide'].includes(command.type), 'maintenance_in_progress');
+    // Investigation retries return their accepted task; new admission is checked inside db.accept.
+    if (this.maintenance.holding && command.type !== 'recovery.investigate') requireThat(this.maintenance.status().state === 'draining' && ['task.pause', 'task.cancel', 'approval.decide'].includes(command.type), 'maintenance_in_progress');
     this.environment.requireProtocol(command.protocolVersion);
     if (command.protocolVersion === 2) this.environment.requireTarget(command.environmentId);
     requireThat(Math.abs(Date.now()-command.issuedAt) < 300000,'expired_command');
     const accepted = this.db.accept(command,() => {
       const { type,aggregateId: key,expectedRevision: expected,payload } = command;
       switch (type) {
+        case 'recovery.investigate': {
+          z.uuid().parse(key); requireThat(expected === 0,'stale_revision');
+          const selection = RecoveryInvestigationInput.parse(payload);
+          requireThat(!this.maintenance.holding,'maintenance_in_progress');
+          requireThat(this.dispatchEnabled,'recovery_dispatch_disabled');
+          requireThat(this.runtimeStatus().configured,'runtime_not_configured');
+          requireThat(!selection.modelRef || !!this.options.worker,'pi_worker_required');
+          return wire(this.tasks.create(key,{ ...selection,profile: 'operations',mode: 'ask_permission',goal: recoveryInvestigationGoal(this.recoveryDiagnostics()) }));
+        }
         case 'task.create': z.uuid().parse(key); requireThat(expected === 0,'stale_revision'); requireThat(!payload.modelRef || !!this.options.worker,'pi_worker_required'); return wire(this.tasks.create(key,payload));
         case 'task.steer': {
           requireThat(!payload.modelRef || !!this.options.worker,'pi_worker_required');
@@ -193,7 +210,15 @@ export class Coordinator {
   environmentDescriptor() {
     return this.environment.descriptor({ worker: !!this.options.worker, hostAdministration: !!this.options.hosts });
   }
+  recoveryDiagnostics() {
+    return collectRecoveryDiagnostics(this.db,{
+      environment: this.environmentDescriptor(),
+      maintenance: { state: this.maintenance.status().state,holding: this.maintenance.holding },
+      runtime: { ...this.runtimeStatus(),hosts: Object.keys(this.options.hosts?.endpoints ?? {}) },
+    });
+  }
   query(type: string, payload: Record<string,Json>) {
+    if (type === 'recovery.diagnostics') { RecoveryInput.parse(payload); return wire(this.recoveryDiagnostics()); }
     if (type === 'browser.frame') {
       const { taskId } = z.strictObject({ taskId: z.uuid() }).parse(payload);
       this.db.need('task',taskId);

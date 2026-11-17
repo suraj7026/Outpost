@@ -124,6 +124,13 @@
   border-radius: 50%;
   padding: 8px;
 }
+.composer-stack .send-button[data-action="stop"]:not(:disabled) {
+  background: #b83d42;
+  border-color: #b83d42;
+  color: #fff;
+}
+.composer-stack .send-button[data-action="stop"]:hover:not(:disabled) { background: #a53439; border-color: #a53439; }
+.composer-stack .send-button[data-action="stop"] > svg { --icon-glyph-size: 14px; fill: currentColor; stroke-width: 0; }
 .composer-stack .composer-toolbar > .icon-button { --icon-button-size: 34px; }
 @container (max-width: 420px) {
   .composer-context { margin-inline: 8px; padding-inline: 10px; gap: 4px; }
@@ -135,8 +142,8 @@
   .composer-stack .composer-model { margin-left: 0; }
 }
 
-/* Task-only context bar; the home/new-task settings controls retain their styles. */
-.composer-context-run {
+/* Preserve the existing dark context palette without overriding the light theme. */
+:root[data-theme="dark"] .composer-context-run {
   --bg: #101112;
   --raised: #1d1e21;
   --text: #ededef;
@@ -148,13 +155,16 @@
   --warning: #d6b78b;
   --danger: #f3a49e;
   --keyboard-focus-bg: #3b3e43;
+  --composer-stop-text: #d58f93;
+  --composer-stop-hover-text: #e6a5a9;
+}
+.composer-context-run {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.5fr) 30px;
   align-items: center;
   column-gap: 12px;
-  color-scheme: dark;
   color: var(--text);
-  background: var(--bg);
+  background: var(--composer-context-bg, var(--bg));
 }
 .composer-context-identity { grid-area: 1 / 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
 .composer-context-identity > .environment-navigation { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; flex: 0 1 auto; min-height: 32px; }
@@ -197,7 +207,17 @@
   border-radius: 50%;
   background: var(--subtle);
 }
-.composer-context-run .composer-run-status:is([data-kind="running"], [data-kind="success"]) .composer-run-mark { background: var(--positive); }
+.composer-context-run .composer-run-status[data-kind="success"] .composer-run-mark { background: var(--positive); }
+.composer-context-run .composer-run-mark[data-active="true"] {
+  width: 14px;
+  height: 14px;
+  background: transparent;
+  border: 1.5px solid color-mix(in srgb, var(--positive) 35%, transparent);
+  border-top-color: var(--positive);
+  border-right-color: var(--positive);
+  animation: composer-response-spin 1.05s linear infinite;
+}
+@keyframes composer-response-spin { to { transform: rotate(360deg); } }
 .composer-context-run .composer-run-status[data-kind="review"] .composer-run-mark { background: var(--warning); }
 .composer-context-run .composer-run-status[data-kind="error"] .composer-run-mark { background: var(--danger); }
 .composer-context-run .review-shortcut {
@@ -224,13 +244,13 @@
   padding: 0 6px;
   gap: 6px;
   border: 0;
-  color: var(--muted);
+  color: var(--composer-stop-text, var(--danger));
   background: transparent;
   font-size: 12px;
 }
-.composer-context-run .composer-run-stop[hidden] { display: none; }
-.composer-context-run .composer-run-stop:hover:not([aria-disabled="true"]) { color: var(--text); background: var(--active); }
-.composer-context-run .composer-run-stop:focus-visible:not([aria-disabled="true"]) { color: var(--text); }
+.composer-context-run :is(.composer-stop-slot, .composer-run-stop)[hidden] { display: none; }
+.composer-context-run .composer-run-stop:hover:not([aria-disabled="true"]) { color: var(--composer-stop-hover-text, var(--danger)); background: color-mix(in srgb, var(--danger) 10%, var(--bg)); }
+.composer-context-run .composer-run-stop:focus-visible:not([aria-disabled="true"]) { color: var(--composer-stop-hover-text, var(--danger)); }
 .composer-context-run .composer-run-stop[aria-disabled="true"] { color: var(--subtle); cursor: default; }
 .composer-context-run .composer-follow {
   --icon-button-size: 30px;
@@ -243,7 +263,7 @@
   color: var(--text);
 }
 .composer-context-run .composer-follow[aria-disabled="true"] { color: var(--subtle); cursor: default; }
-.composer-context-run .composer-follow:is([data-active="true"], [data-unseen="true"])::after {
+.composer-context-run .composer-follow[data-unseen="true"]::after {
   content: '';
   position: absolute;
   top: 0;
@@ -271,6 +291,7 @@
   .composer-context-run .composer-run-stop { height: 44px; min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .composer-context-run .composer-run-mark[data-active="true"] { animation: none; }
   .composer-context-run .composer-run-status,
   .composer-context-run :is(.composer-follow, .composer-run-stop) { transition: none; }
   .composer-context-run :is(.composer-follow, .composer-run-stop):active { transform: none; }

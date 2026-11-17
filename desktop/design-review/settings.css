@@ -5,10 +5,11 @@
   color: var(--text);
 }
 
-.settings-review-pages > .stack { gap: 32px; }
+.settings-review-pages > .stack { gap: 24px; }
 .settings-review-pages p { margin: 0; }
 .settings-review-pages .settings-review-row { gap: 16px; }
-.settings-review-row .detail-text { margin-top: 4px; max-width: 66ch; }
+.settings-review-row .list-title { overflow-wrap: anywhere; }
+.settings-review-row .detail-text { margin-top: 4px; max-width: 66ch; overflow-wrap: anywhere; }
 .settings-review-row-actions { flex-shrink: 0; justify-content: flex-end; }
 .settings-review-icon { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 36px; color: var(--muted); }
 .settings-review-provider-letter { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: var(--raised); color: var(--text); font-size: 14px; font-weight: 550; }
@@ -38,6 +39,8 @@
 .settings-review-dialog p { margin: 0; overflow-wrap: anywhere; }
 .settings-review-dialog .settings-review-callout { margin-top: 0; }
 .settings-review-dialog .dialog-actions { flex-wrap: wrap; }
+.settings-review-dialog.stack > .dialog-actions { margin-top: 0; }
+.settings-review-dialog.form-grid > .dialog-actions { margin-top: 8px; }
 .settings-review-check { display: flex; gap: 12px; align-items: flex-start; color: var(--text); font-size: 13px; cursor: pointer; line-height: 1.65; }
 .settings-review-check > input { appearance: auto; width: 16px; height: 16px; min-height: 16px; flex: 0 0 16px; margin: 3px 0 0; padding: 0; accent-color: var(--positive); cursor: pointer; }
 .settings-review-check > input:focus-visible { outline: 2px solid var(--muted); outline-offset: 3px; }

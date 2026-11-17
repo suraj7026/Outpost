@@ -67,7 +67,7 @@ try {
       window.__frameError = false; window.__heldFrames = []; window.__holdFrames = false; window.__mutations = [];
       window.__control = null; window.__browserRequests = []; window.__inputError = false; window.__offline = false;
       window.isTauri = true;
-      window.__TAURI_INTERNALS__ = { transformCallback: () => 1, unregisterCallback() {}, async invoke(command, args) {
+      window.__TAURI_INTERNALS__ = { metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } }, transformCallback: () => 1, unregisterCallback() {}, async invoke(command, args) {
         if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: null, environments: {} }, legacy: { endpoint: null, pending: false } };
         if (['disconnect', 'set_sidebar_window_controls', 'set_sidebar_window_control_mode', 'set_sidebar_window_control_presentation'].includes(command)) return;
         if (command === 'sidebar_pointer_inside') return false;

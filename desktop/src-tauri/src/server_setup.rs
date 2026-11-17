@@ -29,6 +29,7 @@ pub mod restart;
 pub mod terminal;
 #[path = "server_update.rs"]
 pub mod update;
+pub use update::automatic as auto_update;
 
 fn default_api_port() -> u16 {
     4318

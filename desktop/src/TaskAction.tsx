@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronRight, Globe, Shield, Terminal } from "lucide-react";
+import { ChevronRight, Globe, Shield, SquareTerminal as Terminal } from "lucide-react";
 import { recordedPreview } from "./api";
 import { EvidenceTime } from "./LiveContent";
 import OutcomeDot from "./OutcomeDot";

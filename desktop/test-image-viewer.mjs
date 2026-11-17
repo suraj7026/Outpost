@@ -53,8 +53,10 @@ async function open({ width = 1440, scenario = 'live', colorScheme = 'dark', red
     if (scenario === 'preview') { window.__OUTPOST_RECORDED_PREVIEW__ = fixture; return; }
     let sequence = 0; window.isTauri = true;
     window.__TAURI_INTERNALS__ = {
+      metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
       transformCallback() { return ++sequence; }, unregisterCallback() {},
       async invoke(command, args) {
+        if (command === 'plugin:window|set_theme' && args?.label === 'main' && [null, 'light', 'dark'].includes(args.value)) return;
         if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: null, environments: {} }, legacy: { endpoint: null, pending: false } };
         if (command === 'disconnect') return;
         if (command === 'set_sidebar_window_controls') return;

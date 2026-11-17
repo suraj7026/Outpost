@@ -41,6 +41,7 @@ try {
       streams.delete(A);
     };
     window.__TAURI_INTERNALS__ = {
+      metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
       transformCallback(fn) { const id = ++sequence; callbacks.set(id, fn); return id; }, unregisterCallback(id) { callbacks.delete(id); },
       async invoke(command, args = {}) {
         if (command.startsWith('plugin:') || command === 'set_sidebar_window_controls') return;

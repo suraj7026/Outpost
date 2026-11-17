@@ -31,9 +31,11 @@ try {
     const callbacks = new Map(); let sequence = 0, channel, index = 0;
     window.isTauri = true; window.__mutations = []; window.__streamReady = false;
     window.__TAURI_INTERNALS__ = {
+      metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
       transformCallback(fn) { const id = ++sequence; callbacks.set(id,fn); return id; },
       unregisterCallback(id) { callbacks.delete(id); },
       async invoke(command,args) {
+        if (command === 'plugin:window|set_theme' && args?.label === 'main' && [null, 'light', 'dark'].includes(args.value)) return;
         const environmentId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
         const bound = command.startsWith('environment_');
         if (command === 'environment_list' && legacy) return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: null, environments: {} }, legacy: { endpoint: null, pending: false } };
@@ -118,7 +120,9 @@ try {
     data: { taskId: task.id, name: 'outpost_action', state: 'preparing', arguments: { tool: 'command.run', arguments: { argv: ['/bin/echo', 'fixture'] } }, streaming: true } };
   const toolRow = conversation.locator('.execution-entry[data-record-id="live-fixture-tool"]');
   await emit({ type: 'live', record: tool }); await toolRow.locator('.action-state').getByText('preparing', { exact: true }).waitFor(); checks++;
-  assert.ok(await toolRow.evaluate(node => node.open), 'Current tool output is expanded'); checks++;
+  assert.equal(await toolRow.evaluate(node => node.open), false, 'Compact starts even current tool output collapsed'); checks++;
+  await toolRow.locator(':scope > summary').focus(); await page.keyboard.press('Enter'); await flush();
+  assert.ok(await toolRow.evaluate(node => node.open), 'Current tool output can be explicitly inspected'); checks++;
   assert.equal(await toolRow.locator('.execution-label').textContent(), 'Run /bin/echo fixture'); checks++;
   tool.data.state = 'running'; await emit({ type: 'live', record: tool });
   await toolRow.locator('.action-state').getByText('running', { exact: true }).waitFor(); checks++;

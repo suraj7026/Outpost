@@ -12,13 +12,22 @@ import { Maintenance } from './maintenance.js';
 import type { WorkerClient } from '../pi-worker/client.js';
 import { ReleaseManifest, compatibleUpdate } from '../pi-management/update-contracts.js';
 const source = { schema: 2, id: 'host-' + 'a'.repeat(20), protocolVersion: 2, layoutVersion: 1, compatibility: 'native-v1', sequence: 1, piVersion: '1.4.0', extensions: [{ name: 'pi-ollama-cloud', version: '0.13.1' }], rollback: true };
-const target = { ...source, id: 'host-' + 'b'.repeat(20), sequence: 2 };
+const target = { ...source, id: 'host-' + 'b'.repeat(20), sequence: 2, piVersion: '1.5.2',
+  extensions: [...source.extensions, { name: 'pi-subagents', version: '0.88.1' }] };
 const request = () => ({ type: 'maintenance.prepare', operationId: randomUUID(), expectedRelease: source.id, target, sha256: 'a'.repeat(64) });
 
 test('qualified manifests reject unknown layouts, malformed IDs, downgrade and no-op', () => {
   const current = ReleaseManifest.parse(source), next = ReleaseManifest.parse(target);
   assert.ok(compatibleUpdate(current, next)); assert.ok(!compatibleUpdate(next, current)); assert.ok(!compatibleUpdate(current, current));
   for (const change of [{ schema: 1 }, { layoutVersion: 2 }, { protocolVersion: 1 }, { rollback: false }, { id: '../escape' }, { sequence: -1 }, { unknown: true }]) assert.equal(ReleaseManifest.safeParse({ ...target, ...change }).success, false);
+});
+
+test('extension-only releases remain ordered upgrades without requiring a Pi version change', () => {
+  const current = ReleaseManifest.parse(target);
+  const next = ReleaseManifest.parse({ ...target, id: 'host-' + 'c'.repeat(20), sequence: 3,
+    extensions: [...source.extensions, { name: 'pi-subagents', version: '0.88.2' }] });
+  assert.ok(compatibleUpdate(current, next));
+  assert.equal(compatibleUpdate(next, current), false);
 });
 
 test('drain gates work and can cancel before checkpoint; hold restores no dispatch automatically', async () => {
@@ -83,6 +92,79 @@ test('staging leaves dispatch available; only digest-bound host completion reque
     await assert.rejects(maintenance.request(owner, cancelled), /maintenance_operation_finished/);
     assert.throws(() => updateCheckpoint(root, environment, cancelled.operationId, cancelled.sha256, 'prepare'), /update_not_staging/);
   } finally { db.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+for (const phase of ['staging', 'draining'] as const) {
+  test(`cancellation during ${phase} blocks late host checkpoints and advance without acquiring a hold`, async () => {
+    const root = mkdtempSync(join(tmpdir(), 'outpost-cancel-')), db = new Ledger(join(root, 'ledger.sqlite'));
+    const owner = randomUUID(), environment = new Installation(db).environmentId;
+    db.put('device', owner, 0, { revoked: false });
+    db.put('recovery', 'server', 0, { dispatchEnabled: true });
+    const recovery = db.need('recovery', 'server');
+    let active = true, holds = 0;
+    const worker = { request: async (packet: { request: { type: string } }) => packet.request.type === 'runtime.inventory'
+      ? { manifest: source, releaseId: source.id } : (holds++, { ready: true }) } as unknown as WorkerClient;
+    const maintenance = new Maintenance(db, new Tasks(db), worker, () => active);
+    const operation = { ...request(), type: 'maintenance.stage' };
+    try {
+      await maintenance.request(owner, operation);
+      if (phase === 'draining') {
+        updateCheckpoint(root, environment, operation.operationId, operation.sha256, 'stage');
+        updateCheckpoint(root, environment, operation.operationId, operation.sha256, 'prepare');
+        await maintenance.advance();
+      }
+      assert.equal(maintenance.status().state, phase);
+      assert.equal(holds, 0);
+      assert.equal((await maintenance.request(owner, { type: 'maintenance.cancel', operationId: operation.operationId })).state, 'cancelled');
+      const cancelled = db.need('runtime_update', 'server');
+      active = false;
+      await maintenance.advance();
+      for (const type of ['maintenance.stage', 'maintenance.prepare']) {
+        await assert.rejects(maintenance.request(owner, { ...operation, type }), /maintenance_operation_finished/);
+      }
+      for (const action of ['stage', 'prepare', 'check'] as const) {
+        assert.throws(() => updateCheckpoint(root, environment, operation.operationId, operation.sha256, action),
+          action === 'check' ? /update_not_prepared/ : /update_not_staging/);
+      }
+      assert.deepEqual(db.need('runtime_update', 'server'), cancelled);
+      assert.equal(maintenance.holding, false);
+      assert.equal(holds, 0);
+      assert.equal(db.get('maintenance_checkpoint', 'server'), undefined);
+      assert.deepEqual(db.need('recovery', 'server'), recovery);
+    } finally { db.close(); rmSync(root, { recursive: true, force: true }); }
+  });
+}
+
+test('cancellation is rejected while the worker hold reply is still pending', async () => {
+  const db = new Ledger(), tasks = new Tasks(db);
+  const hold = Promise.withResolvers<{ ready: boolean }>(), entered = Promise.withResolvers<void>();
+  let holds = 0;
+  const worker = { request: async (packet: { request: { type: string } }) => {
+    if (packet.request.type === 'runtime.inventory') return { manifest: source, releaseId: source.id };
+    holds++; entered.resolve();
+    return hold.promise;
+  } } as unknown as WorkerClient;
+  const maintenance = new Maintenance(db, tasks, worker, () => false), operation = request();
+  const pending = maintenance.request('owner', operation);
+  try {
+    await entered.promise;
+    assert.equal(maintenance.status().state, 'holding');
+    assert.equal(maintenance.holding, true);
+    const checkpoint = db.need('maintenance_checkpoint', 'server');
+    const holding = db.need('runtime_update', 'server');
+    await assert.rejects(maintenance.request('owner', { type: 'maintenance.cancel', operationId: operation.operationId }), /maintenance_cannot_cancel/);
+    assert.deepEqual(db.need('runtime_update', 'server'), holding);
+    assert.deepEqual(db.need('maintenance_checkpoint', 'server'), checkpoint);
+    assert.equal(db.need('recovery', 'server').data.dispatchEnabled, false);
+    hold.resolve({ ready: true });
+    assert.equal((await pending).state, 'prepared');
+    assert.equal(holds, 1);
+    assert.equal(maintenance.holding, true);
+    assert.equal(db.need('recovery', 'server').data.dispatchEnabled, false);
+  } finally {
+    hold.resolve({ ready: true });
+    try { await pending; } finally { db.close(); }
+  }
 });
 
 test('worker not idle restores original paused dispatch policy and retains draining admission', async () => {

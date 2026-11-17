@@ -44,10 +44,10 @@ try {
     }
     if (width <= 900) await page.getByRole('button', { name: 'Show sidebar' }).click();
     await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: 'Machines', exact: true }).click();
-    await page.getByRole('heading', { name: 'Servers', exact: true }).waitFor(); checks++;
-    assert.equal(await page.locator('.server-settings-list > a').count(), 1); checks++;
+    await page.getByRole('heading', { name: 'Machines', exact: true }).waitFor(); checks++;
+    assert.equal(await page.locator('.server-settings-list a[data-server-id]').count(), 1); checks++;
     await page.locator('.server-settings-list a[data-server-id="legacy"]').click();
-    await page.getByRole('link', { name: 'Setup & connection', exact: true }).click();
+    await page.getByRole('link', { name: 'Connection', exact: true }).click();
     await page.getByRole('textbox', { name: 'Server URL' }).waitFor(); checks++;
     assert.equal(errors.length, 0, errors.join('\n')); checks++;
     await page.close();

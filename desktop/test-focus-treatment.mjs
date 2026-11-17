@@ -86,7 +86,7 @@ async function inspect(locator) {
     return {
       active: document.activeElement === node, visible: node.matches(':focus-visible'),
       painted: bounds.width > 0 && bounds.height > 0 && bounds.bottom > 0 && bounds.top < innerHeight && bounds.right > 0 && bounds.left < innerWidth && style.visibility === 'visible' && Number(style.opacity) > 0,
-      background: rgba(style.backgroundColor), effective, foreground: over(rgba(style.color), effective), backgroundImage: style.backgroundImage,
+      background: rgba(style.backgroundColor), controlBackground: rgba(getComputedStyle(node.closest('.composer-select-field') ?? node).backgroundColor), effective, foreground: over(rgba(style.color), effective), backgroundImage: style.backgroundImage,
       ...edge(node), ancestors, pseudo,
     };
   });
@@ -105,7 +105,7 @@ function stableEdges(before, after, label, ancestors = true) {
   }
 }
 function filled(before, after, label, minimumContrast = 4.5) {
-  check(JSON.stringify(before.background) !== JSON.stringify(after.background), `${label}: the control's own fill changes, not just an ancestor`, { before: before.background, after: after.background });
+  check(JSON.stringify(before.controlBackground ?? before.background) !== JSON.stringify(after.controlBackground ?? after.background), `${label}: the interactive control surface changes fill`, { before: before.controlBackground ?? before.background, after: after.controlBackground ?? after.background });
   check(delta(before.effective, after.effective) >= 4, `${label}: visibly different fill (at least 4/255 in one channel)`, { before: before.effective, after: after.effective });
   check(contrast(after.foreground, after.effective) >= minimumContrast, `${label}: focused foreground contrast >= ${minimumContrast}:1`, { ratio: contrast(after.foreground, after.effective), foreground: after.foreground, background: after.effective });
 }
@@ -169,8 +169,10 @@ async function open(browser, width, colorScheme, label, forcedColors = 'none') {
     let sequence = 0, pointerX = -1, pointerY = -1;
     document.addEventListener('pointermove', event => { pointerX = event.clientX; pointerY = event.clientY; });
     window.__TAURI_INTERNALS__ = {
+      metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
       transformCallback() { return ++sequence; }, unregisterCallback() {},
       async invoke(command, args) {
+        if (command === 'plugin:window|set_theme' && args?.label === 'main' && [null, 'light', 'dark'].includes(args.value)) return;
         if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: null, environments: {} }, legacy: { endpoint: null, pending: false } };
         if (['disconnect', 'set_sidebar_window_controls', 'update_sidebar', 'plugin:event|listen', 'plugin:event|unlisten'].includes(command)) return 1;
         if (command === 'sidebar_pointer_inside') return pointerX >= 0 && pointerX <= args.width && pointerY >= 0 && pointerY <= innerHeight;

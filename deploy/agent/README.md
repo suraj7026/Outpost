@@ -46,6 +46,12 @@ Before a planned restart, use the checkpoint-aware `Tasks.prepareMaintenance()` 
 
 Interrupted/uncertain effects are not blindly replayed. Inspect evidence before resuming a recovered task. A restart can mark review-stage tasks interrupted under the existing conservative recovery policy.
 
+## Managed Pi update
+
+The current source pins Pi **1.5.2** and bundles `pi-subagents` **0.88.1** alongside `pi-ollama-cloud` **0.13.1**. This does not change the historical deployed layout above. Compatible native installations can update through the Mac app's **Pi & extensions → Check Pi + bundled extensions** flow after rebuilding the app. Containers and older native layouts still need separate migration qualification.
+
+Installed release extensions are enabled automatically in worker sessions and the managed CLI. `pi-subagents` exposes its native tools and child agents; `pi-ollama-cloud` exposes its tools/hooks as well as its provider. They run with worker permissions, outside Outpost's per-action approvals. Installation is the trust decision—there is no separate enable switch. Coordinator tools still use `outpost_action` and retain their gates. Native background work is tracked for draining and cancellation; unresolved restart receipts require reconciliation before maintenance can declare the worker idle.
+
 ## Reprovisioning / source updates
 
 `install.sh` expects staging under `~/outpost-agent` on server 1, `hosts.json` rendered by `render-hosts.mjs`, an existing workspace, its runtime source/dependencies already uploaded, and the original pairing token file. Do not print or commit token files. It creates authenticated executors and patches the workspace deployment, which **replaces the pod**.

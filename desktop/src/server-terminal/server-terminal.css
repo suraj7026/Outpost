@@ -1,19 +1,28 @@
 
-.server-terminal-pane { display: flex; flex-direction: column; min-width: 0; min-height: 180px; height: clamp(230px, 36vh, 400px); flex: none; padding: 0 18px 12px; border-top: 1px solid var(--control); background: var(--bg); overflow: auto; }
-.server-terminal-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 0; flex: none; }
-.server-terminal-identity { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 12px; }
-.server-terminal-identity > strong { padding-right: 12px; border-right: 1px solid var(--control); font-size: 12px; }
-.server-terminal-identity > div { min-width: 0; overflow-wrap: anywhere; }
-.server-terminal-identity small { display: block; margin-top: 4px; font-size: 11px; color: var(--muted); }
+.server-terminal-pane { display: flex; flex-direction: column; width: 100%; min-width: 0; min-height: 260px; height: clamp(260px, 34vh, 380px); flex: none; padding: 0 18px; border-top: 1px solid var(--line); background: var(--bg); overflow: auto; }
+.server-terminal-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; padding: 16px 0; flex: none; }
+.server-terminal-identity { display: flex; align-items: center; gap: 12px; min-width: 0; font-size: 12px; }
+.server-terminal-identity > strong { flex: none; font-size: 13px; font-weight: 550; }
+.server-terminal-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--danger); }
+.server-terminal-dot[data-state="connected"] { background: var(--positive); }
+.server-terminal-dot[data-state="opening"] { background: var(--warning); }
+.server-terminal-dot[data-state="preview"] { background: var(--muted); }
+.server-terminal-host { min-width: 0; margin-left: 8px; padding-left: 20px; border-left: 1px solid var(--line); overflow-wrap: anywhere; }
+.server-terminal-host > span { display: block; font-size: 13px; font-weight: 500; }
+.server-terminal-host small { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; font-size: 11px; color: var(--muted); }
 .server-terminal-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.server-terminal-actions button { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; font-size: 12px; padding: 5px 9px; }
+.server-terminal-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; font-size: 13px; padding: 7px 12px; border: 1px solid transparent; border-radius: 8px; background: transparent; }
+.server-terminal-actions button:hover:not(:disabled) { background: var(--active); }
+.server-terminal-actions .icon-button { --icon-button-size: 36px; --icon-glyph-size: 18px; min-height: 36px; padding: 8px; border-radius: 50%; }
+.server-terminal-actions .icon-button:last-child:not(.terminal-help) { background: var(--active); }
 .server-terminal-actions .server-terminal-reboot, .server-reboot-authorize { color: var(--danger); }
-.server-terminal-state { color: var(--muted); font-size: 11px; margin: 0 0 8px; }
-.server-terminal-screen { flex: 1; min-height: 92px; min-width: 0; overflow: hidden; padding: 10px; border: 1px solid var(--line); border-radius: 8px 8px 0 0; background: #101113; }
+
+.server-terminal-screen { flex: 1; min-height: 92px; min-width: 0; overflow: hidden; padding: 16px 18px; border: 1px solid var(--line); border-bottom: 0; border-radius: 8px 8px 0 0; background: var(--bg); }
 .server-terminal-emulator { width: 100%; height: 100%; }
 .server-terminal-emulator .xterm { height: 100%; }
-.server-terminal-emulator .xterm-viewport { overscroll-behavior: contain; }
-.server-terminal-footer { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 8px 10px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 8px 8px; font-size: 10px; color: var(--muted); flex: none; }
+/* xterm's black fallback otherwise shows below the final whole terminal row. */
+.server-terminal-emulator .xterm-viewport { overscroll-behavior: contain; background-color: transparent; }
+
 .server-terminal-notice, .server-terminal-reboot-status { font-size: 12px; padding: 10px; margin: 0 0 8px; background: var(--raised); border-radius: 6px; overflow-wrap: anywhere; flex: none; }
 .server-terminal-notice p { margin: 0 0 8px; }
 .server-terminal-notice a, .machines-page a, .machines-terminal-page a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
@@ -31,6 +40,11 @@
 .machines-server-list { display: grid; gap: 12px; margin: 24px 0; }
 .machines-server-card { display: flex; align-items: center; gap: 16px; border: 1px solid var(--line); border-radius: 10px; padding: 20px; }
 .machines-server-card > div { flex: 1; min-width: 0; }
+.machines-server-card > .machines-server-actions { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.machines-page .machine-settings-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 8px 12px; border-radius: 8px; background: var(--raised); text-decoration: none; font-size: 13px; }
+.machines-page .machine-settings-link:hover { background: var(--active); }
+.machines-page .page-heading { flex-wrap: wrap; }
+.machines-page .settings-add { display: inline-flex; align-items: center; gap: 8px; }
 .machines-server-card h2 { font-size: 16px; margin: 0 0 6px; overflow-wrap: anywhere; }
 .machines-server-card p { margin: 0; font-size: 12px; color: var(--muted); }
 .machines-server-card button, .machines-terminal-heading button { display: inline-flex; align-items: center; gap: 8px; }
@@ -41,16 +55,15 @@
 .server-terminal-full { flex: 1; height: auto; }
 @media (max-width: 620px) {
 
-  .server-terminal-pane { padding-inline: 10px; height: 38vh; min-height: 250px; }
+  .server-terminal-pane { padding-inline: 12px; height: 34vh; min-height: 280px; }
   .server-terminal-full { height: auto; }
-  .server-terminal-identity > strong { display: none; }
-  .server-terminal-toolbar { gap: 8px; }
-  .server-terminal-actions { gap: 4px; }
-  .server-terminal-actions button { min-height: 40px; }
-  .server-terminal-footer { flex-wrap: wrap; }
-  .server-terminal-footer > span:nth-child(2) { display: none; }
+  .server-terminal-host { margin-left: 0; padding-left: 12px; }
+  .server-terminal-toolbar { padding-block: 12px; gap: 10px; }
+  .server-terminal-actions { gap: 4px; margin-left: auto; }
+  .server-terminal-actions button { padding-inline: 8px; font-size: 12px; }
   .machines-server-card { flex-wrap: wrap; }
   .machines-server-card > div { flex-basis: 70%; }
+  .machines-server-card > .machines-server-actions { flex-basis: 100%; }
   .machines-terminal-heading { padding: 16px; }
   .server-reboot-dialog { padding: 18px; }
 }

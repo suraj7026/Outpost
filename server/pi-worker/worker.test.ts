@@ -1,8 +1,8 @@
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, type Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -16,6 +16,20 @@ import { WorkerRuns } from './runs.js';
 import { workerServer } from './http.js';
 import { WorkerClient } from './client.js';
 import { RunPoll } from './contracts.js';
+import { AgentSession } from '@earendil-works/pi-coding-agent';
+import { SessionWorkJournal } from '../pi-management/session-background.js';
+
+const privateHome = mkdtempSync(join(tmpdir(), 'outpost-worker-home-'));
+const originalHome = process.env.HOME, originalAgentDir = process.env.PI_CODING_AGENT_DIR, originalTempRoot = process.env.PI_SUBAGENTS_TEMP_ROOT;
+process.env.HOME = privateHome;
+process.env.PI_SUBAGENTS_TEMP_ROOT = join(privateHome, 'subagents');
+process.env.PI_CODING_AGENT_DIR = join(privateHome, 'agent');
+after(() => {
+  if (originalHome === undefined) delete process.env.HOME; else process.env.HOME = originalHome;
+  if (originalAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = originalAgentDir;
+  if (originalTempRoot === undefined) delete process.env.PI_SUBAGENTS_TEMP_ROOT; else process.env.PI_SUBAGENTS_TEMP_ROOT = originalTempRoot;
+  rmSync(privateHome, { recursive: true, force: true });
+});
 
 async function listen(server: Server) {
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -31,7 +45,11 @@ test('authenticated worker: add providers, log in, select each model and execute
   let injectInvalid = true, correctedValidation = false;
   const upstream = createServer(async (request, response) => {
     const chunks = []; for await (const bytes of request) chunks.push(Buffer.from(bytes));
-    const body = z.object({ model: z.string(), messages: z.array(z.object({ role: z.string() }).passthrough()) }).parse(JSON.parse(Buffer.concat(chunks).toString()));
+    const body = z.object({ model: z.string(), messages: z.array(z.object({ role: z.string() }).passthrough()),
+          tools: z.array(z.object({ function: z.object({ name: z.string() }) })) }).parse(JSON.parse(Buffer.concat(chunks).toString()));
+    const activeTools = body.tools.map(tool => tool.function.name);
+    for (const name of ['outpost_action', 'subagent', 'ollama_web_search', 'ollama_web_fetch']) assert.ok(activeTools.includes(name), `${name} is active`);
+    assert.ok(!activeTools.includes('bash') && !activeTools.includes('write'), 'Parent builtins remain unchanged');
     received.push({ path: request.url ?? '', model: body.model, authorization: request.headers.authorization });
     if (request.url?.startsWith('/beta/') && holdBeta) await holdBeta;
     const toolMessages = body.messages.filter(message => message.role === 'tool');
@@ -132,5 +150,161 @@ test('authenticated worker: add providers, log in, select each model and execute
   } finally {
     management.close(); await runs.close(); coordinator.live.close();
     await close(server); await close(upstream); db.close(); rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('worker runs the installed upstream subagent with its native profile and no action bridge', { timeout: 45000 }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'outpost-worker-child-'));
+  const profile = new PiProfile(process.env.PI_CODING_AGENT_DIR!);
+  const agents = join(profile.directory, 'agents'), proof = join(root, 'native-child.txt');
+  mkdirSync(agents, { recursive: true });
+  writeFileSync(join(agents, 'worker-fixture.md'), '---\nname: worker-fixture\ndescription: Worker native fixture\ntools: write\n---\nWrite the requested file.\n');
+  writeFileSync(join(profile.directory, 'auth.json'), JSON.stringify({ alpha: { type: 'api_key', key: 'worker-child-private-key' } }), { mode: 0o600 });
+  const received: { parent: boolean; model: string; authorization: string | undefined }[] = [];
+  const upstream = createServer(async (request, response) => {
+    const chunks = []; for await (const chunk of request) chunks.push(Buffer.from(chunk));
+    const body = z.object({ model: z.string(), tools: z.array(z.object({ function: z.object({ name: z.string() }) })),
+      messages: z.array(z.object({ role: z.string() }).passthrough()) }).parse(JSON.parse(Buffer.concat(chunks).toString()));
+    const parent = body.tools.some(tool => tool.function.name === 'outpost_action');
+    received.push({ parent, model: body.model, authorization: request.headers.authorization });
+    const call = body.messages.some(message => message.role === 'tool') ? undefined : parent
+      ? { name: 'subagent', arguments: { agent: 'worker-fixture', task: 'Write the native proof file. Delegation is authorized.', async: false, options: { context: 'fresh' } } }
+      : { name: 'write', arguments: { path: proof, content: 'WORKER_NATIVE_CHILD' } };
+    const delta = call ? { role: 'assistant', tool_calls: [{ index: 0, id: `worker_native_${received.length}`, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.arguments) } }] }
+      : { role: 'assistant', content: 'Native worker child finished.' };
+    response.writeHead(200, { 'content-type': 'text/event-stream' });
+    for (const choice of [{ delta, finish_reason: null }, { delta: {}, finish_reason: call ? 'tool_calls' : 'stop' }]) response.write(`data: ${JSON.stringify({ id: 'worker_native', object: 'chat.completion.chunk', created: 1, model: body.model, choices: [{ index: 0, ...choice }] })}\n\n`);
+    response.end('data: [DONE]\n\n');
+  });
+  const endpoint = await listen(upstream);
+  const runs = new WorkerRuns(profile, join(root, 'workspaces'), join(root, 'sessions'));
+  try {
+    await profile.configure({ providerId: 'alpha', baseUrl: `${endpoint}/v1`, api: 'openai-completions', allowInsecureHttp: true,
+      models: [{ id: 'worker-native-model', name: 'Native fixture', contextWindow: 16384, maxTokens: 1024 }] }, profile.generation());
+    const runId = randomUUID();
+    runs.start({ type: 'run.start', runId, taskId: randomUUID(), model: { providerId: 'alpha', modelId: 'worker-native-model' },
+      prompt: 'Delegate the native write to worker-fixture.', systemPrompt: 'Fixture: use outpost_action for coordinator actions.' });
+    let state: RunPoll | undefined, cursor = 0;
+    for (let i = 0; i < 1500; i++) {
+      state = runs.poll(runId, cursor); cursor = state.cursor;
+      assert.equal(state.actions.length, 0, 'Native extension execution must not enter Outpost approvals');
+      if (['finished', 'failed', 'cancelled'].includes(state.state)) break;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.equal(state?.state, 'finished', JSON.stringify(state));
+    assert.ok(received.some(request => !request.parent), JSON.stringify(state));
+    assert.equal(readFileSync(proof, 'utf8'), 'WORKER_NATIVE_CHILD');
+    assert.ok(received.every(request => request.model === 'worker-native-model' && request.authorization === 'Bearer worker-child-private-key'));
+    assert.equal(runs.active, false);
+  } finally { await runs.close(); await close(upstream); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('worker receipt failure disposes its session and does not leave a permanent active run', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'outpost-worker-receipt-'));
+  const profile = new PiProfile(join(root, 'agent'));
+  writeFileSync(join(profile.directory, 'auth.json'), JSON.stringify({ alpha: { type: 'api_key', key: 'receipt-fixture-key' } }), { mode: 0o600 });
+  await profile.configure({ providerId: 'alpha', baseUrl: 'http://127.0.0.1:1/v1', api: 'openai-completions', allowInsecureHttp: true,
+    models: [{ id: 'receipt-model', name: 'Receipt fixture', contextWindow: 16384, maxTokens: 1024 }] }, profile.generation());
+  const runs = new WorkerRuns(profile, join(root, 'workspaces'), join(root, 'sessions'));
+  const disposed = t.mock.method(AgentSession.prototype, 'dispose');
+  t.mock.method(SessionWorkJournal.prototype, 'own', () => { throw Object.assign(new Error('receipt disk full'), { code: 'ENOSPC' }); });
+  try {
+    const runId = randomUUID();
+    runs.start({ type: 'run.start', runId, taskId: randomUUID(), model: { providerId: 'alpha', modelId: 'receipt-model' }, prompt: 'Fixture', systemPrompt: 'Fixture' });
+    for (let i = 0; i < 500 && runs.active; i++) await new Promise(resolve => setTimeout(resolve, 10));
+    assert.equal(runs.poll(runId, 0).state, 'failed');
+    assert.equal(disposed.mock.callCount(), 1); assert.equal(runs.active, false); assert.equal(runs.needsAttention, false);
+    assert.equal(new SessionWorkJournal(join(root, 'sessions')).needsAttention, false);
+  } finally { await runs.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('worker close is bounded and never reports idle while owned startup is unresolved', { timeout: 10000 }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'outpost-close-'));
+  let release = () => {};
+  const held = new Promise<void>(resolve => { release = resolve; });
+  class SlowProfile extends PiProfile {
+    override async runtime(metadataOnly = false) { await held; return super.runtime(metadataOnly); }
+  }
+  const runs = new WorkerRuns(new SlowProfile(join(root, 'agent')), join(root, 'workspaces'), join(root, 'sessions'));
+  try {
+    runs.start({ type: 'run.start', runId: randomUUID(), taskId: randomUUID(), model: { providerId: 'missing', modelId: 'missing' }, prompt: 'Fixture', systemPrompt: 'Fixture' });
+    const started = Date.now();
+    await assert.rejects(runs.close(30), /worker_native_work_needs_attention/);
+    assert.ok(Date.now() - started < 500); assert.equal(runs.active, true);
+    release();
+    for (let i = 0; i < 100 && runs.active; i++) await new Promise(resolve => setTimeout(resolve, 10));
+    assert.equal(runs.active, false);
+  } finally { release(); await runs.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+for (const cancel of [false, true]) test(`native detached children ${cancel ? 'cancel only owned work' : 'retain callbacks and block maintenance through completion'}`, { timeout: 45000 }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'outpost-detached-'));
+  const profile = new PiProfile(process.env.PI_CODING_AGENT_DIR!);
+  const agents = join(profile.directory, 'agents'); mkdirSync(agents, { recursive: true });
+  writeFileSync(join(agents, 'background-fixture.md'), '---\nname: background-fixture\ndescription: Background lifecycle fixture\ntools: write\n---\nWrite the requested proof.\n');
+  writeFileSync(join(profile.directory, 'auth.json'), JSON.stringify({ alpha: { type: 'api_key', key: 'background-private-key' } }), { mode: 0o600 });
+  const received: { parent: boolean; other: boolean }[] = [];
+  let release = () => {}, releaseOther = () => {};
+  const held = new Promise<void>(resolve => { release = resolve; }), heldOther = new Promise<void>(resolve => { releaseOther = resolve; });
+  const upstream = createServer(async (request, response) => {
+    const chunks = []; for await (const chunk of request) chunks.push(Buffer.from(chunk));
+    const body = z.object({ model: z.string(), tools: z.array(z.object({ function: z.object({ name: z.string() }) })),
+      messages: z.array(z.object({ role: z.string() }).passthrough()) }).parse(JSON.parse(Buffer.concat(chunks).toString()));
+    const parent = body.tools.some(tool => tool.function.name === 'outpost_action');
+    const other = JSON.stringify(body.messages).includes('background-other');
+    received.push({ parent, other });
+    if (!parent) await (other ? heldOther : held);
+    const call = body.messages.some(message => message.role === 'tool') ? undefined : parent
+      ? { name: 'subagent', arguments: { agent: 'background-fixture', task: other ? 'background-other write proof' : 'background-primary write proof', async: true, options: { context: 'fresh' } } }
+      : { name: 'write', arguments: { path: join(root, other ? 'other.txt' : 'primary.txt'), content: 'DETACHED_NATIVE_WRITE' } };
+    const delta = call ? { role: 'assistant', tool_calls: [{ index: 0, id: randomUUID(), type: 'function', function: { name: call.name, arguments: JSON.stringify(call.arguments) } }] }
+      : { role: 'assistant', content: 'Background completion observed.' };
+    response.writeHead(200, { 'content-type': 'text/event-stream' });
+    for (const choice of [{ delta, finish_reason: null }, { delta: {}, finish_reason: call ? 'tool_calls' : 'stop' }]) response.write(`data: ${JSON.stringify({ id: 'background', object: 'chat.completion.chunk', created: 1, model: body.model, choices: [{ index: 0, ...choice }] })}\n\n`);
+    response.end('data: [DONE]\n\n');
+  });
+  const endpoint = await listen(upstream), workspaces = join(root, 'workspaces'), sessions = join(root, 'sessions');
+  const runs = new WorkerRuns(profile, workspaces, sessions), runId = randomUUID(), otherId = randomUUID();
+  const cursors = new Map<string, number>();
+  const poll = (id: string) => { const state = runs.poll(id, cursors.get(id) ?? 0); cursors.set(id, state.cursor); return state; };
+  const wait = async (condition: () => boolean) => {
+    const deadline = Date.now() + 20000;
+    while (!condition() && Date.now() < deadline) { poll(runId); if (cancel) poll(otherId); await new Promise(resolve => setTimeout(resolve, 25)); }
+    assert.ok(condition(), JSON.stringify({ received, primary: poll(runId), other: cancel ? poll(otherId) : null }));
+  };
+  try {
+    await profile.configure({ providerId: 'alpha', baseUrl: `${endpoint}/v1`, api: 'openai-completions', allowInsecureHttp: true,
+      models: [{ id: 'background-model', name: 'Background fixture', contextWindow: 16384, maxTokens: 1024 }] }, profile.generation());
+    for (const id of cancel ? [runId, otherId] : [runId]) runs.start({ type: 'run.start', runId: id, taskId: randomUUID(), model: { providerId: 'alpha', modelId: 'background-model' },
+      prompt: id === otherId ? 'Delegate background-other.' : 'Delegate background-primary.', systemPrompt: 'Native delegation is authorized.' });
+    await wait(() => received.filter(request => !request.parent).length >= (cancel ? 2 : 1) && received.filter(request => request.parent).length >= (cancel ? 4 : 2));
+    assert.equal(runs.active, true);
+    assert.equal(poll(runId).state, 'running', 'Foreground reply must not discard native completion delivery');
+    const { snapshotBackgroundWork } = await import('pi-subagents/background-work');
+    assert.equal(snapshotBackgroundWork([poll(runId).session!.id]).items.length, 0, 'The external-provider registry does not contain this native job');
+    if (cancel) {
+      await runs.abort(runId);
+      assert.equal(poll(runId).state, 'cancelled');
+      assert.equal(poll(otherId).state, 'running');
+      assert.equal(runs.active, true, 'Unrelated native work remains owned');
+      assert.equal(existsSync(join(root, 'primary.txt')), false);
+      releaseOther();
+      await wait(() => !runs.active);
+      assert.equal(readFileSync(join(root, 'other.txt'), 'utf8'), 'DETACHED_NATIVE_WRITE');
+      assert.equal(existsSync(join(root, 'primary.txt')), false);
+    } else {
+      const restarted = new WorkerRuns(profile, workspaces, sessions);
+      assert.equal(restarted.active, true); assert.equal(restarted.needsAttention, true);
+      await assert.rejects(restarted.close(100), /worker_native_work_needs_attention/);
+      release();
+      await wait(() => !runs.active);
+      assert.equal(poll(runId).state, 'finished');
+      assert.equal(readFileSync(join(root, 'primary.txt'), 'utf8'), 'DETACHED_NATIVE_WRITE');
+      assert.ok(received.filter(request => request.parent).length >= 3, 'Native completion wakes the retained parent and reaches inference');
+      const cleanRestart = new WorkerRuns(profile, workspaces, sessions);
+      assert.equal(cleanRestart.active, false); await cleanRestart.close();
+    }
+  } finally {
+    release(); releaseOther(); await runs.close(); await close(upstream); rmSync(root, { recursive: true, force: true });
   }
 });

@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
-import { Minus, Power, TerminalSquare, Unplug, X } from 'lucide-react';
+import { CircleHelp, Minus, Power, SquareTerminal, Unplug, X } from 'lucide-react';
 import { nativeApp, recordedPreview, type EnvironmentId } from '../api';
 import { terminalFor, type TerminalController } from './controller';
+import { Button, Dialog } from '../Interface';
 import '@xterm/xterm/css/xterm.css';
 import './server-terminal.css';
 
@@ -50,7 +51,7 @@ export default function TerminalPane({ environmentId, label, onCollapse, fullSiz
   const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const host = useRef<HTMLDivElement>(null);
   const rebootButton = useRef<HTMLButtonElement>(null);
-  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false), [helpOpen, setHelpOpen] = useState(false);
   const enabled = nativeApp() && !recordedPreview();
   useEffect(() => {
     if (!enabled || !host.current) return;
@@ -61,23 +62,28 @@ export default function TerminalPane({ environmentId, label, onCollapse, fullSiz
   const target = snapshot.target;
   const live = snapshot.state === 'connected' || snapshot.state === 'opening';
   const stateLabel = snapshot.state === 'connected' ? 'Shell connected' : snapshot.state === 'opening' ? 'Connecting to saved SSH host…' : snapshot.state === 'exited' ? `Shell exited${snapshot.exitCode == null ? '' : ` · code ${snapshot.exitCode}`}` : snapshot.state === 'error' ? 'Connection needs attention' : 'Shell disconnected';
-  return <section id={id} className={`server-terminal-pane ${fullSize ? 'server-terminal-full' : ''}`} aria-label={`${label} server terminal`} data-terminal-owner={environmentId ?? 'legacy'}>
+  return <section id={id} className={`server-terminal-pane ${fullSize ? 'server-terminal-full' : ''}`} aria-label={`${label} server terminal`} data-terminal-owner={environmentId ?? 'legacy'} onKeyDownCapture={event => {
+        if (event.key === 'Escape' && !event.altKey && !event.ctrlKey && !event.metaKey && onCollapse && !reviewOpen && !(event.target instanceof Element && event.target.closest('dialog'))) {
+          event.preventDefault(); event.stopPropagation(); onCollapse();
+        }
+      }}>
     <div className="server-terminal-toolbar">
-      <div className="server-terminal-identity"><TerminalSquare size={17} aria-hidden="true" /><strong>Terminal</strong><div><span>{target ? `${target.user}@${target.host}` : label}</span><small>{target ? `${target.label} · verified SSH host · port ${target.port}` : 'Saved SSH connection'}</small></div></div>
+      <div className="server-terminal-identity"><SquareTerminal size={18} aria-hidden="true" /><strong>Terminal</strong><span className="server-terminal-dot" data-state={enabled ? snapshot.state : 'preview'} role="img" aria-label={enabled ? stateLabel : 'Read-only preview'} title={enabled ? stateLabel : 'Read-only preview'} /><div className="server-terminal-host"><span>{target ? `${target.user}@${target.host}` : label}</span><small><span>{target?.label ?? label}</span><span>{target ? `SSH · port ${target.port}` : 'Saved SSH connection'}</span></small></div></div>
       <div className="server-terminal-actions">
         {enabled && <button onClick={() => live ? void controller.disconnect() : void controller.open()}><Unplug size={14} />{live ? 'Disconnect' : 'Reconnect'}</button>}
         <button ref={rebootButton} className="server-terminal-reboot" disabled={!enabled} onClick={() => { setReviewOpen(true); if (!snapshot.reboot.consumed) void controller.reviewReboot(); }}><Power size={14} />{snapshot.reboot.consumed ? 'Reboot status…' : 'Reboot server…'}</button>
-        {onCollapse && <button className="icon-button" aria-label="Collapse terminal" title="Collapse terminal" onClick={onCollapse}><Minus size={16} /></button>}
+        <button className="icon-button terminal-help" aria-label="Terminal help" title="Terminal help" onClick={event => { event.currentTarget.focus(); setHelpOpen(true); }}><CircleHelp size={18} /></button>
+        {onCollapse && <button className="icon-button" aria-label="Collapse terminal" title="Collapse terminal" onClick={onCollapse}><Minus size={18} /></button>}
       </div>
     </div>
     {!enabled ? <div className="server-terminal-notice" role="status"><p>This preview is read-only. Open the installed Outpost app and connect a verified saved SSH server to use the terminal or reboot.</p><a href="#settings/servers">Open server settings</a></div> : <>
-      <div className="server-terminal-state" role="status">{stateLabel}</div>
+      <span className="sr-only" role="status">{stateLabel}</span>
       {snapshot.error && <div className="server-terminal-notice" role="alert"><p>{snapshot.error}</p><a href="#settings/servers">Open Server setup in Settings</a></div>}
       {snapshot.warning && <p className="server-terminal-notice" role="status">{snapshot.warning}</p>}
       {snapshot.reboot.consumed && <p className="server-terminal-reboot-status" role="status"><strong>{snapshot.reboot.state === 'returned' ? 'Reboot verified' : snapshot.reboot.state === 'unknown' ? 'Reboot outcome unknown' : 'Reboot not yet verified'}</strong> · {snapshot.reboot.message}</p>}
       <div className="server-terminal-screen" ref={host} aria-label="Interactive SSH terminal" />
     </>}
-    <div className="server-terminal-footer"><span>SSH · UTF-8</span><span>Collapsing keeps this shell open. Disconnect ends it, not agent tasks.</span><span>⌃C Interrupt · ⌘V Paste</span></div>
+    {helpOpen && <Dialog title="Terminal help" onClose={() => setHelpOpen(false)}><p>{onCollapse ? 'Escape collapses this pane. The shell stays open until you disconnect. Use Control [ to send Escape to the shell.' : 'This is the full-size server terminal. Keyboard input is sent to the shell.'}</p><dl className="ui-facts"><dt>Interrupt</dt><dd>Control C</dd><dt>Paste</dt><dd>Command V</dd><dt>Session</dt><dd>{stateLabel}</dd>{target && <><dt>Server</dt><dd>{target.user}@{target.host}</dd><dt>SSH port</dt><dd>{target.port}</dd><dt>Verified host key</dt><dd>{target.fingerprint}</dd></>}</dl><p>Disconnect ends this shell, not agent tasks. Use tmux for shell work that must survive a disconnect. SSH output uses UTF-8.</p><div className="ui-dialog-actions"><Button onClick={() => setHelpOpen(false)}>Done</Button></div></Dialog>}
     {reviewOpen && <RebootDialog key={environmentId ?? 'legacy'} controller={controller} returnFocus={rebootButton.current} close={() => setReviewOpen(false)} />}
   </section>;
 }

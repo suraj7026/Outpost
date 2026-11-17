@@ -17,7 +17,7 @@ k() { "$HOME/.local/bin/kubectl" -n pi-workspace "$@"; }
   grep -Eq "^CapEff:[[:space:]]+0+$" /proc/self/status
   read -r memory_limit < /sys/fs/cgroup/memory.max
   test "$memory_limit" = 8589934592
-  test "$(pi --version)" = 1.4.0
+  test "$(pi --version)" = 1.5.2
   tmux has-session -t main
   printf "Placement, UID, credential isolation, capabilities, root filesystem, memory limit, Pi and tmux: OK\n"
   curl --fail --silent --show-error --max-time 20 https://registry.npmjs.org/-/ping

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Outpost · Chat automations preview</title>
+  <link rel="stylesheet" href="prototype.css">
+</head>
+<body>
+  <header class="preview-bar" aria-label="Prototype navigation">
+    <div class="preview-label"><span class="preview-dot"></span><strong>Feature preview</strong><span class="preview-disclaimer">Sample data · no live actions</span></div>
+    <nav class="tour" aria-label="Explore the workflows">
+      <button data-action="tour-setup" aria-current="step">Chat setup</button>
+      <button data-action="tour-run">Scheduled result</button>
+      <button data-action="tour-page">Automations → chat</button>
+    </nav>
+    <button class="text-button reset" data-action="reset">Reset demo</button>
+  </header>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Outpost navigation">
+      <div class="brand"><svg viewBox="0 0 24 28" fill="none" aria-hidden="true"><path d="M4 7 12 2l8 5v14l-8 5-8-5V7Z M4 7l8 5 8-5M12 12v14" stroke="currentColor" stroke-width="1.7"/></svg><span>Outpost</span></div>
+      <nav class="main-nav"><button class="nav-button" data-action="chat" data-chat="server-checks"><span data-icon="message"></span><span>Conversation</span></button><button class="nav-button" data-action="automations"><span data-icon="clock"></span><span>Automations</span></button></nav>
+      <div class="sidebar-heading"><span data-icon="server"></span><span>Outpost 2</span><span class="dot"></span></div>
+      <div id="chat-list" class="chat-list"></div>
+      <div class="sidebar-foot"><span data-icon="shield"></span><div>Local prototype<br><span class="muted">No server connection</span></div></div>
+    </aside>
+    <main id="main" tabindex="-1"></main>
+  </div>
+  <dialog id="editor" aria-labelledby="editor-title"></dialog>
+  <dialog id="manager" aria-labelledby="manager-title"></dialog>
+  <dialog id="approval" aria-labelledby="approval-title"></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="prototype.js"></script>
+</body>
+</html>

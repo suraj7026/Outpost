@@ -1,17 +1,18 @@
 import "./live.css";
-import { useEffect, useRef, useState } from "react";
-import { ChevronRight, Terminal } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { ChevronRight, SquareTerminal as Terminal } from "lucide-react";
 import type { ServerRecord } from "./types";
 import { object, text } from "./types";
 import OutcomeDot from "./OutcomeDot";
+import { ThinkingIndicator, useConversationDisclosure } from './conversation-detail';
 
 export function Thinking({ message }: { message: ServerRecord }) {
   const thinking = text(message, "thinking");
-  const active = message.data.streaming === true && !message.data.interrupted;
-  const [expanded, setExpanded] = useState<boolean | null>(null);
+  const active = message.data.streaming === true && !message.data.interrupted && !text(message, 'error') && text(message, 'stopReason') !== 'error' && !text(message, 'text');
+  const { open, setOpen: setExpanded } = useConversationDisclosure();
   const panel = useRef<HTMLPreElement>(null),
     follow = useRef(true);
-  const open = expanded ?? (active && !text(message, "text"));
+
   useEffect(() => {
     if (panel.current && follow.current)
       panel.current.scrollTop = panel.current.scrollHeight;
@@ -38,6 +39,7 @@ export function Thinking({ message }: { message: ServerRecord }) {
         >
           <summary>
             <ChevronRight size={13} />
+            <ThinkingIndicator active={active} />
             <span>
               {active && !text(message, "text") ? "Thinking…" : "Thinking"}
             </span>
@@ -56,7 +58,7 @@ export function Thinking({ message }: { message: ServerRecord }) {
         </details>
       )}
       {active && !thinking && !text(message, "text") && (
-        <p className="stream-placeholder">Waiting for model output…</p>
+        <p className="stream-placeholder"><ThinkingIndicator active={active} />Waiting for model output…</p>
       )}
       {message.data.interrupted === true && (
         <p className="small">Interrupted · partial output retained</p>
@@ -86,9 +88,10 @@ export function LiveTool({ record }: { record: ServerRecord }) {
   const name = typeof args.tool === "string" ? args.tool : text(record, "name");
   const state = record.data.interrupted ? 'interrupted' : text(record, 'state');
   const failed = state === 'error' || state === 'interrupted';
-  const active = record.data.streaming === true && ['preparing', 'running'].includes(state);
+  const { open, setOpen } = useConversationDisclosure();
   return (
-    <details className={`action live-tool ${failed ? 'action-failed' : ''}`} data-record-id={record.id} data-state={state} open={active}>
+    <details className={`action live-tool ${failed ? 'action-failed' : ''}`} data-record-id={record.id} data-state={state} open={open}
+      onToggle={event => { if (event.currentTarget.open !== open) setOpen(event.currentTarget.open); }}>
       <summary>
         <ChevronRight size={13} className="disclosure" />
         <Terminal size={15} />

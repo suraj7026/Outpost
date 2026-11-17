@@ -47,8 +47,14 @@ function install({ A, B, options }) {
     return;
   }
   window.isTauri = true;
-  window.__TAURI_INTERNALS__ = { transformCallback: () => 1, unregisterCallback() {}, async invoke(command, args = {}) {
+  window.__TAURI_INTERNALS__ = { metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } }, transformCallback: () => 1, unregisterCallback() {}, async invoke(command, args = {}) {
     fixture.calls.push({ command, args: structuredClone(args), at: Date.now() });
+    if (command === 'plugin:window|set_theme') {
+      if (args.label !== 'main' || ![null, 'light', 'dark'].includes(args.value)) {
+        fixture.unexpected.push(command); throw new Error(`Invalid native theme request: ${JSON.stringify(args)}`);
+      }
+      return;
+    }
     if (command.startsWith('plugin:') || ['set_sidebar_window_controls', 'sidebar_pointer_inside', 'connections_wake', 'set_window_blur', 'update_sidebar'].includes(command)) return;
     if (command === 'environment_list') return { registry };
     if (command === 'environment_select') { registry.selectedEnvironmentId = args.environmentId; return registry; }
@@ -203,8 +209,8 @@ async function composerLayout(page, { scheme, ownerLabel, long }) {
   verify(near(geometry.task?.top, geometry.main?.top) && near(geometry.columns?.top, geometry.task?.top) && near(geometry.conversation?.top, geometry.columns?.top), 'Conversation must start at main-shell top with no reserved heading row');
   verify(geometry.headingOutOfFlow && geometry.heading?.width <= 1 && geometry.heading?.height <= 1, 'Task h1 must remain screen-reader-only without reserving layout space');
   verify(await page.getByRole('heading', { name: 'Studio chat', level: 1, exact: true }).count() === 1, 'Task h1 must remain in the accessibility tree');
-  verify(geometry.inContext && geometry.inIdentity && geometry.terminalClass, 'Terminal button must live in the composer owner identity, not the old header or right-side controls');
-  verify(geometry.adjacent && geometry.beforeStatus && geometry.beforeStop, 'Terminal must immediately follow environment-navigation and precede status/Stop in DOM order');
+  verify(geometry.inContext && !geometry.inIdentity && geometry.terminalClass, 'Terminal button lives on the right of the composer strip, outside the owner label');
+  verify(!geometry.beforeStatus && !geometry.beforeStop, 'Terminal follows the run controls in DOM order');
   verify(geometry.ownerText === ownerLabel, 'Composer must show the task owner label');
   if (!long) {
     const fit = geometry.ownerFit;
@@ -214,16 +220,17 @@ async function composerLayout(page, { scheme, ownerLabel, long }) {
   verify(sameRow(geometry.owner, geometry.dot) && sameRow(geometry.dot, geometry.terminal), 'Owner label, connection dot and Terminal must share a row');
   const ownerDotGap = geometry.dot?.left - geometry.owner?.right;
   const terminalGap = geometry.terminal.left - geometry.dot?.right;
-  verify(ownerDotGap >= 0 && ownerDotGap <= 12 && terminalGap >= 0 && terminalGap <= 16, `Terminal must be directly beside owner/dot (label–dot ${ownerDotGap}px; dot–Terminal ${terminalGap}px)`);
-  verify(precedes(geometry.terminal, geometry.status) && precedes(geometry.terminal, geometry.stop), 'Terminal must precede status/Stop visually without overlap');
+  verify(ownerDotGap >= 0 && ownerDotGap <= 12 && terminalGap >= 0, `Owner/dot stay grouped and Terminal sits to their right (label–dot ${ownerDotGap}px; dot–Terminal ${terminalGap}px)`);
+  verify((precedes(geometry.terminal, geometry.status) || precedes(geometry.status, geometry.terminal)) && (precedes(geometry.terminal, geometry.stop) || precedes(geometry.stop, geometry.terminal)), 'Terminal and status/Stop do not overlap in either responsive layout');
   verify(geometry.terminal.width >= 32 && geometry.terminal.height >= 32 && geometry.terminalUnclipped && geometry.terminalHit, 'Terminal icon button must remain visible, unclipped and pointer reachable');
     verify((await trigger.textContent()).trim() === '', 'Terminal toggle is icon-only');
     verify(await trigger.getAttribute('aria-label') === 'Terminal' && await trigger.getAttribute('title') === 'Terminal', 'Icon-only Terminal retains accessible name and tooltip');
-    verify(await trigger.locator('svg rect').getAttribute('rx') === '5', 'Terminal glyph has rounded corners');
-  verify(geometry.context && geometry.terminal.left >= geometry.context.left && geometry.terminal.right <= geometry.context.right && geometry.terminal.top >= geometry.context.top && geometry.terminal.bottom <= geometry.context.bottom, 'Terminal bounds must stay inside the black composer context strip');
+    verify(await trigger.locator('svg.lucide-square-terminal').count() === 1, 'Terminal uses the same Lucide square-terminal glyph as the pane');
+        equal(await trigger.locator('svg rect').evaluate(node => [getComputedStyle(node).rx, getComputedStyle(node).ry]), ['5px', '5px'], 'Terminal glyph has rounded corners in both engines');
+  verify(geometry.context && geometry.terminal.left >= geometry.context.left && geometry.terminal.right <= geometry.context.right && geometry.terminal.top >= geometry.context.top && geometry.terminal.bottom <= geometry.context.bottom, 'Terminal bounds must stay inside the composer context strip');
   verify(geometry.documentOverflow <= 1 && geometry.contextOverflow !== null && geometry.contextOverflow <= 1, 'Long owner labels must not cause document or composer overflow');
   verify(geometry.dark === (scheme === 'dark'), 'Fixture must render the requested color scheme');
-  verify(geometry.background === 'rgb(16, 17, 18)' && geometry.colorScheme === 'dark', 'Composer context must remain black in both themes');
+  verify(geometry.background === (scheme === 'light' ? 'rgb(230, 232, 236)' : 'rgb(16, 17, 18)') && geometry.colorScheme === scheme, 'Composer context must use the approved background and color scheme for each theme');
   verify(await trigger.getAttribute('aria-controls') === 'chat-server-terminal', 'Terminal must control chat-server-terminal');
   verify(await trigger.getAttribute('aria-expanded') === 'false', 'Terminal must initially expose collapsed semantics');
   verify(await page.locator('#chat-server-terminal').count() === 0, 'Collapsed terminal must not reserve pane space');
@@ -234,7 +241,7 @@ async function composerLayout(page, { scheme, ownerLabel, long }) {
   const focusStyle = node => {
     const style = getComputedStyle(node);
     return { active: node === document.activeElement, visible: node.matches(':focus-visible'), outlineWidth: style.outlineWidth,
-      border: style.border, shadow: style.boxShadow, fill: style.backgroundColor };
+      border: style.border, shadow: style.boxShadow, fill: style.backgroundColor, outlineStyle: style.outlineStyle };
   };
   const beforeFocus = await trigger.evaluate(focusStyle);
   const isWebkit = page.context().browser().browserType().name() === 'webkit';
@@ -245,11 +252,11 @@ async function composerLayout(page, { scheme, ownerLabel, long }) {
   const focused = await trigger.evaluate(focusStyle);
   console.log(`FOCUS ${JSON.stringify({ width: page.viewportSize().width, scheme, ownerLabel, before: beforeFocus, after: focused })}`);
   check(focused.active && focused.visible, 'Terminal receives actual sequential keyboard focus');
-  equal(focused.outlineWidth, '0px', 'Focused Terminal has zero outline width');
+  equal(focused.outlineStyle, 'none', 'Terminal focus uses a surface change, not a painted outline');
   equal([focused.border, focused.shadow], [beforeFocus.border, beforeFocus.shadow], 'Terminal focus changes neither border nor shadow');
 }
 async function terminalDisclosure(page, resourcesOverlay, engine) {
-  equal(await page.locator('.composer-context-identity button.composer-terminal').count(), 1, 'Disclosure uses the relocated composer Terminal button');
+  equal(await page.locator('.composer-context-run > button.composer-terminal').count(), 1, 'Disclosure uses the relocated composer Terminal button');
   const trigger = page.getByRole('button', { name: 'Terminal', exact: true });
   equal(await trigger.getAttribute('aria-expanded'), 'false', 'Terminal starts collapsed');
   equal(await trigger.getAttribute('aria-controls'), 'chat-server-terminal', 'Accessible trigger names its terminal pane');
@@ -282,10 +289,31 @@ async function terminalDisclosure(page, resourcesOverlay, engine) {
   await trigger.focus(); await page.keyboard.press('Space'); await connected(page);
   equal(await trigger.getAttribute('aria-expanded'), 'true', 'Space reopens retained terminal');
   equal(await count(page, 'terminal_open'), 1, 'Composer disclosure reuses the existing shell');
+  await fullWidthDock(page, '#chat-server-terminal');
+  const writesBeforeEscape = await count(page, 'terminal_write');
+  await page.locator('#chat-server-terminal .xterm-helper-textarea').focus();
+  await page.keyboard.press('Escape'); await frames(page);
+  equal(await page.locator('#chat-server-terminal').count(), 0, 'Escape inside xterm collapses the pane');
+  equal(await count(page, 'terminal_write'), writesBeforeEscape, 'Collapse Escape is not forwarded as a remote keystroke');
+  check(await trigger.evaluate(node => node === document.activeElement), 'Escape restores focus to terminal launcher');
+  await trigger.click(); await connected(page);
   await trigger.click();
   equal(await trigger.getAttribute('aria-expanded'), 'false', 'Composer trigger also collapses terminal');
   equal(await page.locator('#chat-server-terminal').count(), 0, 'Trigger collapse removes terminal pane');
   equal(await count(page, 'terminal_close'), 0, 'Disclosure never disconnects retained shell');
+}
+async function fullWidthDock(page, selector) {
+  const geometry = await page.locator(selector).evaluate(node => {
+    const box = element => { const { left, right, bottom, height } = element.getBoundingClientRect(); return { left, right, bottom, height }; };
+    return { pane: box(node), main: box(document.querySelector('.main-shell')), screen: box(node.querySelector('.server-terminal-screen')) };
+  });
+  check(Math.abs(geometry.pane.left - geometry.main.left) <= 1 && Math.abs(geometry.pane.right - geometry.main.right) <= 1, 'Terminal fills workspace width');
+  check(Math.abs(geometry.pane.bottom - geometry.main.bottom) <= 1, 'Terminal reaches the workspace bottom');
+  check(Math.abs(geometry.screen.bottom - geometry.pane.bottom) <= 1, 'Output reaches the dock bottom without a footer');
+  equal(await page.locator('.statusbar, .server-terminal-footer, .server-terminal-state').count(), 0, 'History strip and text-heavy terminal footer/status row are absent');
+  equal(await page.locator(`${selector} .server-terminal-dot`).getAttribute('data-state'), 'connected', 'Connected shell has a status dot');
+  check(await page.locator(selector).getByRole('img', { name: 'Shell connected', exact: true }).isVisible(), 'Status dot has an accessible label');
+  return geometry.pane;
 }
 async function layouts(browser, engine) {
   for (const scheme of ['dark', 'light']) for (const width of [1440, 900, 390]) for (const long of [false, true]) {
@@ -319,6 +347,34 @@ async function layouts(browser, engine) {
     const options = { width, ownerLabel: 'Outpost 1', state: 'interrupted' };
     await layoutCase(browser, engine, `disclosure-${width}`, options, page => terminalDisclosure(page, false, engine));
     if (width <= 1000) await layoutCase(browser, engine, `resources-collapse-${width}`, options, page => terminalDisclosure(page, true, engine));
+    await layoutCase(browser, engine, `shared-bottom-dock-${width}`, options, async page => {
+      await toggle(page); await connected(page); await frames(page);
+      const chatDock = await fullWidthDock(page, '#chat-server-terminal');
+      await page.getByRole('button', { name: 'Terminal help', exact: true }).click();
+      const help = page.getByRole('dialog', { name: 'Terminal help', exact: true }); await help.waitFor();
+      check(await help.getByText('SHA256:synthetic-host-key', { exact: true }).isVisible(), 'Verified host details remain available in Help');
+      await page.keyboard.press('Escape'); await help.waitFor({ state: 'hidden' });
+      check(await page.locator('#chat-server-terminal').isVisible(), 'Escape in Help does not collapse the terminal');
+      await page.keyboard.press('Meta+n'); await page.getByLabel('Task goal').waitFor();
+      await toggle(page); await connected(page); await frames(page);
+      const draftDock = await fullWidthDock(page, '#draft-server-terminal');
+      equal(draftDock, chatDock, 'New task and Chat use identical terminal dock geometry');
+      equal(await count(page, 'terminal_open'), 1, 'Both docks reuse the same server shell');
+      await layoutScreenshot(page, engine, `new-task-bottom-dock-${width}`);
+    });
+  }
+  for (const scheme of ['light', 'dark']) {
+    await layoutCase(browser, engine, `machines-terminal-bottom-${scheme}`, { scheme, width: 1440 }, async page => {
+      await machines(page, 'Studio server'); await connected(page); await waitCalls(page, 'terminal_read', 5); await frames(page);
+      const viewport = await page.locator('.server-terminal-full .xterm-viewport').evaluate(node => {
+        const style = getComputedStyle(node);
+        return { background: style.backgroundColor, overflowY: style.overflowY };
+      });
+      equal(viewport.background, 'rgba(0, 0, 0, 0)', 'Unused terminal row space reveals the themed surface, never xterm’s black default');
+      equal(viewport.overflowY, 'scroll', 'Terminal viewport scrolling remains enabled');
+      check(await page.locator('.server-terminal-full .xterm-screen').isVisible(), 'Full-size terminal renderer remains visible');
+      await layoutScreenshot(page, engine, `machines-terminal-bottom-${scheme}`);
+    });
   }
 }
 try {

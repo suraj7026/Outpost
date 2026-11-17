@@ -66,6 +66,7 @@ function installTransport({ A, B, states }) {
     transformCallback(fn) { const id = ++sequence; callbacks.set(id, fn); return id; },
     unregisterCallback(id) { callbacks.delete(id); },
     async invoke(wireCommand, args = {}) {
+      if (wireCommand === 'plugin:window|set_theme' && args?.label === 'main' && [null, 'light', 'dark'].includes(args.value)) return;
       if (['set_sidebar_window_controls', 'set_window_blur', 'update_sidebar'].includes(wireCommand)) return;
       if (wireCommand === 'sidebar_pointer_inside') return pointerX >= 0 && pointerX <= args.width && pointerY >= 0 && pointerY <= innerHeight;
       if (wireCommand.startsWith('plugin:event|')) return 1;
@@ -157,7 +158,7 @@ async function noHeaders(page) {
     equal(run.name, 'Outpost', `${run.run}: assistant name is visible`);
     equal(run.timeCount, 1, `${run.run}: assistant timestamp is retained`);
     check(run.bylineIsFirst && run.contentFollowsByline && run.contentBelowByline, `${run.run}: content follows the assistant byline`);
-    near(run.contentInset, page.viewportSize().width <= 620 ? 40 : 48, `${run.run}: content aligns beneath the avatar byline`);
+    near(run.contentInset, 0, `${run.run}: content uses the whole text column with avatars outside`);
     equal(run.nestedBylineCount, 0, `${run.run}: chunks do not repeat the run byline`);
   }
 }

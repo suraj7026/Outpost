@@ -32,8 +32,10 @@ async function open(width, colorScheme = 'dark') {
     let x = -1, y = -1;
     document.addEventListener('pointermove', event => { x = event.clientX; y = event.clientY; });
     window.__TAURI_INTERNALS__ = {
+      metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
       transformCallback() { return ++sequence; }, unregisterCallback() {},
       async invoke(command, args) {
+        if (command === 'plugin:window|set_theme' && args?.label === 'main' && [null, 'light', 'dark'].includes(args.value)) return;
         if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: null, environments: {} }, legacy: { endpoint: null, pending: false } };
         if (command === 'disconnect') return;
         if (command === 'set_sidebar_window_controls') { window.__controls.push(args.visible); window.__controlFrames.push(args); return; }
@@ -63,12 +65,15 @@ try {
       const box = selector => { const rect = document.querySelector(selector).getBoundingClientRect(); return { x: rect.x, y: rect.y, width: rect.width }; };
       return { sidebar: box('#app-sidebar'), navigation: box('.web-sidebar nav'), chrome: box('.sidebar-chrome'), control: box('.sidebar-chrome button') };
     });
+    const centeredControls = () => page.evaluate(() => Math.abs(window.__controlFrames.at(-1).y - document.querySelector('.new-task-button').getBoundingClientRect().top / 2) < .5);
+    check(await centeredControls(), 'Traffic lights are vertically centered between the window top and New task');
     const anchor = await geometry();
     const nativeRequests = await page.evaluate(() => window.__controlFrames.length);
     for (const width of [1601, 1600, 1599, 1151, 1150, 1149, 901, 900, 901, 1151, 1320]) {
       await page.setViewportSize({ width, height: width === 900 ? 600 : 850 });
       await page.waitForTimeout(40);
       assert.deepEqual(await geometry(), anchor, `Sidebar/header geometry stays anchored through ${width}px resize`); checks++;
+      check(await centeredControls(), 'Traffic lights remain centered after resizing');
       check(await page.evaluate(() => window.__controlFrames.length) === nativeRequests, 'Resizing does not queue duplicate or stale native button positions');
       check(await page.locator('#task-evidence').isVisible(), 'Persistent Evidence remains visible during resizing');
     }
@@ -101,7 +106,7 @@ try {
     const revealed = await frame(page);
     check(revealed.x > hidden.x && revealed.width < hidden.width, 'Hover pushes and resizes the workspace');
     const nativeRow = await page.evaluate(() => window.__controlFrames.at(-1));
-    check(nativeRow.x >= 24 && nativeRow.y >= 28, 'Native dots are positioned inside the sidebar header row');
+    check(nativeRow.x >= 24 && await centeredControls(), 'Native dots keep their horizontal inset and vertical midpoint after sidebar reveal');
     check(await page.locator('.conversation').evaluate(node => node.scrollTop === 500), 'Hover does not change conversation scroll');
     check(await page.evaluate(() => JSON.parse(localStorage.getItem('outpost.appearance.v1')).sidebarCollapsed), 'Hover does not change saved pin preference');
     await page.mouse.move(140, 380);

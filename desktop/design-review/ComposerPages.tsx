@@ -7,10 +7,17 @@ import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'r
 import {
   ArrowUp,
   Check,
+  ChevronDown,
+  CircleHelp,
+  Power,
+  Unplug,
   Code2,
+  Files,
   Globe,
   MessageSquare,
   Minus,
+  Pause,
+  Play,
   Plus,
   Server,
   Shield,
@@ -32,9 +39,6 @@ type PreviewMessage = {
   paragraphs: string[];
   evidence?: string;
 };
-
-const SAMPLE_HOST = 'preview-server';
-const SAMPLE_TASK_TITLE = 'Investigate the failed preview deploy';
 
 const PROFILE_TABS: { value: Profile; label: string; icon: LucideIcon }[] = [
   { value: 'code', label: 'Code', icon: Code2 },
@@ -62,9 +66,13 @@ const CONTROL_MODES = [
 
 const MODEL_OPTIONS = [
   { value: 'server-default', label: 'Server default' },
-  { value: 'ollama/gpt-oss:120b', label: 'Ollama · gpt-oss:120b' },
-  { value: 'ollama/qwen3-coder:30b', label: 'Ollama · qwen3-coder:30b' },
-  { value: 'ollama/llama3.3:70b', label: 'Ollama · llama3.3:70b' },
+  { value: 'ollama/glm-5.3-flash', label: 'Ollama · glm-5.3-flash' },
+  { value: 'openai/gpt-6.1-sol', label: 'OpenAI · GPT-6.1 Sol' },
+];
+
+const SERVERS = [
+  { value: 'development', label: 'Development', connected: true },
+  { value: 'home-server', label: 'Home server', connected: false },
 ];
 
 const optionLabel = (list: { value: string; label: string }[], value: string) =>
@@ -104,28 +112,27 @@ const SEEDS: PreviewMessage[] = [
 ];
 
 const previewResponse = (isNew: boolean, profile: Profile): string[] => [
-  'Preview response — sample data. Nothing was sent to a server and no task was created.',
   isNew
     ? profile === 'browser'
       ? 'Outpost would open a supervised browser session, capture the current page state, and propose each navigation step for approval before acting. The Control mode select above decides which steps run without asking.'
       : profile === 'operations'
-        ? 'Outpost would plan the work across preview-server, list every command it intends to run, and pause for approval when Control mode requires it. Output appears as plain text above.'
+        ? 'Outpost would plan the work across the selected sample server, list every command it intends to run, and pause for approval when Control mode requires it. Output appears as plain text above.'
         : profile === 'research'
           ? 'Outpost would gather the sources you point it at, summarize findings in plain text, and propose follow-up work — without opening any network connection in this preview.'
           : profile === 'chat'
             ? 'Outpost would keep this conversational: plain text replies with an occasional proposed action for approval, like the sample transcript.'
             : 'Outpost would draft a plan: check the failing tests, propose a patch as a pending action for your approval, and stop for review before writing any file. The Control mode select above decides which steps can run without asking.'
-    : 'Outpost would re-run the failed checks, compare the build log with the last successful run, and propose the lockfile refresh as a pending action. You approve each step before it executes.',
+    : 'Outpost would re-run the failed checks, compare the build log with the last successful run, and propose the lockfile refresh as a pending action. You approve each step before it runs — nothing has been sent.',
 ];
 
-const TERMINAL_LINES = [
-  '# preview-server · sample session (static, nothing executed)',
-  'outpost@preview-server:~$ outpost status',
-  'agent running · server preview-server · 2 tasks active (sample)',
-  'outpost@preview-server:~$ outpost task list --brief',
-  't-8f31  investigate the failed preview deploy   running   preview',
-  't-4a9c  summarize overnight logs                paused    preview',
-  'outpost@preview-server:~$ ▍',
+const terminalLines = (host: string) => [
+  `# ${host} · sample session (static, nothing executed)`,
+  `outpost@${host}:~$ outpost status`,
+  `agent running · server ${host} · 2 tasks active (sample)`,
+  `outpost@${host}:~$ outpost task list --brief`,
+  't-8f31  investigate the failed preview deploy    running   preview',
+  't-4a9c  summarize overnight logs                 paused    preview',
+  `outpost@${host}:~$ ▍`,
 ];
 
 const terminalLineClass = (line: string) =>
@@ -170,7 +177,6 @@ function OutpostMessage({ message }: { message: PreviewMessage }) {
         <span>{message.at}</span>
       </div>
       <div className="composer-review-reply-content">
-        <p className="composer-review-preview-note">Preview response · sample data · nothing was sent</p>
         {message.paragraphs.map(paragraph => (
           <p className="composer-review-text" key={paragraph.slice(0, 24)}>{paragraph}</p>
         ))}
@@ -192,11 +198,14 @@ function Screen({ mode }: { mode: ComposerMode }) {
 
   const [profile, setProfile] = useState<Profile>('code');
   const [controlMode, setControlMode] = useState(CONTROL_MODES[0].value);
-  const [model, setModel] = useState(MODEL_OPTIONS[0].value);
+  const [model, setModel] = useState('ollama/glm-5.3-flash');
+  const [server, setServer] = useState(SERVERS[0].value);
+  const [paused, setPaused] = useState(false);
   const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState<PreviewMessage[]>(isNew ? [] : SEEDS);
   const [pending, setPending] = useState(false);
-  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(() => new URLSearchParams(location.search).get('terminal') === 'open');
+  const [terminalHelp, setTerminalHelp] = useState(false);
   const [sessionOpen, setSessionOpen] = useState(true);
   const [rebootOpen, setRebootOpen] = useState(false);
   const [rebootConfirm, setRebootConfirm] = useState('');
@@ -250,6 +259,9 @@ function Screen({ mode }: { mode: ComposerMode }) {
     });
   };
 
+  const serverEntry = SERVERS.find(item => item.value === server) ?? SERVERS[0];
+  const host = serverEntry.value;
+
   let content: ReactNode = null;
   if (messages.length) {
     content = (
@@ -278,34 +290,10 @@ function Screen({ mode }: { mode: ComposerMode }) {
   }
 
   return (
-    <div className={`composer-review composer-review-${mode}`}>
+    <div
+      className={`composer-review composer-review-${mode}${isNew && !messages.length ? ' composer-review-center' : ''}`}
+    >
       <div className="composer-review-column">
-        <header className="composer-review-topbar">
-          <div className="composer-review-identity">
-            <OutpostMark />
-            <div className="composer-review-identity-text">
-              <strong>{isNew ? 'New task' : `Preview task · ${SAMPLE_TASK_TITLE}`}</strong>
-              <small>
-                {isNew
-                  ? 'Offline preview — profiles and controls are simulated'
-                  : 'Sample conversation — plain text, nothing is live'}
-              </small>
-            </div>
-            <Badge>Preview</Badge>
-          </div>
-          <div className="composer-review-topbar-actions">
-            <IconButton
-              id="composer-review-terminal-toggle"
-              label="Terminal (sample session)"
-              aria-expanded={terminalOpen}
-              aria-controls="composer-review-terminal"
-              onClick={() => setTerminalOpen(open => !open)}
-            >
-              <SquareTerminal size={18} />
-            </IconButton>
-          </div>
-        </header>
-
         <div className="composer-review-body" ref={bodyRef}>{content}</div>
 
         <div className="composer-review-dock">
@@ -325,6 +313,42 @@ function Screen({ mode }: { mode: ComposerMode }) {
               ))}
             </div>
           )}
+          <div className="composer-review-context">
+            <div className="composer-review-server">
+              <span
+                className={`composer-review-server-dot${serverEntry.connected ? ' is-ok' : ''}`}
+                aria-hidden="true"
+              />
+              <span className="composer-review-server-name">{serverEntry.label}</span>
+              <ChevronDown size={12} aria-hidden="true" />
+              <select
+                aria-label="Server"
+                value={server}
+                onChange={(event: ChangeEvent<HTMLSelectElement>) => {
+                  const { value } = event.currentTarget;
+                  setServer(value);
+                  notify(`Preview: server switching is simulated. ${optionLabel(SERVERS, value)} is a sample server; only text in this window changes.`);
+                }}
+              >
+                {SERVERS.map(item => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+            </div>
+            <span className="composer-review-connection" role="status" data-connected={serverEntry.connected}>
+              <span className="composer-review-connection-dot" aria-hidden="true" />
+              {serverEntry.connected ? 'Connected' : 'Not connected (sample)'}
+            </span>
+            <IconButton
+              id="composer-review-terminal-toggle"
+              label="Terminal (sample session)"
+              aria-expanded={terminalOpen}
+              aria-controls="composer-review-terminal"
+              onClick={() => setTerminalOpen(open => !open)}
+            >
+              <SquareTerminal size={18} />
+            </IconButton>
+          </div>
           <div className="composer-review-composer">
             <textarea
               ref={textareaRef}
@@ -354,6 +378,25 @@ function Screen({ mode }: { mode: ComposerMode }) {
               />
               <IconButton label="Attach file (preview)" onClick={() => fileInputRef.current?.click()}>
                 <Plus size={18} />
+              </IconButton>
+              {!isNew && (
+                <IconButton
+                  label={paused ? 'Resume task (preview)' : 'Pause task (preview)'}
+                  onClick={() => {
+                    setPaused(value => !value);
+                    notify(paused
+                      ? 'Preview: task resumed (sample only — nothing was sent).'
+                      : 'Preview: task paused (sample only — nothing was sent).');
+                  }}
+                >
+                  {paused ? <Play size={18} /> : <Pause size={18} />}
+                </IconButton>
+              )}
+              <IconButton
+                label="Files & changes (preview)"
+                onClick={() => notify('Preview: “Files & changes” opens here in the app — 1 screenshot and deploy.log so far (sample).')}
+              >
+                <Files size={18} />
               </IconButton>
               <div className="composer-review-cell composer-review-cell-permission">
                 <SelectField
@@ -402,6 +445,7 @@ function Screen({ mode }: { mode: ComposerMode }) {
           </div>
         </div>
 
+      </div>
         {terminalOpen && (
           <section
             id="composer-review-terminal"
@@ -417,11 +461,12 @@ function Screen({ mode }: { mode: ComposerMode }) {
           >
             <div className="composer-review-terminal-header">
               <div className="composer-review-terminal-identity">
-                <SquareTerminal size={17} aria-hidden="true" />
+                <SquareTerminal size={18} aria-hidden="true" />
                 <strong>Terminal</strong>
+                <span className="composer-review-terminal-dot" data-connected={sessionOpen} role="img" aria-label={sessionOpen ? 'Shell connected (preview)' : 'Shell disconnected (preview)'} title={sessionOpen ? 'Connected · sample session' : 'Disconnected · sample session'} />
                 <div className="composer-review-terminal-host">
-                  <span>{SAMPLE_HOST} · {sessionOpen ? 'sample session' : 'sample session closed'}</span>
-                  <small>Static preview — no SSH connection is open</small>
+                  <span>outpost@{host}</span>
+                  <small><span>{serverEntry.label}</span><span>SSH · port 22</span></small>
                 </div>
               </div>
               <div className="composer-review-terminal-actions">
@@ -434,42 +479,34 @@ function Screen({ mode }: { mode: ComposerMode }) {
                       : 'Preview: reconnect simulated. No real connection exists.');
                   }}
                 >
-                  {sessionOpen ? 'Disconnect (preview)' : 'Reconnect (preview)'}
+                  <Unplug size={16} />{sessionOpen ? 'Disconnect' : 'Reconnect'}
                 </Button>
-                <Button variant="danger" onClick={() => setRebootOpen(true)}>Reboot server…</Button>
+                <Button variant="danger" onClick={() => setRebootOpen(true)}><Power size={16} />Reboot server…</Button>
+                <IconButton label="Terminal help" onClick={() => setTerminalHelp(true)}><CircleHelp size={18} /></IconButton>
                 <IconButton label="Close terminal" onClick={closeTerminal}>
                   <Minus size={18} />
                 </IconButton>
               </div>
             </div>
-            <p className="composer-review-terminal-state" role="status">
-              {sessionOpen
-                ? 'Sample shell connected — output is a static snapshot.'
-                : 'Preview: disconnect simulated. Sample output retained; no session ever existed.'}
-            </p>
-            <div className="composer-review-terminal-frame">
+            <div className="composer-review-terminal-frame" data-connected={sessionOpen}>
               <pre
                 className="composer-review-screen"
                 tabIndex={0}
                 aria-label="Terminal output preview (static sample)"
               >
-                {TERMINAL_LINES.map((line, index) => (
+                {terminalLines(host).map((line, index) => (
                   <span key={index} className={terminalLineClass(line)}>{line}</span>
                 ))}
               </pre>
-              <div className="composer-review-terminal-footer">
-                <span>Preview · UTF-8</span>
-                <span>Sample output only — no shell, SSH or network activity exists.</span>
-                <span>Keyboard shortcuts inactive in preview</span>
-              </div>
+
             </div>
           </section>
         )}
-      </div>
+      {terminalHelp && <Modal title="Terminal shortcuts" onClose={() => setTerminalHelp(false)}><div className="stack"><p><strong>Escape</strong> collapses the terminal. The shell stays open until you disconnect.</p><p><strong>Control C</strong> interrupts a command. <strong>Command V</strong> pastes into the shell.</p><p className="muted small">This is a design preview with static sample output. No SSH connection, shell command or server reboot is performed.</p><Button onClick={() => setTerminalHelp(false)}>Done</Button></div></Modal>}
 
       {rebootOpen && (
         <Modal
-          title={`Reboot ${SAMPLE_HOST}? (preview)`}
+          title={`Reboot ${serverEntry.label}? (preview)`}
           onClose={() => {
             setRebootOpen(false);
             setRebootConfirm('');
@@ -482,7 +519,7 @@ function Screen({ mode }: { mode: ComposerMode }) {
               after verifying a changed boot ID; a requested or uncertain reboot is never reported as completed.
             </p>
             <Field
-              label={`Type “${SAMPLE_HOST}” to confirm, as you would in the app`}
+              label={`Type “${host}” to confirm, as you would in the app`}
               value={rebootConfirm}
               onChange={(event: ChangeEvent<HTMLInputElement>) => setRebootConfirm(event.target.value)}
             />
@@ -499,7 +536,7 @@ function Screen({ mode }: { mode: ComposerMode }) {
               <Button
                 type="button"
                 variant="danger"
-                disabled={rebootConfirm.trim() !== SAMPLE_HOST}
+                disabled={rebootConfirm.trim() !== host}
                 onClick={() => {
                   setRebootOpen(false);
                   setRebootConfirm('');

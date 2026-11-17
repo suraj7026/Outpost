@@ -1,0 +1,364 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
+import { Ledger } from '../core/ledger.js';
+import { Coordinator } from '../gateway/coordinator.js';
+import type { Action, Policy } from '../policy/trust.js';
+import type { RecordValue } from '../core/contracts.js';
+import { WorkerClient } from '../pi-worker/client.js';
+import { outpostSystemPrompt } from '../pi-adapter/system-prompt.js';
+import { Schedule } from './scheduler.js';
+
+const names = ['automation.list', 'automation.save', 'automation.set_paused'] as const;
+const AutomationRecord = z.strictObject({ kind: z.literal('automation'), id: z.string(), revision: z.number().int().positive(), data: Schedule, updatedAt: z.string() });
+const AutomationPage = z.strictObject({ serverTime: z.number(), automations: z.array(AutomationRecord), total: z.number().int().nonnegative(), hasMore: z.boolean() });
+const schedule = (overrides: Partial<Schedule> = {}) => ({
+  name: 'Inspect service', timezone: 'UTC', nextAt: 1000, intervalMs: 60000, missed: 'coalesce' as const,
+  task: { goal: 'Inspect service health', profile: 'operations' as const }, ...overrides,
+});
+
+function fixture(mode: Policy['mode'] = 'full_control', options: ConstructorParameters<typeof Coordinator>[2] = {}) {
+  const root = mkdtempSync(join(tmpdir(), 'outpost-automation-tools-'));
+  const db = new Ledger(join(root, 'ledger.sqlite'));
+  const coordinator = new Coordinator(db, root, options);
+  const task = coordinator.tasks.create(randomUUID(), { goal: 'Manage service automations', profile: 'operations', mode });
+  const gate = coordinator.gate(task.id);
+  return {
+    db, coordinator, task, gate,
+    propose: (name: string, input: unknown) => gate.propose(task.id, name, input),
+    approve(action: RecordValue<Action>) {
+      return gate.decide(action.id, action.revision, action.data.nonce, action.data.actionDigest, 'approve', randomUUID());
+    },
+    async run(name: string, input: unknown) {
+      const action = await gate.propose(task.id, name, input);
+      const observed = await gate.dispatch(action.id);
+      assert.equal(observed.data.state, 'succeeded', JSON.stringify(observed.data.result));
+      return observed.data.result;
+    },
+    async rejects(name: string, input: unknown) {
+      assert.ok(gate.catalogue().some(tool => tool.name === name), `${name} must be registered before testing validation`);
+      const cursor = db.cursor();
+      await assert.rejects(gate.propose(task.id, name, input));
+      assert.equal(db.cursor(), cursor, 'Rejected input must not create an action or mutate records');
+    },
+    close() { coordinator.live.close(); db.close(); rmSync(root, { recursive: true, force: true }); },
+  };
+}
+
+test('automation tools expose descriptions, effects and authoritative JSON input schemas through Coordinator', () => {
+  const f = fixture();
+  try {
+    const catalogue = f.gate.catalogue();
+    assert.deepEqual(f.coordinator.query('tools', { taskId: f.task.id }), catalogue);
+    for (const name of names) {
+      const tool = catalogue.find(item => item.name === name);
+      assert.ok(tool, `${name} must be registered`);
+      assert.ok(tool.description?.trim(), `${name} needs a description`);
+      assert.deepEqual(tool.effects, [name === 'automation.list' ? 'automation.read' : 'automation.write']);
+      assert.ok(tool.inputSchema);
+      assert.equal(tool.inputSchema.type, 'object');
+      assert.equal(tool.inputSchema.additionalProperties, false);
+      const properties = z.record(z.string(), z.unknown()).parse(tool.inputSchema.properties);
+      const property = (key: string) => z.record(z.string(), z.unknown()).parse(properties[key]);
+      if (name === 'automation.list') {
+        assert.deepEqual(Object.keys(properties).sort(), ['automationId', 'limit', 'offset']);
+        assert.equal(property('automationId').type, 'string');
+        assert.equal(property('limit').type, 'integer');
+        assert.equal(property('limit').minimum, 1); assert.equal(property('limit').maximum, 100); assert.equal(property('limit').default, 50);
+        assert.equal(property('offset').type, 'integer'); assert.equal(property('offset').minimum, 0); assert.equal(property('offset').default, 0);
+      } else {
+        const required = z.array(z.string()).parse(tool.inputSchema.required);
+        assert.deepEqual(required.sort(), (name === 'automation.save' ? ['automationId', 'expectedRevision', 'schedule'] : ['automationId', 'expectedRevision', 'paused']).sort());
+        assert.equal(property('automationId').type, 'string');
+        assert.equal(property('expectedRevision').type, 'integer');
+        assert.equal(property('expectedRevision').minimum, name === 'automation.save' ? 0 : 1);
+        if (name === 'automation.save') {
+          assert.equal(property('automationId').minLength, 1); assert.equal(property('automationId').maxLength, 200);
+          assert.equal(property('schedule').type, 'object');
+        } else assert.equal(property('paused').type, 'boolean');
+      }
+    }
+  } finally { f.close(); }
+});
+
+test('system prompt explicitly teaches automation tools and fixed-interval rather than calendar or implicit OS cron scheduling', () => {
+  const prompt = outpostSystemPrompt([]);
+  for (const name of names) assert.ok(prompt.includes(name), `${name} must be explained, not merely serialized in the catalogue`);
+  assert.match(prompt, /fixed[- ]interval/i);
+  assert.match(prompt, /calendar/i);
+  assert.match(prompt, /cron/i);
+  assert.match(prompt, /(?:OS|operating.system|system)[^\n]*cron|crontab/i);
+  assert.match(prompt, /explicit/i);
+});
+
+test('save, list, update, pause and resume reuse the UI automation records and preserve a non-UUID id', async () => {
+  const f = fixture();
+  try {
+    const automationId = 'service-health/every-minute';
+    const saved = AutomationRecord.parse(await f.run('automation.save', { automationId, expectedRevision: 0, schedule: schedule() }));
+    assert.equal(saved.id, automationId); assert.equal(saved.revision, 1);
+    assert.equal(saved.data.task.mode, 'ask_permission'); assert.equal(saved.data.paused, false);
+    assert.deepEqual(saved, f.db.need('automation', automationId));
+    const snapshot = z.object({ records: z.array(z.object({ kind: z.string() }).passthrough()) }).parse(f.coordinator.query('snapshot', {}));
+    assert.deepEqual(snapshot.records.filter(record => record.kind === 'automation'), [saved]);
+    const before = Date.now();
+    const page = AutomationPage.parse(await f.run('automation.list', { automationId }));
+    assert.ok(page.serverTime >= before && page.serverTime <= Date.now());
+    assert.deepEqual(page.automations, [saved]); assert.equal(page.total, 1); assert.equal(page.hasMore, false);
+    const updated = AutomationRecord.parse(await f.run('automation.save', { automationId, expectedRevision: 1, schedule: { ...saved.data, name: 'Updated health check', intervalMs: 120000 } }));
+    assert.equal(updated.id, automationId); assert.equal(updated.revision, 2); assert.equal(updated.data.name, 'Updated health check');
+    assert.equal(updated.data.intervalMs, 120000); assert.equal(f.db.list('automation').length, 1);
+    const paused = AutomationRecord.parse(await f.run('automation.set_paused', { automationId, expectedRevision: 2, paused: true }));
+    assert.equal(paused.revision, 3); assert.deepEqual(paused.data, { ...updated.data, paused: true });
+    const resumed = AutomationRecord.parse(await f.run('automation.set_paused', { automationId, expectedRevision: 3, paused: false }));
+    assert.equal(resumed.revision, 4); assert.deepEqual(resumed.data, updated.data);
+    assert.deepEqual(resumed, f.db.need('automation', automationId));
+  } finally { f.close(); }
+});
+
+test('save executes through the existing Scheduler inside a Ledger transaction, never during proposal', async t => {
+  const f = fixture();
+  try {
+    const save = f.coordinator.scheduler.save.bind(f.coordinator.scheduler);
+    const delegated = t.mock.method(f.coordinator.scheduler, 'save', (key: string, expected: number, input: unknown) => {
+      assert.equal(f.db.db.isTransaction, true, 'Execute must validate and save in the same transaction');
+      return save(key, expected, input);
+    });
+    const action = await f.propose('automation.save', { automationId: 'transactional-save', expectedRevision: 0, schedule: schedule() });
+    assert.equal(delegated.mock.callCount(), 0);
+    const observed = await f.gate.dispatch(action.id);
+    assert.equal(observed.data.state, 'succeeded', JSON.stringify(observed.data.result));
+    assert.equal(delegated.mock.callCount(), 1);
+    assert.deepEqual(AutomationRecord.parse(observed.data.result), f.db.need('automation', 'transactional-save'));
+  } finally { f.close(); }
+});
+
+test('list defaults to 50 records, paginates without overlap, filters by id and never changes automations', async () => {
+  const f = fixture();
+  try {
+    for (let index = 0; index < 52; index++) f.coordinator.scheduler.save(`routine-${index}`, 0, schedule());
+    const records = f.db.list<Schedule>('automation');
+    const first = AutomationPage.parse(await f.run('automation.list', {}));
+    assert.equal(first.automations.length, 50); assert.equal(first.total, 52); assert.equal(first.hasMore, true);
+    const last = AutomationPage.parse(await f.run('automation.list', { offset: 50 }));
+    assert.equal(last.automations.length, 2); assert.equal(last.total, 52); assert.equal(last.hasMore, false);
+    assert.deepEqual(new Set([...first.automations, ...last.automations].map(row => row.id)), new Set(records.map(row => row.id)));
+    const limited = AutomationPage.parse(await f.run('automation.list', { limit: 1, offset: 1 }));
+    assert.deepEqual(limited.automations, first.automations.slice(1, 2)); assert.equal(limited.total, 52); assert.equal(limited.hasMore, true);
+    const all = AutomationPage.parse(await f.run('automation.list', { limit: 100, offset: 0 }));
+    assert.equal(all.automations.length, 52); assert.equal(all.hasMore, false);
+    const pastEnd = AutomationPage.parse(await f.run('automation.list', { offset: 52 }));
+    assert.deepEqual(pastEnd.automations, []); assert.equal(pastEnd.total, 52); assert.equal(pastEnd.hasMore, false);
+    const missing = AutomationPage.parse(await f.run('automation.list', { automationId: 'missing' }));
+    assert.deepEqual(missing.automations, []); assert.equal(missing.total, 0); assert.equal(missing.hasMore, false);
+    const selected = AutomationPage.parse(await f.run('automation.list', { automationId: records[0]!.id }));
+    assert.deepEqual(selected.automations, [records[0]]); assert.equal(selected.total, 1); assert.equal(selected.hasMore, false);
+    assert.deepEqual(f.db.list('automation'), records);
+  } finally { f.close(); }
+});
+
+test('tool-created automations run through the existing Scheduler, inherit ask_permission and honor pause/resume', async () => {
+  const f = fixture();
+  try {
+    const automationId = 'scheduled-health';
+    await f.run('automation.save', { automationId, expectedRevision: 0, schedule: schedule({ paused: true }) });
+    assert.deepEqual(f.coordinator.scheduler.tick(1000), []);
+    await f.run('automation.set_paused', { automationId, expectedRevision: 1, paused: false });
+    const started = f.coordinator.scheduler.tick(181000);
+    assert.equal(started.length, 1); assert.deepEqual(f.coordinator.scheduler.tick(181000), []);
+    const child = f.db.need('task', started[0]!);
+    assert.equal(child.data.goal, 'Inspect service health'); assert.equal(child.data.profile, 'operations');
+    assert.equal(f.db.need('policy', child.id).data.mode, 'ask_permission');
+    assert.equal(f.db.list('task').length, 2);
+    assert.equal(f.db.list('occurrence')[0]?.data.automationId, automationId);
+    const stored = f.db.need<Schedule>('automation', automationId);
+    assert.equal(stored.revision, 3); assert.equal(stored.data.nextAt, 241000);
+    const page = AutomationPage.parse(await f.run('automation.list', { automationId }));
+    assert.deepEqual(page.automations, [stored]);
+  } finally { f.close(); }
+});
+
+test('ask_permission save, pause and resume stay pending and cannot write until approved', async () => {
+  const f = fixture('ask_permission');
+  try {
+    const automationId = 'owner-approved';
+    for (const [name, input] of [
+      ['automation.save', { automationId, expectedRevision: 0, schedule: schedule() }],
+      ['automation.set_paused', { automationId, expectedRevision: 1, paused: true }],
+      ['automation.set_paused', { automationId, expectedRevision: 2, paused: false }],
+    ] as const) {
+      const before = f.db.list('automation');
+      const action = await f.propose(name, input);
+      assert.equal(action.data.state, 'pending'); assert.deepEqual(action.data.effects, ['automation.write']);
+      assert.deepEqual(f.db.list('automation'), before);
+      await assert.rejects(f.gate.dispatch(action.id), { code: 'not_authorized' });
+      assert.deepEqual(f.db.list('automation'), before);
+      f.approve(action);
+      assert.deepEqual(f.db.list('automation'), before, 'Approval alone must not write the schedule');
+      const observed = await f.gate.dispatch(action.id);
+      assert.equal(observed.data.state, 'succeeded');
+      assert.equal(AutomationRecord.parse(observed.data.result).revision, input.expectedRevision + 1);
+    }
+  } finally { f.close(); }
+});
+
+test('stale save and pause revisions, and updates to missing ids, are rejected before proposal', async () => {
+  const f = fixture();
+  try {
+    f.coordinator.scheduler.save('existing', 0, schedule());
+    const before = f.db.list('automation');
+    for (const expectedRevision of [0, 2]) await f.rejects('automation.save', { automationId: 'existing', expectedRevision, schedule: schedule() });
+    await f.rejects('automation.save', { automationId: 'missing', expectedRevision: 1, schedule: schedule() });
+    await f.rejects('automation.set_paused', { automationId: 'existing', expectedRevision: 2, paused: true });
+    await f.rejects('automation.set_paused', { automationId: 'missing', expectedRevision: 1, paused: true });
+    assert.deepEqual(f.db.list('automation'), before);
+  } finally { f.close(); }
+});
+
+for (const operation of ['create', 'update', 'pause', 'resume'] as const) {
+  for (const phase of ['after proposal', 'after approval'] as const) test(`${operation} revalidates revisions ${phase}; dispatch becomes unknown without overwriting newer data`, async () => {
+    const f = fixture(phase === 'after approval' ? 'ask_permission' : 'full_control');
+    try {
+      const automationId = 'concurrent-schedule';
+      const existing = operation === 'create' ? undefined : f.coordinator.scheduler.save(automationId, 0, schedule({ paused: operation === 'resume' }));
+      const name = operation === 'create' || operation === 'update' ? 'automation.save' : 'automation.set_paused';
+      const input = name === 'automation.save'
+        ? { automationId, expectedRevision: existing?.revision ?? 0, schedule: schedule({ name: 'Proposed value' }) }
+        : { automationId, expectedRevision: existing!.revision, paused: operation === 'pause' };
+      const action = await f.propose(name, input);
+      if (phase === 'after approval') f.approve(action);
+      const concurrent = f.coordinator.scheduler.save(automationId, existing?.revision ?? 0, schedule({ name: 'Concurrent owner edit', paused: operation === 'resume' }));
+      const observed = await f.gate.dispatch(action.id);
+      assert.equal(observed.data.state, 'unknown');
+      assert.deepEqual(f.db.need('automation', automationId), concurrent);
+      assert.equal(f.db.list('automation').length, 1);
+    } finally { f.close(); }
+  });
+}
+
+test('invalid list/save/pause inputs fail at parse time without action or automation writes', async () => {
+  const f = fixture();
+  try {
+    for (const input of [null, [], { extra: true }, { automationId: 1 }, { limit: 0 }, { limit: 101 }, { limit: 1.5 }, { limit: '50' }, { offset: -1 }, { offset: 0.5 }, { offset: '0' }]) await f.rejects('automation.list', input);
+    const valid = { automationId: 'valid', expectedRevision: 0, schedule: schedule() };
+    for (const input of [null, [], {}, { ...valid, automationId: '' }, { ...valid, automationId: 'a'.repeat(201) }, { ...valid, expectedRevision: -1 }, { ...valid, expectedRevision: 0.5 }, { ...valid, expectedRevision: '0' }, { ...valid, extra: true }]) await f.rejects('automation.save', input);
+    for (const invalid of [
+      { timezone: 'Not/A_Real_Zone' }, { intervalMs: 59999 }, { intervalMs: 60000.5 }, { intervalMs: '60000' },
+      { nextAt: -1 }, { nextAt: 0.5 }, { missed: 'replay' }, { cron: '* * * * *' }, { cronExpression: '* * * * *' },
+      { task: { goal: 'Inspect', profile: 'operations', mode: 'root' } },
+      { task: { goal: 'Inspect', profile: 'operations', model: 'legacy', modelRef: { providerId: 'openai', modelId: 'fixture' } } },
+    ]) await f.rejects('automation.save', { ...valid, schedule: { ...schedule(), ...invalid } });
+    f.coordinator.scheduler.save('existing', 0, schedule());
+    const pause = { automationId: 'existing', expectedRevision: 1, paused: true };
+    for (const input of [null, [], {}, { ...pause, expectedRevision: 0 }, { ...pause, expectedRevision: -1 }, { ...pause, expectedRevision: 1.5 }, { ...pause, expectedRevision: '1' }, { ...pause, paused: 'true' }, { ...pause, extra: true }]) await f.rejects('automation.set_paused', input);
+    assert.equal(f.db.list('action').length, 0); assert.equal(f.db.list('automation').length, 1);
+  } finally { f.close(); }
+});
+
+test('valid boundary ids, one-shot schedules and IANA timezones are accepted', async () => {
+  const f = fixture();
+  try {
+    for (const automationId of ['a', 'a'.repeat(200)]) {
+      const saved = AutomationRecord.parse(await f.run('automation.save', { automationId, expectedRevision: 0, schedule: schedule({ timezone: 'America/New_York', intervalMs: null }) }));
+      assert.equal(saved.id, automationId); assert.equal(saved.data.timezone, 'America/New_York'); assert.equal(saved.data.intervalMs, null);
+    }
+    assert.equal(f.coordinator.scheduler.tick(1000).length, 2);
+    assert.deepEqual(f.coordinator.scheduler.tick(1000), []);
+    assert.ok(f.db.list<Schedule>('automation').every(row => row.data.paused));
+  } finally { f.close(); }
+});
+
+for (const sourceMode of ['ask_permission', 'auto', 'full_control'] as const) test(`${sourceMode} cannot save or resume a more permissive child, but can pause it`, async () => {
+  const f = fixture(sourceMode);
+  const rank = { ask_permission: 0, auto: 1, full_control: 2 };
+  try {
+    for (const childMode of ['ask_permission', 'auto', 'full_control'] as const) {
+      const automationId = `child-${childMode}`;
+      const child = schedule({ task: { goal: 'Inspect', profile: 'operations', mode: childMode } });
+      if (rank[childMode] > rank[sourceMode]) {
+        await f.rejects('automation.save', { automationId, expectedRevision: 0, schedule: child });
+        await f.rejects('automation.save', { automationId, expectedRevision: 0, schedule: { ...child, paused: true } });
+        f.coordinator.scheduler.save(automationId, 0, child);
+        await f.rejects('automation.save', { automationId, expectedRevision: 1, schedule: child });
+      } else {
+        const action = await f.propose('automation.save', { automationId, expectedRevision: 0, schedule: child });
+        if (action.data.state === 'pending') f.approve(action);
+        assert.equal((await f.gate.dispatch(action.id)).data.state, 'succeeded');
+      }
+      const pause = await f.propose('automation.set_paused', { automationId, expectedRevision: 1, paused: true });
+      if (pause.data.state === 'pending') f.approve(pause);
+      assert.equal((await f.gate.dispatch(pause.id)).data.state, 'succeeded');
+      assert.equal(f.db.need<Schedule>('automation', automationId).data.paused, true);
+      const resume = { automationId, expectedRevision: 2, paused: false };
+      if (rank[childMode] > rank[sourceMode]) await f.rejects('automation.set_paused', resume);
+      else {
+        const action = await f.propose('automation.set_paused', resume);
+        if (action.data.state === 'pending') f.approve(action);
+        assert.equal((await f.gate.dispatch(action.id)).data.state, 'succeeded');
+      }
+    }
+  } finally { f.close(); }
+});
+
+test('omitting child mode defaults to ask_permission even for an ask_permission source', async () => {
+  const f = fixture('ask_permission');
+  try {
+    const action = await f.propose('automation.save', { automationId: 'default-mode', expectedRevision: 0, schedule: schedule() });
+    f.approve(action);
+    const observed = await f.gate.dispatch(action.id);
+    assert.equal(observed.data.state, 'succeeded');
+    assert.equal(AutomationRecord.parse(observed.data.result).data.task.mode, 'ask_permission');
+  } finally { f.close(); }
+});
+
+for (const configured of [false, true]) test(`provider-qualified modelRef requires a configured worker (${configured})`, async () => {
+  const f = fixture('full_control', configured ? { worker: new WorkerClient('http://127.0.0.1:1', 'fixture-worker-token'.repeat(2)) } : {});
+  try {
+    const modelRef = { providerId: 'openai', modelId: 'fixture' };
+    const input = { automationId: 'qualified-model', expectedRevision: 0, schedule: schedule({ task: { goal: 'Inspect', profile: 'operations', mode: 'ask_permission', modelRef } }) };
+    if (!configured) await f.rejects('automation.save', input);
+    else {
+      const saved = AutomationRecord.parse(await f.run('automation.save', input));
+      assert.deepEqual(saved.data.task.modelRef, modelRef);
+      const started = f.coordinator.scheduler.tick(1000);
+      assert.equal(started.length, 1);
+      const child = f.db.need('task', started[0]!);
+      assert.equal(child.data.provider, modelRef.providerId); assert.equal(child.data.model, modelRef.modelId);
+    }
+  } finally { f.close(); }
+});
+
+for (const hold of ['recovery', 'invalid recovery', 'draining', 'holding', 'prepared'] as const) {
+  for (const phase of ['before proposal', 'after proposal'] as const) test(`${hold} hold ${phase} blocks all automation writes without changing records`, async () => {
+    const f = fixture();
+    try {
+      f.coordinator.scheduler.save('existing', 0, schedule());
+      f.coordinator.scheduler.save('paused', 0, schedule({ paused: true }));
+      const writes = [
+        ['automation.save', { automationId: 'new', expectedRevision: 0, schedule: schedule() }],
+        ['automation.save', { automationId: 'existing', expectedRevision: 1, schedule: schedule({ name: 'Changed' }) }],
+        ['automation.set_paused', { automationId: 'existing', expectedRevision: 1, paused: true }],
+        ['automation.set_paused', { automationId: 'paused', expectedRevision: 1, paused: false }],
+      ] as const;
+      const proposals: RecordValue<Action>[] = [];
+      if (phase === 'after proposal') for (const [name, input] of writes) proposals.push(await f.propose(name, input));
+      if (hold === 'recovery') f.db.put('recovery', 'server', 0, { dispatchEnabled: false });
+      else if (hold === 'invalid recovery') f.db.put('recovery', 'server', 0, { dispatchEnabled: 'true' });
+      else f.db.put('runtime_update', 'server', 0, { state: hold });
+      const before = f.db.list('automation');
+      if (phase === 'before proposal') for (const [name, input] of writes) await f.rejects(name, input);
+      else for (const action of proposals) {
+        const observed = await f.gate.dispatch(action.id);
+        assert.equal(observed.data.state, 'unknown');
+        assert.deepEqual(f.db.list('automation'), before);
+      }
+      assert.deepEqual(f.db.list('automation'), before);
+      const listed = AutomationPage.parse(await f.run('automation.list', {}));
+      assert.deepEqual(listed.automations, before, 'Inspection remains available during a write hold');
+    } finally { f.close(); }
+  });
+}

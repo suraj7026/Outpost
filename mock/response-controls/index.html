@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Outpost · Response controls mock</title>
+<style>
+:root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #e7e7e9; background: #161719; --muted: #a1a2a6; --green: #a9bfac; --strip: #101112; --composer: #252527; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, textarea { font: inherit; }
+button { color: inherit; cursor: pointer; }
+button:disabled { cursor: default; }
+button:focus-visible, textarea:focus-visible { outline: 2px solid var(--green); outline-offset: 5px; }
+[hidden] { display: none !important; }
+svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+main { max-width: 872px; padding: 52px 40px 40px; margin: auto; }
+header { margin-bottom: 32px; }
+h1 { font-size: 24px; font-weight: 550; letter-spacing: -.6px; margin: 0 0 10px; }
+header p { color: var(--muted); font-size: 14px; line-height: 1.6; margin: 0; }
+.presets { display: flex; gap: 8px; flex-wrap: wrap; }
+.presets button { background: transparent; border: 1px solid #37383b; border-radius: 8px; min-height: 38px; padding: 8px 13px; font-size: 13px; color: var(--muted); }
+.presets button[aria-pressed="true"] { background: #e1e2e4; color: #191a1c; border-color: #e1e2e4; }
+.stage { padding: 70px 0 32px; }
+.preview-label { display: flex; justify-content: space-between; gap: 16px; color: #85868c; font-size: 12px; margin: 0 14px 18px; }
+.composer-stack { max-width: 720px; margin: auto; }
+.strip { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 6px 12px 12px 18px; margin: 0 12px -6px; background: var(--strip); border-radius: 24px 24px 0 0; }
+.status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); min-width: 0; margin-left: auto; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: #cdb486; }
+.strip-stop { display: flex; align-items: center; gap: 7px; background: transparent; border: 0; border-radius: 7px; min-height: 36px; padding: 0 7px; font-size: 13px; color: #d58f93; }
+.strip-stop:hover { color: #e6a5a9; background: #2a1c1e; }
+.strip-stop svg { width: 12px; height: 12px; }
+.icon-button { display: grid; place-items: center; flex: none; height: 36px; width: 36px; padding: 0; border: 0; border-radius: 50%; color: var(--muted); background: transparent; }
+.jump { background: #27282a; }
+.icon-button:hover { color: #e7e7e9; background: #303134; }
+.composer { position: relative; background: var(--composer); border: 1px solid #2d2e31; border-radius: 28px; padding: 20px 20px 16px; }
+textarea { display: block; resize: none; width: 100%; height: 88px; padding: 0 2px; border: 0; background: transparent; color: #e7e7e9; font-size: 16px; line-height: 1.65; border-radius: 4px; }
+textarea::placeholder { color: #929398; }
+textarea:focus { outline: none; }
+textarea:focus-visible { outline: 1px solid #666b67; outline-offset: 5px; }
+.toolbar { display: flex; align-items: center; gap: 16px; margin-top: 8px; min-height: 44px; }
+.model { font-size: 14px; font-weight: 550; margin-left: auto; }
+.primary { position: relative; display: grid; place-items: center; height: 40px; width: 40px; flex: none; margin-left: 6px; border: 1px solid #46494a; border-radius: 50%; background: #303332; color: #e5ebe6; padding: 0; }
+.primary:disabled { color: #696b70; border-color: #303135; background: transparent; }
+.primary[data-action="send"]:not(:disabled) { background: #e7e7e9; color: #222325; border-color: #e7e7e9; }
+.primary[data-action="stop"] { background: #b83d42; border-color: #b83d42; color: #fff; }
+.primary[data-action="stop"] svg { width: 15px; height: 15px; fill: currentColor; stroke-width: 0; }
+.primary:not(:disabled):hover { filter: brightness(1.15); }
+
+.small-spinner { width: 14px; height: 14px; border: 1.5px solid #455148; border-top-color: #b9d1bd; border-right-color: #b9d1bd; border-radius: 50%; animation: spin 1.05s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .small-spinner { animation: none; } }
+.description { min-height: 106px; border-top: 1px solid #303135; padding: 24px 0 0; }
+h2 { font-size: 15px; font-weight: 550; margin: 0 0 9px; }
+.description p { margin: 0; font-size: 14px; line-height: 1.7; color: var(--muted); max-width: 660px; }
+.feedback { min-height: 24px; font-size: 12px; color: var(--green); margin: 18px 0 0; }
+.note { margin: 24px 0 0; padding-top: 20px; border-top: 1px solid #303135; font-size: 12px; line-height: 1.8; color: #97999e; }
+@media (max-width: 560px) { main { padding: 28px 16px; } .stage { padding-top: 42px; } .strip { gap: 5px; margin-inline: 8px; padding-left: 10px; padding-right: 8px; } .status { font-size: 12px; gap: 6px; } .strip-stop { padding-inline: 4px; } .composer { padding: 18px 16px; border-radius: 24px; } .model { font-size: 12px; } .toolbar { gap: 8px; } .preview-label { margin-inline: 4px; } }
+</style>
+</head>
+<body>
+<svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"><defs>
+<symbol id="arrow-up" viewBox="0 0 24 24"><path d="M12 20V4m-8 8 8-8 8 8"/></symbol>
+<symbol id="arrow-down" viewBox="0 0 24 24"><path d="M12 4v16m-8-8 8 8 8-8"/></symbol>
+<symbol id="square" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></symbol>
+<symbol id="terminal" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="m7 8 4 4-4 4m7 0h3"/></symbol>
+</defs></svg>
+<main>
+<header><h1>Response controls</h1><p>Interactive HTML mock · same composer, one activity indicator.<br>Try typing, clearing the input, and stopping the response.</p></header>
+<div class="presets" role="group" aria-label="Preview states">
+<button type="button" data-preset="empty" aria-pressed="true">Responding · empty</button>
+<button type="button" data-preset="draft" aria-pressed="false">Responding · typing</button>
+<button type="button" data-preset="idle" aria-pressed="false">Idle</button>
+<button type="button" data-preset="review" aria-pressed="false">Ready for review</button>
+</div>
+<section class="stage" aria-label="Composer preview">
+<div class="composer-stack">
+<div class="preview-label"><span>Outpost composer</span><span>Local simulation only</span></div>
+<div class="strip">
+<div class="status" role="status"><span class="status-dot" hidden aria-hidden="true"></span><span class="small-spinner" hidden aria-hidden="true"></span><span id="status-text">Responding</span></div>
+<button type="button" class="strip-stop" hidden aria-label="Stop response"><svg aria-hidden="true"><use href="#square"/></svg>Stop</button>
+<button type="button" class="icon-button terminal" aria-label="Terminal" title="Terminal"><svg aria-hidden="true"><use href="#terminal"/></svg></button>
+<button type="button" class="icon-button jump" aria-label="Jump to latest" title="Jump to latest — navigation only"><svg aria-hidden="true"><use href="#arrow-down"/></svg></button>
+</div>
+<form class="composer">
+<textarea aria-label="Message Outpost" placeholder="Ask a follow-up, or give Outpost the next step…"></textarea>
+<div class="toolbar"><span class="model">Ollama · deepseek-v4.1-flash</span><button type="button" class="primary" data-action="stop" aria-label="Stop response" title="Stop response"><svg aria-hidden="true"><use href="#square"/></svg></button></div>
+</form>
+</div>
+</section>
+<section class="description" aria-label="State explanation"><h2 id="state-title">Responding, with an empty chatbox</h2><p id="state-description">The send position becomes a red Stop button, without a ring. The same spinner appears beside Responding in the black strip whether the chatbox is empty or you are typing. Stop stays clickable.</p></section>
+<p class="feedback" role="status" aria-live="polite"></p>
+<p class="note">The responding spinner always stays in the black strip. Empty input: a red Stop button below. With a draft: Send below and Stop above. All actions here are simulated, with no server connection.</p>
+</main>
+<script>
+const input = document.querySelector('textarea');
+const primary = document.querySelector('.primary');
+const upperStop = document.querySelector('.strip-stop');
+
+const spinner = document.querySelector('.small-spinner');
+const dot = document.querySelector('.status-dot');
+const feedback = document.querySelector('.feedback');
+let state = 'running';
+function render() {
+  const draft = input.value.trim().length > 0;
+  const running = state === 'running';
+  const stop = running && !draft;
+  const preset = running ? draft ? 'draft' : 'empty' : state === 'review' ? 'review' : 'idle';
+  primary.dataset.action = stop ? 'stop' : 'send';
+  primary.disabled = !running && !draft;
+  primary.setAttribute('aria-label', stop ? 'Stop response' : 'Send message');
+  primary.title = stop ? 'Stop response' : draft ? 'Send message' : 'Type a message to send';
+  primary.querySelector('use').setAttribute('href', stop ? '#square' : '#arrow-up');
+  spinner.hidden = !running;
+  upperStop.hidden = !(running && draft);
+  dot.hidden = state !== 'review';
+  document.querySelector('#status-text').textContent = running ? 'Responding' : state === 'review' ? 'Ready for your review' : state === 'stopped' ? 'Response stopped' : 'Ready';
+  document.querySelectorAll('[data-preset]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.preset === preset)));
+  const copy = {
+    empty: ['Responding, with an empty chatbox', 'The send position becomes a red Stop button, without a ring. The same spinner appears beside Responding in the black strip whether the chatbox is empty or you are typing. Stop stays clickable.'],
+    draft: ['Responding, while you write', 'The bottom control is now Send. The activity spinner stays beside Responding in the black strip, with a separate Stop button. You can stop the current response without losing your draft. Jump to latest remains a navigation control.'],
+    idle: ['Not responding', 'No spinner in either location. The bottom control is Send: disabled while the chatbox is empty, enabled once you type. Stopping a response preserves anything you have written.'],
+    review: ['Ready for your review', 'The amber dot stays with the review status. It is not a running indicator, so neither location spins. The send button is available only when there is a message to send.']
+  };
+  document.querySelector('#state-title').textContent = copy[preset][0];
+  document.querySelector('#state-description').textContent = copy[preset][1];
+}
+function stopResponse() {
+  state = 'stopped';
+  feedback.textContent = input.value.trim() ? 'Simulation: response stopped. Your draft is preserved.' : 'Simulation: response stopped.';
+  const restoreFocus = document.activeElement === upperStop;
+  render();
+  if (restoreFocus || primary.disabled) input.focus();
+}
+function sendMessage() {
+  if (!input.value.trim()) return;
+  feedback.textContent = 'Simulation: message sent. A new response is running.';
+  input.value = '';
+  state = 'running';
+  render();
+  input.focus();
+}
+primary.addEventListener('click', () => primary.dataset.action === 'stop' ? stopResponse() : sendMessage());
+upperStop.addEventListener('click', stopResponse);
+input.addEventListener('input', () => { feedback.textContent = ''; render(); });
+input.addEventListener('keydown', event => {
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); sendMessage(); }
+});
+document.querySelector('form').addEventListener('submit', event => { event.preventDefault(); sendMessage(); });
+document.querySelectorAll('[data-preset]').forEach(button => button.addEventListener('click', () => {
+  const preset = button.dataset.preset;
+  state = preset === 'empty' || preset === 'draft' ? 'running' : preset;
+  input.value = preset === 'draft' ? 'Focus on the failing checks first.' : '';
+  feedback.textContent = '';
+  render();
+}));
+document.querySelector('.jump').addEventListener('click', () => { feedback.textContent = 'Simulation: jumped to the latest output. This button no longer carries running status.'; });
+document.querySelector('.terminal').addEventListener('click', () => { feedback.textContent = 'Terminal is unchanged in this proposal; no terminal connection is opened by this mock.'; });
+render();
+</script>
+</body>
+</html>

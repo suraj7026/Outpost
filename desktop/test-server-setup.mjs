@@ -103,6 +103,7 @@ function installFixture({ servers, direct, exportDirectory, noPendingRestart }) 
   };
   window.isTauri = true;
   window.__TAURI_INTERNALS__ = {
+    metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
     transformCallback: () => ++callback, unregisterCallback() {},
     async invoke(command, args = {}) {
       if (command.startsWith('plugin:') || ['set_sidebar_window_controls', 'set_sidebar_window_control_mode', 'set_sidebar_window_control_presentation'].includes(command)) return;
@@ -474,7 +475,7 @@ async function run(name, test, { width = 1440, colorScheme = 'dark' } = {}) {
       (async () => {
         await page.goto(origin);
         await page.getByRole('button', { name: 'Settings', exact: true }).click();
-        await page.locator('.settings-link-list a[href="#settings/servers"]').click();
+        await page.locator('.settings-link-list a[href="#machines"]').click();
         await page.getByRole('link', { name: 'Add server', exact: true }).click();
         await visible(dialogFor(page));
         check(await dialogFor(page).evaluate(element => element instanceof HTMLDialogElement && element.open && element.matches(':modal')), 'Add server auto-opens a real modal dialog');

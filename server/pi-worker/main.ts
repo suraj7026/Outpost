@@ -30,5 +30,8 @@ let closing = false;
 for (const signal of ['SIGINT','SIGTERM']) process.on(signal, () => {
   if (closing) return; closing = true;
   management.close();
-  void runs.close().finally(() => server.close(() => process.exit(0)));
+  void runs.close().then(
+      () => server.close(() => process.exit(0)),
+      () => { console.error('Native extension work did not confirm shutdown; retained session receipts require reconciliation.'); server.close(() => process.exit(1)); },
+    );
 });

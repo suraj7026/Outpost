@@ -2,6 +2,8 @@
 set -euo pipefail
 cd -- "$(dirname -- "$0")"
 node ../scripts/package-host-release.mjs
+node ../scripts/package-pi-update.mjs
+node ../scripts/sign-releases.mjs
 npx tauri build --bundles app "$@"
 app='src-tauri/target/release/bundle/macos/Outpost.app'
 # Local builds need a complete bundle seal, not just the Mach-O ad-hoc signature.

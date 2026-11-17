@@ -7,6 +7,7 @@ import App from "./App";
 import { AllChats, type ChatGroup } from "./ChatHistory";
 import SettingsWorkspace from "./SettingsWorkspace";
 import SharedMemory, { useSharedMemory } from "./SharedMemory";
+import { AutomaticUpdatesProvider } from "./AutomaticUpdates";
 
 export interface SavedEnvironment { environmentId: string; label: string; routes: string[]; activeRoute: string }
 export interface Metadata { version: 1; legacyMutationsRetired: boolean; selectedEnvironmentId: EnvironmentId; environments: Record<string, SavedEnvironment> }
@@ -117,20 +118,20 @@ export default function Environments() {
   const draftConnection = target && connections[ownerKey(target.environmentId)];
   const draftLabel = target?.label ?? "No server available";
   const openChat = (id: EnvironmentId, task: string) => { void select(id, task); };
-  const historyView = <AllChats groups={groups} open={openChat} />;
-  return <>
+  const historyView = <AllChats groups={groups} open={openChat} connections={connections} />;
+  return <AutomaticUpdatesProvider registry={registry} connections={connections}>
     {supervisors.map(owner => <Supervisor key={ownerKey(owner.environmentId)} id={owner.environmentId} route={owner.activeRoute} retired={owner.environmentId === null && registry.legacyMutationsRetired} publish={publish} />)}
     {connection && <EnvironmentContext.Provider value={connection}>
       <App key={`${navigation}:${ownerKey(selected)}:${registry.legacyMutationsRetired}`} connection={connection} initialTask={task}
         environmentNavigation={<div className="environment-navigation"><Server size={16} /><span>{label}</span><span className={`environment-status ${connection.connected ? "online" : ""}`} title={connection.connected ? "Connected" : "Offline"} />{error && <p role="alert">{error}</p>}</div>}
         draftConnection={draftConnection} draftLabel={draftLabel} connections={connections} sharedMemory={<SharedMemory memory={sharedMemory} />}
-        newTaskNavigation={<details className="new-task-server"><summary><Server size={16} />Run on {draftLabel}</summary><div role="group" aria-label="New task server">{draftOwners.map(owner => <button key={ownerKey(owner.environmentId)} onClick={event => {
+        newTaskNavigation={<details className="new-task-server"><summary aria-label={`Run on ${draftLabel}`}><span className={`environment-status ${draftConnection?.connected ? 'online' : ''}`} aria-hidden="true" />{draftLabel}</summary><div role="group" aria-label="New task server">{draftOwners.map(owner => <button key={ownerKey(owner.environmentId)} onClick={event => {
           setDraftOwner(owner.environmentId);
           event.currentTarget.closest("details")?.removeAttribute("open");
         }}>{owner.label}</button>)}</div></details>}
-        renderSettings={appearance => <SettingsWorkspace registry={registry} connections={connections} groups={groups} appearance={appearance} mutate={mutate} refresh={refresh} />}
+        renderSettings={appearance => <SettingsWorkspace registry={registry} connections={connections} groups={groups} appearance={appearance} mutate={mutate} refresh={refresh} openChat={openChat} />}
         groups={groups} openChat={openChat} showHistory={() => { window.history.replaceState(null, "", window.location.pathname + window.location.search); setHistory(true); }}
         history={history ? historyView : null} dismissHistory={() => setHistory(false)} ownerLabel={label} />
     </EnvironmentContext.Provider>}
-  </>;
+  </AutomaticUpdatesProvider>;
 }

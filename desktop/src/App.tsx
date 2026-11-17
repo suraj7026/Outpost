@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   ArrowUp,
   ArrowUpRight,
@@ -13,11 +13,14 @@ import {
   Server,
   Settings,
   Shield,
-  Sparkles,
+  NotebookPen,
+  CalendarClock,
+  ShieldCheck,
   FileText,
   Search,
   Pin,
   PanelLeftClose,
+  SquareTerminal,
 } from "lucide-react";
 import { nativeApp, recordedPreview } from "./api";
 import type { Connection } from "./useConnection";
@@ -30,8 +33,11 @@ import { ImageViewerProvider } from "./image-viewer/ImageViewer";
 
 import { preferredCloudModel } from "./models";
 import { useAppearance, useMediaQuery, type Appearance } from "./appearance";
+import { ConversationDetailContext } from './conversation-detail';
 import { useSidebar } from "./useSidebar";
 import ComposerContext from "./ComposerContext";
+import { ControlMode, ComposerModelSelect } from './ComposerControls';
+import TerminalPane from './server-terminal/TerminalPane';
 import WorkspaceView, { isApproval, isWorkspaceSection } from "./WorkspaceViews";
 
 const navigation = [
@@ -45,16 +51,16 @@ const navigation = [
     id: "decisions",
     title: "Approvals",
     icon: "checkmark.shield",
-    glyph: Inbox,
+    glyph: ShieldCheck,
   },
   { id: "machines", title: "Machines", icon: "server.rack", glyph: Server },
   { id: "outputs", title: "Library", icon: "doc.on.doc", glyph: FileText },
-  { id: "automations", title: "Automations", icon: "clock", glyph: RefreshCw },
+  { id: "automations", title: "Automations", icon: "clock", glyph: CalendarClock },
   {
     id: "memory",
     title: "Memory",
     icon: "square.stack.3d.up",
-    glyph: Sparkles,
+    glyph: NotebookPen,
   },
 ];
 const profileIcons = {
@@ -112,7 +118,7 @@ function Composer({
   };
   return (
     <div className="new-work">
-      <h1>What should run next?</h1>
+      <h1 className="sr-only">New task</h1>
       <div className="profile-tabs" role="group" aria-label="Task profile">
         {(["code", "browser", "operations", "research", "chat"] as const).map(
           (value) => {
@@ -149,7 +155,9 @@ function Composer({
               ? "Tell Outpost what to do across your servers…"
               : profile === "browser"
                 ? "Describe what you want done in the browser…"
-                : "Describe a change, a problem, or something to build…"
+                : profile === "chat" ? "Describe what you want to talk through…"
+                  : profile === "research" ? "Describe what to investigate or summarize…"
+                    : "Describe a change, a problem, or something to build…"
           }
           value={goal}
           onChange={(event) => setGoal(event.target.value)}
@@ -161,16 +169,9 @@ function Composer({
           }}
         />
         <div className="composer-toolbar">
-          <label className="composer-permission">
-            <Shield size={16} aria-hidden="true" />
-            <select aria-label="Control mode" value={mode} onChange={(event) => setMode(event.target.value)}>
-              <option value="full_control">Full control</option>
-              <option value="ask_permission">Ask permission</option>
-              <option value="auto">Auto review</option>
-            </select>
-          </label>
+          <ControlMode label="Control mode" value={mode} onChange={(event) => setMode(event.target.value)} />
           <div className="composer-model-control">
-          {managed ? <ModelPicker catalogue={connection.agentCatalogue} value={selectedRef} onChange={setModelRef} disabled={!connection.connected || connection.busy || !!connection.info?.pending} /> : <select
+          {managed ? <ModelPicker catalogue={connection.agentCatalogue} value={selectedRef} onChange={setModelRef} disabled={!connection.connected || connection.busy || !!connection.info?.pending || connection.retired || !!connection.info?.pendingError} /> : <ComposerModelSelect
             aria-label="Ollama model"
             title="Cloud models advertised by your connected Ollama server"
             value={selectedModel}
@@ -179,7 +180,7 @@ function Composer({
           >
             {!connection.models.length && <option value="">No cloud models available</option>}
             {connection.models.map((name) => <option key={name} value={name}>{name}</option>)}
-          </select>}
+          </ComposerModelSelect>}
           </div>
           <button
             type="submit"
@@ -200,81 +201,21 @@ function Composer({
       </form>
       </div>
       <p className="composer-note">
-        {managed && !selectedRef ? "Choose an available model. Manage server providers in Settings." : !managed && !connection.models.length ? "No cloud models returned by the connected Ollama server. Local models are not listed." : mode === "full_control"
-          ? "Runs autonomously. Root commands on both hosts are available when enabled."
-          : mode === "auto"
-            ? "An independent reviewer is required; otherwise actions wait for your approval."
-            : "Every tool action waits for your approval."}
+        {connection.retired ? "This connection is read-only. Choose a verified server in Machines." : !connection.connected ? "Connect this server to start a task." : !modelReady ? "Choose an available model to start. Manage providers in Machines." : null}
       </p>
     </div>
   );
 }
 
-function RecentTasks({
-  groups,
-  connections,
-  openChat,
-}: {
-  groups: ChatGroup[];
-  connections: Record<string, Connection>;
-  openChat: OpenChat;
-}) {
-  const tasks = groups.flatMap(group => group.tasks.map(task => ({ task, group })))
-    .sort((a, b) => b.task.updatedAt.localeCompare(a.task.updatedAt));
-  return (
-    <section className="recent">
-      <div className="section-heading">
-        <h2>Recent sessions</h2>
-        <span>
-          {tasks.length} {tasks.length === 1 ? "session" : "sessions"}
-        </span>
-      </div>
-      {tasks.length === 0 ? (
-        <p className="empty-line">
-          Your first task starts here. Its conversation, actions and files stay
-          together.
-        </p>
-      ) : (
-        <div className="session-list">
-          {tasks.slice(0, 8).map(({ task, group }) => {
-            const owner = group.id ?? "legacy";
-            const Icon =
-              profileIcons[
-                text(task, "profile") as keyof typeof profileIcons
-              ] ?? MessageSquare;
-            const actionCount = connections[owner]?.records.filter(
-              (record) =>
-                record.kind === "action" && text(record, "taskId") === task.id,
-            ).length ?? 0;
-            return (
-              <button
-                className="session-row"
-                key={`${owner}:${task.id}`}
-                onClick={() => openChat(group.id, task.id)}
-              >
-                <Icon size={17} />
-                <span className="session-title">
-                  <strong>{title(task)}</strong>
-                  <span>
-                    {group.label} · {text(task, "profile")} · {actionCount} recorded actions
-                  </span>
-                </span>
-                <span className={`state state-${text(task, "state")}`}>
-                  {labelState(text(task, "state"))}
-                </span>
-                <ChevronRight size={15} />
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </section>
-  );
-}
+const locationSnapshot = () => window.location.hash;
+const subscribeLocation = (notify: () => void) => {
+  window.addEventListener("hashchange", notify);
+  return () => window.removeEventListener("hashchange", notify);
+};
 
 function settingsSelection() {
   const hash = window.location.hash;
-  return /^#settings\/servers(?:\/|$)/.test(hash) ? "servers" : hash.startsWith("#settings") ? "connection" : null;
+  return hash === "#machines" || /^#settings\/servers(?:\/|$)/.test(hash) ? "machines" : hash.startsWith("#settings") ? "connection" : null;
 }
 
 export default function App({ connection, initialTask, environmentNavigation, newTaskNavigation, draftConnection, draftLabel, renderSettings, groups, connections, sharedMemory, openChat, showHistory, history, dismissHistory, ownerLabel }: {
@@ -291,14 +232,20 @@ export default function App({ connection, initialTask, environmentNavigation, ne
   const [selection, setSelection] = useState<string | null>(settingsSelection() ?? initialTask),
     [searchOpen, setSearchOpen] = useState(false),
     [taskSearch, setTaskSearch] = useState("");
+  const locationHash = useSyncExternalStore(subscribeLocation, locationSnapshot);
+  const dismissHistoryRef = useRef(dismissHistory);
+  dismissHistoryRef.current = dismissHistory;
+  const [draftTerminalOpen, setDraftTerminalOpen] = useState(false);
+  const draftTerminalButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => setDraftTerminalOpen(false), [draftConnection?.environmentId, selection, history]);
   const currentSelection = useRef(selection);
   currentSelection.current = selection;
-  useEffect(() => { if (initialTask && !window.location.hash.startsWith("#settings")) setSelection(initialTask); }, [initialTask]);
+  useEffect(() => { if (initialTask && !settingsSelection()) setSelection(initialTask); }, [initialTask]);
   useEffect(() => {
-    const update = () => { dismissHistory(); setSelection(settingsSelection() ?? "home"); };
+    const update = () => { dismissHistoryRef.current(); setSelection(settingsSelection() ?? "home"); };
     window.addEventListener("hashchange", update);
     return () => window.removeEventListener("hashchange", update);
-  }, [dismissHistory]);
+  }, []);
   const sidebar = useSidebar(appearance, narrow);
   const showingHistory = !!history;
   useEffect(() => { if (showingHistory) sidebar.dismiss(); }, [showingHistory]);
@@ -345,20 +292,25 @@ export default function App({ connection, initialTask, environmentNavigation, ne
   const select = (id: string, settingsPath?: string) => {
     if (!mounted.current) return;
     dismissHistory();
-    if (id === "connection" || id === "servers") window.location.hash = settingsPath ?? (id === "servers" ? "settings/servers" : "settings");
+    if (id === "connection" || id === "servers") window.location.hash = settingsPath ?? (id === "servers" ? "machines" : "settings");
+    else if (id === "machines") window.location.hash = "machines";
     else window.history.replaceState(null, "", window.location.pathname + window.location.search);
-    setSelection(id);
+    setSelection(id === "servers" ? "machines" : id);
     sidebar.dismiss();
   };
 
   const composerConnection = selectedTask ? connection : draftConnection;
   const composerContext = <ComposerContext environmentNavigation={selectedTask ? environmentNavigation : newTaskNavigation}
+    connected={!!composerConnection?.connected}
+    terminalToggle={!selectedTask && draftConnection && <button ref={draftTerminalButton} type="button" className="composer-terminal" aria-label="Terminal" title="Terminal" aria-expanded={draftTerminalOpen} aria-controls="draft-server-terminal" onClick={() => setDraftTerminalOpen(open => !open)}><SquareTerminal size={18} aria-hidden="true" /></button>}
     onReconnect={composerConnection ? () => void composerConnection.connect() : undefined}
     onSettings={() => select("servers", `settings/servers/${composerConnection?.environmentId ?? "legacy"}/models`)} />;
   const showingComposer = !history && (!!selectedTask || selection === "home" || selection === null);
-  const showingSettings = !history && (selection === "connection" || selection === "servers");
+  const showingSettings = !history && selection === "connection";
+  const showingMachineSettings = selection === "machines" && /^#settings\/servers\/[^/]+/.test(locationHash);
   const status = showingComposer ? composerConnection : undefined;
   return (
+    <ConversationDetailContext.Provider value={appearance.conversationDetail}>
     <div
       data-tauri-drag-region
       className={`app-shell web-shell ${nativeApp() && navigator.userAgent.includes("Macintosh") ? "desktop-window" : ""} ${narrow ? "sidebar-overlay" : "sidebar-push"} ${sidebar.present ? "sidebar-present" : ""} ${sidebar.visible ? "sidebar-visible" : "sidebar-hidden"}`}
@@ -440,25 +392,20 @@ export default function App({ connection, initialTask, environmentNavigation, ne
             />
           </ImageViewerProvider>
         ) : selection === "home" || selection === null ? (
-          <main className="home">
+          <><main className="home">
             <div className="home-content">
               {draftConnection && <Composer connection={draftConnection} onCreated={id => {
                 if (mounted.current && (currentSelection.current === "home" || currentSelection.current === null)) {
                   openChat(draftConnection.environmentId, id);
                 }
               }} contextBar={composerContext} />}
-              <RecentTasks groups={groups} connections={connections} openChat={openChat} />
-              <div className="home-footer">
-                <Server size={14} />
-                <span>{draftLabel}</span>
-                <button onClick={() => select("servers")}>
-                  View servers <ArrowUpRight size={13} />
-                </button>
-              </div>
+
             </div>
           </main>
+          {draftTerminalOpen && draftConnection && <TerminalPane key={draftConnection.environmentId ?? 'legacy'} id="draft-server-terminal" environmentId={draftConnection.environmentId} label={draftLabel} onCollapse={() => { setDraftTerminalOpen(false); draftTerminalButton.current?.focus({ preventScroll: true }); }} />}
+          </>
         ) : selection === "machines" ? (
-          <Machines groups={groups} />
+          showingMachineSettings ? renderSettings(appearance) : <Machines groups={groups} />
         ) : showingSettings ? (
           renderSettings(appearance)
         ) : isWorkspaceSection(selection) ? (
@@ -466,21 +413,9 @@ export default function App({ connection, initialTask, environmentNavigation, ne
         ) : (
           <main className="page"><p role="status">This chat is not available yet.</p></main>
         )}
-        {status && <footer className="statusbar">
-          <span>
-            {status.retired ? status.environmentId === null ? "Legacy read-only · mutations retired" : "Removed connection · read-only" : status.busy
-              ? "Sending to server…"
-              : status.connected
-                ? "Server-owned history"
-                : "Stale in-memory history · read-only"}
-          </span>
-          <span>
-            {status.lastSync
-              ? `Updated ${status.lastSync.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-              : "Waiting for connection"}
-          </span>
-        </footer>}
+
       </div>
     </div>
+    </ConversationDetailContext.Provider>
   );
 }

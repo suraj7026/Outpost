@@ -27,7 +27,7 @@ The frontend is bundled, including Google Sans Flex and the Google Sans fallback
 
 ## Saved environments
 
-Use **Settings → Servers** for the clickable server list and **Add server**. Each server opens its own General, Setup & connection, Models & providers, Devices & access, and Recovery pages. **Settings → Appearance** contains local window preferences. Settings has deep links and back/forward navigation; opening another server’s settings does not change the current chat owner.
+Use **Settings → Servers** for the clickable server list and **Add server**. Each server opens its own General, Setup & connection, Models & providers, Devices & access, and Recovery pages. **Settings → Appearance → Theme** offers **Auto**, **Light**, and **Dark**, saved on this Mac. Auto follows macOS and updates while the app is open; manual choices override the system for the interface, native window chrome, setup dialogs, and terminal. Changing theme preserves open terminal sessions and other window preferences. Settings has deep links and back/forward navigation; opening another server’s settings does not change the current chat owner.
 
 The sidebar and **All chats** group conversations under every server. Identical task IDs remain isolated by server. Offline and removed connections retain read-only history in memory until the app closes; remote history is never deleted by removing a saved connection. Choose a destination with **Run on…** when creating a new task, not a global environment dropdown. Each installation retains independent streams, pending recovery and provider state; switching chats never retargets an in-flight action. Legacy v1 live streaming and original Keychain enrollment remain supported.
 
@@ -45,7 +45,7 @@ Cross-release upgrades, rollback, history migration, Kubernetes removal and auto
 
 ## Native versus web
 
-The owner-selected Graphite Studio layout is implemented directly in React, including its custom sidebar. Typography uses locally bundled Google Sans Flex with Google Sans as the fallback throughout the app, including controls, conversations and code/log text; OS-owned dialogs retain native typography. Font provenance is in `src/assets/fonts/README.md`, and redistribution notices ship in `dist/font-licenses/`. The separate native title strip is hidden; macOS traffic lights are overlaid inside the sidebar, with draggable app headers and native window resizing. In-app branding uses the existing three-bar Outpost application icon. System appearance and Reduce Motion remain authoritative. The previous `src-tauri/native/sidebar.m` bridge is retained as source history but is no longer compiled or installed.
+The owner-selected Graphite Studio layout is implemented directly in React, including its custom sidebar. Typography uses locally bundled Google Sans Flex with Google Sans as the fallback throughout the app, including controls, conversations and code/log text; OS-owned dialogs retain native typography. Font provenance is in `src/assets/fonts/README.md`, and redistribution notices ship in `dist/font-licenses/`. The separate native title strip is hidden; macOS traffic lights are overlaid inside the sidebar, with draggable app headers and native window resizing. In-app branding uses the existing three-bar Outpost application icon. System appearance is followed in Auto mode; Reduce Motion remains authoritative. The previous `src-tauri/native/sidebar.m` bridge is retained as source history but is no longer compiled or installed.
 
 The task workbench has a compact header, centered conversation/composer, and an inset Evidence inspector with Overview/Changes/Activity tabs. Evidence is always visible in the desktop task layout; both visibility controls and the collapsed state have been removed. Narrow browser layouts retain Conversation/Evidence tabs. The outer window is fixed; conversation, evidence, recent tasks and page content scroll independently without moving the header, composer or shell padding. Settings → Appearance adds optional native macOS frosted glass with adjustable opacity and a saved collapse-sidebar preference. The sidebar's single state-aware button pins a hover-revealed sidebar or collapses/unpins a pinned sidebar; ⌘B also hides it and the native traffic lights. Hover the left edge to spring the sidebar in and move the workspace over; moving away slides it back out. Pinning holds that same layout. Reduce Motion disables the animation. Native traffic lights appear inside the sidebar header after it settles. Desktop resizing keeps the sidebar width/padding fixed, while AppKit retains the native button anchor synchronously without waiting for resize IPC. The spring uses 520ms in / 240ms out with a 350ms hover-dismiss delay. The edge trigger is invisible, and ⌘K reveals task search. Native window corners are paired with smaller inset workspace corners and even padding. Frosted glass requires native macOS support; a browser preview does not qualify native appearance or window-control behavior. Exact-action review opens a revision-bound dialog; approval and dispatch remain separate explicit operations. Automations and Memory sit in the main navigation after Library and before All chats; there is no separate Workspace tools disclosure. Command-N opens a new task; Command-K searches recent tasks.
 
@@ -63,7 +63,7 @@ The task workbench has a compact header, centered conversation/composer, and an 
 
 Full control is the new-task default because this deployment is intentionally an unrestricted private administrative agent. Root access is not a sandbox. Cloud-selected models send context to Ollama Cloud; Camoufox runs on your own server once the engine migration is deployed; Pi uses its selected model directly.
 
-Thinking expands during generation; models without exposed reasoning do not get fabricated thinking. Tool lifecycle is live, but subprocess stdout is not yet streamed individually.
+**Settings → Appearance → Conversation detail** controls all tool-call and model-provided thinking disclosures. **Compact** (the default) starts them collapsed; **Extended** opens them, including completed-history groups. Each row can still be toggled independently, and that choice survives streaming updates and tool/action linking. The preference is saved on this Mac; if storage is blocked, it lasts for the app session and a warning explains the persistence failure. Active thinking uses a subtle three-dot animation that stops on completion, response text, interruption or error; Reduce Motion uses static dots. Models without exposed reasoning do not get fabricated traces or durations. Normal replies and execution are unchanged, and exact-action approval dialogs always show their review details. Tool lifecycle is live, but subprocess stdout is not yet streamed individually.
 
 ## SSH terminal and OS reboot
 
@@ -90,6 +90,10 @@ Use **Settings → Servers → your server → Models & providers**. Managed ser
 npm --prefix desktop run build
 node desktop/test-connection-administration.mjs # synthetic IPC; no Keychain or live server
 node desktop/test-environments.mjs
+node desktop/test-appearance.mjs
+OUTPOST_TEST_BROWSER=webkit node desktop/test-appearance.mjs
+node desktop/test-conversation-detail.mjs # synthetic Compact/Extended and thinking lifecycle tests in Chromium + WebKit
+node desktop/test-terminal-theme.mjs
 # Install the browser first if missing: npx playwright install webkit
 OUTPOST_TEST_BROWSER=webkit node desktop/test-environments.mjs
 cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked --no-default-features

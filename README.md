@@ -39,6 +39,38 @@ The local desktop implementation now includes saved environments, identity-verif
 
 **Connection settings → Set up server** now includes reviewed new-environment installation over pinned SSH: protected sudo authorization, private runtimes, non-root coordinator/worker services, initial enrollment, live stage progress/logs, scoped cancellation and final authenticated registration. **Full server control is now the default setup choice:** explicit installation consent installs an authenticated, loopback-only root executor with host filesystem, Docker and service access. Restricted workspace mode remains optional. The earlier restricted installer was exercised in a real Ubuntu x86 VM. Full control has now been activated and verified on the existing Outpost 1 native server, preserving its identity/data; an actual reboot test of the extension remains pending. Existing Kubernetes/data are not migrated or removed; browser dependencies can update shared OS libraries and require maintenance review. Upgrade/rollback and history migration remain unimplemented. The full-control deployment updated the existing Server 1 installation; Server 2 and Kubernetes were untouched.
 
+### Automatic server updates
+
+The installed app checks all connected saved servers, not just the selected server. **Pi & extensions → Automatic server updates** offers one-time opt-in for both servers, followed by sequential, idle-drained updates of signed compatible releases. Status survives app restarts; unknown/failed operations are inspected rather than launched again. No sudo password is saved, and the server grant authorizes only a fixed, signed-release updater—not unrestricted sudo.
+
+Developer builds now require a publisher signing key: run `node scripts/sign-releases.mjs --init` once on the build Mac, then use `npm --prefix desktop run desktop:build`. Enrollment pins that publisher; do not rotate it silently. Building the app does not enroll live servers. See [automatic update authorization, packaging and recovery](deploy/environment/AUTOMATIC-UPDATES.md).
+
+### Manual server Pi and bundled-extension updates
+
+This source pins **Pi 1.5.2**, **pi-ollama-cloud 0.13.1**, and **pi-subagents 0.88.1**. Build the Mac app with `npm --prefix desktop run desktop:build` to include the signed sequence-6 server releases. In the app, select the saved server, open **Pi & extensions**, choose **Check Pi + bundled extensions**, review the versions, and **Authorize server update**. The check compares against the app's bundled release, not npm's latest versions; future upgrades require a new reviewed app bundle.
+
+The app checks the installed release's public runtime-pin digest over pinned SSH before offering an update. Outpost 1's legacy runtime family uses a separate [complete compatible-server bundle](deploy/pi-update/README.md), preserving its browser source and runtime pins while updating the reviewed coordinator/tool overlays. This avoids introducing the main bundle's Camoufox migration. Other mismatched browser/runtime releases require separate qualification; that safety gate is not bypassed.
+
+For compatible native installations, dependencies stage before work drains; activation restarts the server with health checks and a retained rollback release. Credentials, sessions, task history and the existing browser installation are preserved. Legacy/container or unqualified installations require a separately reviewed migration; this flow does not reinstall them. A successful local build/test is not evidence that a live server was upgraded.
+
+If an update shows **Unknown**, check its status rather than launching it again. **Cancel pending update** asks the authenticated coordinator to cancel that exact operation; it succeeds only before a maintenance hold/activation begins. A missing host receipt is not proof of cancellation. Once the server confirms cancellation, create a new review before authorizing another attempt. Launch diagnostics retain fixed error categories, never password or raw exception text. Host failures are reported as **Failed**, not as user cancellation merely because the coordinator cleaned up the reservation.
+
+**Installed extensions are enabled by default.** Installing this release makes `pi-subagents` and the full `pi-ollama-cloud` extension available to Pi, including native tools, bundled resources and child agents; there is no separate activation switch. Their execution uses the worker's filesystem/network/process permissions and does **not** pass through Outpost's per-action approval flow. Coordinator tools still use `outpost_action` and their existing permission gates. Only install extensions you trust with the worker profile and credentials.
+
+Native background work remains tracked while sessions drain, and unresolved work after a restart prevents maintenance from treating the worker as idle. Worker children use the native Pi profile; the legacy direct adapter supplies parent-only model credentials to its local children through a private, session-scoped socket without writing API keys into extension modules. General package installation and direct `pi update` / `pi update --extensions` remain outside the managed release workflow.
+
+### Agent automation tools
+
+The coordinator exposes `automation.list`, `automation.save`, and `automation.set_paused` through `outpost_action` in both direct and worker-backed agent sessions. Each has a description and JSON input schema. They manage the same server-owned records as the desktop **Automations** page, not Linux cron files.
+
+- `automation.list`: inspect schedules, IDs, revisions, and the server clock; supports `automationId`, `limit`, and `offset`.
+- `automation.save`: create with a stable `automationId` and `expectedRevision: 0`, or replace a complete schedule using its latest revision. Each occurrence creates a new agent task with self-contained instructions.
+- `automation.set_paused`: pause/resume using the latest revision without replacing the task configuration. Pausing does not cancel existing tasks; resuming may immediately admit overdue work.
+
+All calls use the existing action approval/evidence gate. Writes recheck revisions and recovery/maintenance holds at execution. Scheduled task mode defaults to `ask_permission`; the agent cannot save or resume a schedule with greater authority than its current task. Provider-qualified models require a configured Pi worker.
+
+Supported timing remains one-time or fixed intervals of at least one minute. Calendar cron expressions are not wired into the scheduler; every 24 hours is not a fixed local hour across DST. The Outpost server must be running. The agent is instructed to use these tools for scheduled agent work and only use OS cron when explicitly requested. Source changes require a server deployment/restart and a new agent run; they do not update already-running installations or import existing OS cron entries.
+
 ### Pairing and additional devices
 
 For an unpaired server, open **Connection** on the first device, enter the bootstrap token and choose **Pair First Device**. Bootstrap closes after the first device.

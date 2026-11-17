@@ -7,8 +7,8 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { ModelRuntime } from '@earendil-works/pi-coding-agent';
-import { normalizeContext, type OAuthCredential, type Provider, type RefreshModelsContext } from '@earendil-works/pi-ai';
-import { subscriptionProvider } from './subscription-models.js';
+import { InMemoryCredentialStore, normalizeContext, type OAuthCredential, type Provider, type RefreshModelsContext } from '@earendil-works/pi-ai';
+import { refreshSubscriptionModels, registerSubscriptionPolicy, subscriptionProvider } from './subscription-models.js';
 import { PiProfile } from './profile.js';
 import { ProviderManagement } from './providers.js';
 import { WorkerRuns } from '../pi-worker/runs.js';
@@ -17,7 +17,7 @@ const supported = 'gpt-6.1-sol', denied = 'gpt-5.4-nano';
 const entry = (slug: string, extra = {}) => ({ slug, visibility: 'list', supported_in_api: true, ...extra });
 const credential = (access = 'fixture-oauth-access'): OAuthCredential => ({ type: 'oauth', access, refresh: 'fixture-refresh', expires: Date.now() + 3600000 });
 async function original() {
-  const r = await ModelRuntime.create({ modelsPath: null, refreshOnCreate: false });
+  const r = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsPath: null, refreshOnCreate: false });
   const p = r.getProvider('openai'); assert.ok(p); const { refreshModels: _refresh, ...staticProvider } = p; return staticProvider;
 }
 async function refresh(provider: Provider, value = credential(), extra: Partial<RefreshModelsContext> = {}) {
@@ -91,6 +91,45 @@ test('direct model lookup cannot bypass subscription verification or send an inf
   const result = await policy.streamSimple(model, normalizeContext({ messages: [] }), { apiKey: credential().access }).result();
   assert.equal(result.stopReason, 'error'); assert.match(result.errorMessage ?? '', /subscription_model_not_verified/);
   assert.equal(streams, 0); assert.equal(requests, 1);
+});
+
+test('SDK public-catalogue auth mode does not strip the subscription verifier credential', async t => {
+  const credentials = new InMemoryCredentialStore();
+  await credentials.modify('openai', async () => credential());
+  const runtime = await ModelRuntime.create({ credentials, modelsPath: null, refreshOnCreate: false });
+  let publicRequests = 0, accountRequests = 0, fail = false;
+  t.mock.method(globalThis, 'fetch', async (input: Parameters<typeof fetch>[0], options?: Parameters<typeof fetch>[1]) => {
+    const headers = new Headers(options?.headers);
+    if (String(input).startsWith('https://pi.dev/api/models/providers/openai?')) {
+      assert.equal(headers.has('authorization'), false, 'Public metadata must not receive the account token');
+      publicRequests++;
+      return new Response('', { status: 404 });
+    }
+    assert.equal(String(input), 'https://api.openai.com/v1/models', 'No inference or unintended network requests');
+    assert.equal(options?.method, 'GET');
+    assert.equal(options?.redirect, 'error');
+    assert.equal(headers.get('authorization'), 'Bearer fixture-oauth-access');
+    accountRequests++;
+    return fail ? Response.json({}, { status: 403 }) : Response.json({ models: [entry(supported)] });
+  });
+  await registerSubscriptionPolicy(runtime);
+  assert.equal(accountRequests, 0, 'Registration must remain offline');
+  assert.deepEqual(await runtime.getAvailable('openai'), []);
+  assert.equal(await refreshSubscriptionModels(runtime), false);
+  assert.equal(publicRequests, 1);
+  assert.equal(accountRequests, 1, 'Public metadata alone cannot authorize a model');
+  assert.deepEqual((await runtime.getAvailable('openai')).map(m => m.id), [supported]);
+
+  fail = true;
+  const failed = await runtime.refresh({ providers: ['openai'], allowNetwork: true, force: true, signal: AbortSignal.timeout(5000) });
+  assert.equal(failed.errors.has('openai'), true);
+  assert.equal(accountRequests, 2);
+  assert.deepEqual(await runtime.getAvailable('openai'), [], 'Failed account discovery revokes prior verification');
+
+  await credentials.modify('openai', async () => ({ type: 'api_key', key: 'sk-fixture' }));
+  assert.equal(await refreshSubscriptionModels(runtime), false);
+  assert.equal(accountRequests, 2, 'API keys must not enter the subscription verifier');
+  assert.deepEqual(await runtime.getAvailable('openai'), []);
 });
 
 test('managed CLI uses the same account policy and stays closed offline', () => {

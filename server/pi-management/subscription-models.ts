@@ -77,6 +77,9 @@ export function subscriptionProvider(base: Provider, options: { fetch?: typeof f
   };
   const policy: Provider = {
     ...base,
+    // Pi's public catalogue uses "configured", which omits the network-phase credential.
+    // Account verification requires the SDK's resolved credential, including OAuth refresh.
+    refreshModelsAuth: 'credential',
     ...(base.generateImages ? { generateImages: async () => { throw managementError('model_access_unverified'); } } : {}),
     ...(base.classify ? { classify: async () => { throw managementError('model_access_unverified'); } } : {}),
     ...(base.fetchDeferred ? { fetchDeferred: model => lazyStream(model, async () => { throw managementError('model_access_unverified'); }) } : {}),

@@ -1,4 +1,4 @@
-import { Terminal } from '@xterm/xterm';
+import { Terminal, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { call, nativeApp, recordedPreview, type EnvironmentId } from '../api';
 
@@ -21,6 +21,14 @@ const sameTarget = (a: TerminalTarget, b: TerminalTarget) =>
   a.setupId === b.setupId && a.host === b.host && a.user === b.user && a.port === b.port && a.fingerprint === b.fingerprint;
 const encode = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 const decode = (data: string) => Uint8Array.from(atob(data), char => char.charCodeAt(0));
+const terminalTheme = (): ITheme => document.documentElement.dataset.theme === 'light' ? {
+  background: '#f1f2f4', foreground: '#24272d', cursor: '#24272d', cursorAccent: '#f1f2f4',
+  selectionBackground: '#cbd8ec', selectionForeground: '#24272d',
+  black: '#24272d', red: '#a83232', green: '#28633d', yellow: '#765800',
+  blue: '#245a9b', magenta: '#804391', cyan: '#20656b', white: '#5c626d',
+  brightBlack: '#5c626d', brightRed: '#b33c36', brightGreen: '#337347', brightYellow: '#806000',
+  brightBlue: '#3268ad', brightMagenta: '#90529b', brightCyan: '#287780', brightWhite: '#24272d',
+} : { background: '#101113', foreground: '#ededef', cursor: '#c7c9cf', selectionBackground: '#44464b' };
 
 // Controllers outlive chat/Machines views. Neither queued input nor asynchronous replies
 // ever consult the selected chat: the owner and each session generation are captured here.
@@ -40,6 +48,7 @@ export class TerminalController {
   private container?: HTMLDivElement;
   private attachment?: HTMLElement;
   private observer?: ResizeObserver;
+  private themeObserver?: MutationObserver;
   private cols = 80;
   private rows = 24;
   private closing: Promise<void> = Promise.resolve();
@@ -71,8 +80,13 @@ export class TerminalController {
       cursorBlink: false, screenReaderMode: true, disableStdin: true,
       allowProposedApi: false, allowTransparency: false,
       linkHandler: { activate: () => {} },
-      theme: { background: '#101113', foreground: '#ededef', cursor: '#c7c9cf', selectionBackground: '#44464b' },
+      theme: terminalTheme(),
     });
+    // Follow the emulator lifetime, not the pane: detached sessions retain their buffers.
+    this.themeObserver = new MutationObserver(() => {
+      if (this.terminal) this.terminal.options.theme = terminalTheme();
+    });
+    this.themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     this.fit = new FitAddon();
     this.terminal.loadAddon(this.fit);
     // Explicitly consume clipboard and hyperlink OSC sequences; no clipboard, link,
@@ -273,6 +287,7 @@ export class TerminalController {
   }
   private disposeEmulator() {
     this.observer?.disconnect(); this.observer = undefined;
+    this.themeObserver?.disconnect(); this.themeObserver = undefined;
     this.terminal?.dispose(); this.terminal = undefined; this.fit = undefined;
     this.container?.remove(); this.container = undefined;
   }

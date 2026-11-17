@@ -34,7 +34,7 @@
     "active": true,
     "targets": ["app"],
     "category": "DeveloperTool",
-    "resources": { "resources/host-release.tar.gz": "host-release.tar.gz", "resources/host-release.json": "host-release.json" },
+    "resources": { "resources/host-release.tar.gz": "host-release.tar.gz", "resources/host-release.json": "host-release.json", "resources/pi-release.tar.gz": "pi-release.tar.gz", "resources/pi-release.json": "pi-release.json" },
     "icon": ["icons/icon.icns", "icons/icon.png"],
     "shortDescription": "Your private agent workspace",
     "macOS": { "minimumSystemVersion": "14.0" }

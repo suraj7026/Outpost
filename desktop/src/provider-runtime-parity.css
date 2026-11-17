@@ -1,0 +1,51 @@
+.provider-runtime-stack { display:grid; gap:24px; }
+.provider-runtime-note { color:var(--muted); font-size:12px; line-height:1.65; margin:16px 0 0; }
+.provider-runtime-callout { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 16px; margin-top:16px; background:var(--raised); border-radius:8px; font-size:13px; }
+.provider-runtime-callout > div { min-width:0; }
+.provider-runtime-callout strong { font-weight:550; }
+.provider-runtime-callout small { display:block; color:var(--muted); margin-top:4px; }
+.provider-runtime-check { display:flex; align-items:flex-start; gap:8px; margin:18px 0 10px; font-size:12px; }
+.provider-runtime-check input { flex:none; margin-top:3px; }
+.provider-runtime-dialog .ui-facts code { overflow-wrap:anywhere; }
+.provider-runtime-footer { display:flex; align-items:center; gap:16px; margin-top:16px; }
+.provider-runtime-footer > span { color:var(--muted); font-size:12px; line-height:1.6; }
+.runtime-update-dialog.ui-dialog { padding:0; }
+.runtime-update-dialog .ui-dialog-heading h2 { margin:0; }
+.runtime-update-dialog .ui-dialog-body > :last-child { margin-bottom:0; }
+.runtime-update-dialog .ui-dialog-body > :has(+ .runtime-update-actions) { margin-bottom:0; }
+.runtime-update-dialog .runtime-update-actions { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:24px; }
+.runtime-update-dialog .runtime-update-actions-end { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; margin-left:auto; }
+.runtime-update-dialog .runtime-update-actions .ui-button { flex:none; margin:0; }
+@media(max-width:640px) { .runtime-update-dialog .ui-dialog-heading { padding-inline:20px; } }
+.runtime-check-label { display: grid; }
+.runtime-check-label > span { grid-area: 1 / 1; }
+button.runtime-update-check[aria-busy="true"] { opacity: 1; cursor: progress; }
+.provider-settings .ui-details { margin-top:0; }
+.provider-settings > .ui-section > p { color:var(--muted); font-size:12px; line-height:1.65; }
+.provider-identity { font-size:16px; font-weight:550; }
+.provider-default-control { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:12px 0; }
+.provider-default-control .model-picker-trigger { width:min(100%, 480px); max-width:480px; min-height:40px; justify-content:space-between; background:var(--raised); border-color:transparent; }
+.provider-runtime-dialog h3 { font-size:14px; font-weight:550; margin:20px 0 8px; }
+.provider-auth-methods { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; }
+.provider-runtime-dialog .provider-confirm { margin-top:16px; }
+.provider-runtime-dialog .provider-confirm .ui-dialog-actions { margin-top:0; }
+.provider-runtime-dialog .provider-search-results { display:grid; gap:4px; max-height:320px; overflow:auto; margin-top:16px; }
+.provider-runtime-dialog button.provider-result { width:100%; justify-content:space-between; text-align:left; padding:12px; }
+.provider-result > span { min-width:0; }
+.provider-result strong, .provider-result small { display:block; overflow-wrap:anywhere; }
+.provider-result strong { font-weight:500; }
+.provider-result small { color:var(--muted); font-size:12px; margin-top:4px; }
+.provider-runtime-dialog .ui-details > .ui-form { margin-top:16px; }
+.provider-runtime-dialog .ui-form :is(.agent-check, .provider-runtime-check) { display:flex; align-items:flex-start; gap:8px; line-height:1.65; }
+.provider-runtime-dialog .ui-form > .ui-button { justify-self:start; }
+.provider-import { margin-top:16px; }
+.provider-import-dialog .provider-import-body { margin-top:20px; }
+.provider-import-dialog .import-review { padding:0; background:transparent; border:0; }
+.provider-import-dialog .import-provider { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; padding:16px 0; border-bottom:1px solid var(--line); }
+.provider-import-dialog .import-provider small { display:block; margin-top:4px; color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+.provider-import-dialog .import-provider .ui-button { justify-self:start; }
+.provider-settings .provider-login { background:var(--raised); }
+.provider-settings .provider-login .ui-form { display:grid; gap:12px; }
+.provider-settings .provider-login p { font-size:12px; line-height:1.65; }
+@media(max-width:640px) { .provider-runtime-callout, .provider-runtime-footer { flex-wrap:wrap; } }
+@container settings (max-width:560px) { .provider-settings .ui-row { flex-wrap:wrap; }.provider-settings .ui-row-content { flex-basis:calc(100% - 48px); }.provider-settings .ui-row-actions { margin-left:48px; flex-wrap:wrap; } }

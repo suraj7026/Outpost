@@ -3,9 +3,9 @@ import type { CredentialStore } from '@earendil-works/pi-ai';
 import { join } from 'node:path';
 import { managementError } from './contracts.js';
 
-/** Pi 1.4's lock-preserving store is internal; isolate and version-fence this reviewed adapter. */
+/** Pi's lock-preserving store is internal; isolate and version-fence this reviewed adapter. */
 export async function credentialStore(directory: string): Promise<CredentialStore> {
-  if (VERSION !== '1.4.0') throw managementError('credential_store_adapter_requires_qualification');
+  if (VERSION !== '1.4.0' && VERSION !== '1.5.2') throw managementError('credential_store_adapter_requires_qualification');
   const module: { AuthStorage: { create(path: string): CredentialStore } } = await import(
     new URL('./core/auth-storage.js', import.meta.resolve('@earendil-works/pi-coding-agent')).href);
   const store = module.AuthStorage.create(join(directory, 'auth.json'));

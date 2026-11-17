@@ -1,0 +1,68 @@
+/* Shared new-task / conversation controls; the run status keeps its own lifecycle. */
+.home { display: flex; min-height: 0; padding-block: 28px; }
+.home-content { display: flex; flex-direction: column; justify-content: center; width: 100%; max-width: 672px; min-height: 100%; }
+.home .new-work { width: 100%; margin-block: auto; }
+.task-unified .conversation-content, .task-unified .reply-composer-stack { max-width: var(--conversation-width, 672px); }
+
+.home .composer-note { text-align: center; margin-top: 12px; }
+.home .composer-note:empty { display: none; }
+.new-work .profile-tabs { justify-content: center; }
+.new-work > h1.sr-only { margin: 0; }
+.composer-stack > :is(.composer, .reply-composer) { padding: 18px 18px 12px; border-radius: 28px; background: var(--raised); }
+.composer-stack :is(.composer, .reply-composer) textarea { height: 64px; min-height: 64px; font-size: 14px; line-height: 1.6; }
+.composer-stack .composer-toolbar { display: flex; align-items: center; gap: 10px; padding-top: 6px; }
+.composer-stack .composer-toolbar > .icon-button { --icon-button-size: 36px; --icon-glyph-size: 18px; border-radius: 50%; }
+.composer-stack .composer-toolbar > .icon-button svg { width: 18px; height: 18px; stroke-width: 1.7; }
+.composer-stack .composer-select-field { position: relative; display: inline-flex; align-items: center; min-width: 0; height: 36px; border-radius: 8px; background: transparent; }
+.composer-stack .composer-select-field:hover:not(:has(select:disabled)),
+:root .composer-stack .composer-select-field:has(select:focus-visible) { background: var(--active); }
+.composer-stack .composer-select-field > svg:first-child { position: absolute; left: 12px; width: 18px; height: 18px; pointer-events: none; }
+
+.composer-stack .composer-select-field select { appearance: none; -webkit-appearance: none; min-height: 36px; height: 36px; margin: 0; padding: 0 12px; border: 0; border-radius: inherit; background: transparent; color: inherit; font-size: 12px; line-height: normal; min-width: 0; max-width: 100%; cursor: pointer; }
+:root .composer-stack .composer-select-field select:focus-visible { background-color: transparent; }
+.composer-stack .composer-permission { gap: 0; color: var(--warning); flex: none; }
+.composer-stack .composer-permission select { padding-left: 38px; max-width: none; }
+.composer-stack .composer-select-field:has(select:disabled) { opacity: .5; }
+.composer-stack .composer-select-field select:disabled { opacity: 1; cursor: not-allowed; }
+.composer-stack .composer-model-control { min-width: 0; }
+.composer-stack .model-picker-trigger { display: inline-flex; align-items: center; gap: 10px; height: 36px; min-height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; font-size: 12px; }
+.composer-stack .model-picker-trigger:hover:not(:disabled) { background: var(--active); }
+.composer-stack .model-picker-trigger > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-stack .model-picker-trigger > .lucide-chevron-down { display: none; }
+.composer-stack .composer-model { padding: 8px 12px; }
+.composer-stack .send-button { width: 36px; height: 36px; min-width: 36px; min-height: 36px; padding: 8px; }
+.composer-stack .send-button:disabled { opacity: 1; color: var(--subtle); border: 1px solid var(--line); background: transparent; }
+.composer-context { margin: 0 12px -16px; padding: 6px 12px 22px; border-radius: 24px 24px 0 0; background: var(--composer-context-bg, #101112); color: var(--text); }
+.composer-context .composer-terminal { display: inline-flex; justify-content: center; align-items: center; width: 36px; min-width: 36px; height: 36px; padding: 8px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
+.composer-context .composer-terminal:is(:hover, [aria-expanded="true"]) { background: var(--composer-context-active, #27292c); color: var(--text); }
+.composer-context .composer-terminal svg { width: 18px; height: 18px; stroke-width: 1.7; }
+.app-shell .lucide-square-terminal rect { rx: 5px; ry: 5px; }
+.composer-context-run { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.5fr) 36px 36px; column-gap: 8px; }
+.composer-context-run > .composer-terminal { grid-area: 1 / 3; }
+.composer-context-run .composer-follow { --icon-button-size: 36px; --icon-glyph-size: 18px; grid-area: 1 / 4; }
+.composer-context .composer-connection-actions > .icon-button { --icon-button-size: 36px; --icon-glyph-size: 18px; }
+.composer-connection-actions { margin-left: auto; }
+.composer-connection-label { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.composer-connection-label > span { width: 6px; height: 6px; border-radius: 50%; background: var(--subtle); }
+.composer-connection-label.online > span { background: var(--positive); }
+.composer-context .new-task-server > summary { min-height: 36px; border-radius: 8px; padding: 6px 10px; }
+.composer-context .new-task-server > summary:hover { background: var(--composer-context-active, #27292c); }
+.server-terminal-identity > svg { width: 18px; height: 18px; stroke-width: 1.7; }
+@container (max-width: 560px) {
+  .composer-context-run { grid-template-columns: minmax(0, 1fr) 44px 44px; grid-template-rows: 44px 44px; gap: 0 8px; }
+  .composer-context-run > .composer-terminal { grid-area: 1 / 2; width: 44px; height: 44px; }
+  .composer-context-run .composer-follow { --icon-button-size: 44px; grid-area: 1 / 3; }
+  .composer-context-run .composer-run-status { grid-area: 2 / 1 / 3 / -1; }
+  .composer-stack .composer-toolbar { flex-wrap: wrap; gap: 8px; }
+  .composer-stack .composer-model-control { order: 1; flex-basis: calc(100% - 44px); justify-content: flex-start; }
+  .composer-stack .send-button { order: 2; }
+}
+@container (max-width: 420px) {
+  .composer-stack > :is(.composer, .reply-composer) { padding: 14px 14px 10px; border-radius: 24px; }
+  .composer-context { margin-inline: 8px; padding-inline: 10px; }
+  .composer-context:not(.composer-context-run) .composer-connection-label { display: none; }
+}
+@media (forced-colors: active) {
+  .composer-stack .composer-select-field { border: 1px solid ButtonText; }
+  :root .composer-stack .composer-select-field:has(select:focus-visible) { background: Highlight; color: HighlightText; }
+}

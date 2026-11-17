@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowUp, ChevronRight, Files, Pause, Play, Plus, Shield, X } from 'lucide-react';
+import { ArrowUp, ChevronRight, Files, Pause, Play, Plus, Shield, Square, SquareTerminal, X } from 'lucide-react';
 import { recordedPreview } from './api';
 import type { Connection } from './useConnection';
 import { labelState, text, title, type ServerRecord } from './types';
@@ -9,6 +9,7 @@ import BrowserViewer from './BrowserViewer';
 import TaskConversation from './TaskConversation';
 import { Action } from './TaskAction';
 import { ComposerRunContext } from './ComposerContext';
+import { ControlMode } from './ComposerControls';
 import TaskRunControls from './TaskRunControls';
 import { taskRunStatus, type TaskRunStatus } from './conversation-model';
 import { useConversationScroll } from './useConversationScroll';
@@ -85,6 +86,7 @@ export default function TaskView({ task, ownerLabel, connection, contextBar }: {
     : connection.info?.pendingError || connection.info?.pending ? { label: 'Connection needs attention', kind: 'review', active: false, transient: false }
     : state === 'running' && currentStatus.kind === 'running' && !connection.streaming ? { ...currentStatus, label: 'Reconnecting stream', transient: false }
     : currentStatus;
+  const primaryStops = runStatus.active && !reply.trim() && !stopped;
   const cancel = () => {
     if (mutationBlocked || stopped) return;
     if (confirm('Cancel this task? Completed changes will not be undone.')) {
@@ -112,8 +114,7 @@ export default function TaskView({ task, ownerLabel, connection, contextBar }: {
         </div>
         <div className="composer-stack reply-composer-stack">
           <ComposerRunContext.Provider value={{
-            terminalToggle: <button ref={terminalButton} type="button" className="composer-terminal" aria-label="Terminal" title="Terminal" aria-expanded={terminalOpen} aria-controls="chat-server-terminal" onClick={() => setTerminalOpen(open => !open)}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="5" /><path d="m8 9 3 3-3 3m6 0h3" /></svg></button>,
-            controls: <TaskRunControls status={runStatus} following={scroll.following} unseen={scroll.unseen} onJump={scroll.jumpToLatest} onStop={cancel} canStop={!stopped} disabled={mutationBlocked}
+            controls: <TaskRunControls terminal={<button ref={terminalButton} type="button" className="composer-terminal" aria-label="Terminal" title="Terminal" aria-expanded={terminalOpen} aria-controls="chat-server-terminal" onClick={() => setTerminalOpen(open => !open)}><SquareTerminal size={18} aria-hidden="true" /></button>} status={runStatus} following={scroll.following} unseen={scroll.unseen} onJump={scroll.jumpToLatest} onStop={cancel} canStop={!stopped && !primaryStops} disabled={mutationBlocked}
               review={pendingActions[0] && <button type="button" className="review-shortcut" onClick={() => reviewAction(pendingActions[0])}>Review ({pendingActions.length})</button>} />,
           }}>
             {contextBar}
@@ -131,11 +132,16 @@ export default function TaskView({ task, ownerLabel, connection, contextBar }: {
               }} />
               <button className="icon-button" aria-label="Attach file" title="Attach file" disabled={mutationBlocked || stopped} onClick={() => input.current?.click()}><Plus size={18} /></button>
               {!stopped && <button type="button" className="icon-button" title={resumable ? 'Resume task' : 'Pause task'} aria-label={resumable ? 'Resume task' : 'Pause task'} disabled={mutationBlocked}
-                onClick={() => void connection.command(resumable ? 'task.resume' : 'task.pause', task.id, task.revision)}>{resumable ? <Play size={16} /> : <Pause size={16} />}</button>}
-              <button ref={resourcesButton} type="button" className="icon-button" aria-label="Files, changes and browser" title="Files, changes and browser" aria-controls="task-resources" aria-expanded={resourcesOpen} onClick={() => setResourcesOpen(value => !value)}><Files size={16} /></button>
-              {policy && <label className="composer-permission"><Shield size={16} aria-hidden="true" /><select aria-label="Task control mode" value={text(policy, 'mode')} disabled={mutationBlocked} onChange={event => void connection.command('policy.change', task.id, policy.revision, { mode: event.target.value })}><option value="full_control">Full control</option><option value="auto">Auto review</option><option value="ask_permission">Ask permission</option></select></label>}
+                onClick={() => void connection.command(resumable ? 'task.resume' : 'task.pause', task.id, task.revision)}>{resumable ? <Play size={18} /> : <Pause size={18} />}</button>}
+              <button ref={resourcesButton} type="button" className="icon-button" aria-label="Files, changes and browser" title="Files, changes and browser" aria-controls="task-resources" aria-expanded={resourcesOpen} onClick={() => setResourcesOpen(value => !value)}><Files size={18} /></button>
+              {policy && <ControlMode label="Task control mode" value={text(policy, 'mode')} disabled={mutationBlocked} onChange={event => void connection.command('policy.change', task.id, policy.revision, { mode: event.target.value })} />}
               <div className="composer-model-control">{managed ? <ModelPicker catalogue={connection.agentCatalogue} value={selectedRef} onChange={setModelRef} disabled={mutationBlocked || stopped} /> : <span className="composer-model" title={text(task, 'model') || connection.runtime?.model || 'Server default'}>{text(task, 'model') || connection.runtime?.model || 'Server default'}</span>}</div>
-              <button className="send-button" aria-label="Send message" title="Send message" onClick={() => void submit()} disabled={!reply.trim() || mutationBlocked || stopped || (managed && !selectedRef)}><ArrowUp size={17} /></button>
+              <button type="button" className="send-button" data-action={primaryStops ? 'stop' : 'send'}
+                aria-label={primaryStops ? 'Stop task' : 'Send message'} title={primaryStops ? 'Stop task' : 'Send message'}
+                onClick={() => { if (primaryStops) cancel(); else void submit(); }}
+                disabled={mutationBlocked || stopped || (!primaryStops && (!reply.trim() || (managed && !selectedRef)))}>
+                {primaryStops ? <Square size={14} aria-hidden="true" /> : <ArrowUp size={17} aria-hidden="true" />}
+              </button>
             </div>
           </div>
         </div>

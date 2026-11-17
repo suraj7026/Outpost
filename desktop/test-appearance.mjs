@@ -20,14 +20,18 @@ const fixture = { snapshot: { cursor: 1, protocolVersion: 1, records: [
 let checks = 0; const errors = [];
 const check = (value, label) => { assert.ok(value, label); checks++; };
 const storageKey = 'outpost.appearance.v1';
-async function open({ width = 1320, scheme = 'dark', scenario = 'native' } = {}) {
+async function open({ width = 1320, scheme = 'dark', scenario = 'native', storedAppearance, failTheme = false } = {}) {
   const page = await browser.newPage({ viewport: { width, height: 850 }, colorScheme: scheme });
   page.on('pageerror', error => errors.push(error.message));
-  await page.addInitScript(({ fixture, scenario, storageKey }) => {
+  await page.addInitScript(({ fixture, scenario, storageKey, storedAppearance, failTheme }) => {
+    if (storedAppearance !== undefined && !sessionStorage.getItem('appearance-fixture-seeded')) {
+      localStorage.setItem(storageKey, storedAppearance);
+      sessionStorage.setItem('appearance-fixture-seeded', 'true');
+    }
     if (scenario === 'corrupt') localStorage.setItem(storageKey, '{broken');
     if (scenario === 'blocked') Storage.prototype.setItem = () => { throw new Error('Storage unavailable'); };
-    if (scenario === 'clamp') localStorage.setItem(storageKey, JSON.stringify({ opacity: 900, frosted: 'yes', sidebarCollapsed: 'no' }));
-    if (scenario === 'preview') { window.__OUTPOST_RECORDED_PREVIEW__ = fixture; return; }
+    if (scenario === 'clamp') localStorage.setItem(storageKey, JSON.stringify({ opacity: 900, frosted: 'yes', sidebarCollapsed: 'no', conversationWidth: 'invalid' }));
+    if (scenario === 'preview') window.__OUTPOST_RECORDED_PREVIEW__ = fixture;
     const realMatchMedia = window.matchMedia.bind(window);
     window.matchMedia = query => {
       const media = realMatchMedia(query);
@@ -38,11 +42,34 @@ async function open({ width = 1320, scheme = 'dark', scenario = 'native' } = {})
       return media;
     };
     window.__effects = []; let sequence = 0;
-    window.isTauri = true;
+    window.__nativeCalls = [];
+    window.__themeRequests = [];
+    window.__nativeThemes = [];
+    window.__themeInFlight = 0;
+    window.__maxThemeInFlight = 0;
+    window.__failTheme = failTheme;
+    window.isTauri = scenario !== 'preview';
     window.__TAURI_INTERNALS__ = {
       metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
       transformCallback() { return ++sequence; }, unregisterCallback() {},
       async invoke(command, args) {
+        window.__nativeCalls.push(command);
+        if (command === 'plugin:window|set_theme') {
+          if (args.label !== 'main' || ![null, 'light', 'dark'].includes(args.value)) throw new Error(`Invalid native theme request: ${JSON.stringify(args)}`);
+          window.__themeRequests.push(args.value);
+          window.__themeInFlight++;
+          window.__maxThemeInFlight = Math.max(window.__maxThemeInFlight, window.__themeInFlight);
+          try {
+            if (window.__holdNextTheme) {
+              window.__holdNextTheme = false;
+              await new Promise(resolve => { window.__releaseTheme = resolve; });
+            } else await new Promise(resolve => setTimeout(resolve, 30));
+            if (window.__failTheme) throw new Error('Synthetic native theme failure');
+            window.__nativeThemes.push(args.value);
+          } finally { window.__themeInFlight--; }
+          return;
+        }
+        if (command === 'setup_list' || command === 'setup_history_list') return [];
         if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: null, environments: {} }, legacy: { endpoint: null, pending: false } };
         if (command === 'disconnect') return;
         if (command === 'set_sidebar_window_controls') return;
@@ -59,7 +86,7 @@ async function open({ width = 1320, scheme = 'dark', scenario = 'native' } = {})
         throw new Error(`Unexpected command: ${command}`);
       },
     };
-  }, { fixture, scenario, storageKey });
+  }, { fixture, scenario, storageKey, storedAppearance, failTheme });
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
   await page.evaluate(() => document.fonts.ready);
@@ -160,6 +187,225 @@ async function checkFrostedFooter(page, solidBackground) {
   check((await surface(page, '.connection-nav')).alpha === 0, 'This Mac matches the revealed sidebar');
   await page.keyboard.press('Escape');
 }
+const themeRadio = (page, theme) => page.getByRole('group', { name: 'Theme', exact: true })
+  .getByRole('radio', { name: theme[0].toUpperCase() + theme.slice(1), exact: true });
+const resolvedTheme = (page, preference, theme) => page.waitForFunction(({ preference, theme }) =>
+  document.documentElement.dataset.themePreference === preference && document.documentElement.dataset.theme === theme,
+{ preference, theme });
+const nativeTheme = (page, theme) => page.waitForFunction(theme =>
+  window.__nativeThemes.length > 0 && window.__nativeThemes.at(-1) === theme && window.__themeInFlight === 0, theme);
+const savedAppearance = page => page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
+async function checkTheme(page, preference, theme) {
+  await resolvedTheme(page, preference, theme);
+  check(await themeRadio(page, preference).isChecked(), `${preference} remains selected while resolving to ${theme}`);
+  check(await page.locator('html').evaluate(node => getComputedStyle(node).colorScheme) === theme,
+    `Native form controls use the resolved ${theme} color scheme`);
+}
+async function checkThemePalette(page, theme) {
+  const colors = await page.locator('html').evaluate(node => {
+    const style = getComputedStyle(node), context = document.createElement('canvas').getContext('2d');
+    return Object.fromEntries(['--bg', '--surface', '--raised', '--text'].map(token => {
+      context.fillStyle = style.getPropertyValue(token).trim();
+      return [token, context.fillStyle];
+    }));
+  });
+  const expected = theme === 'light'
+    ? { '--bg': '#f1f2f4', '--surface': '#ffffff', '--raised': '#f1f2f4', '--text': '#24272d' }
+    : { '--bg': '#0f1011', '--surface': '#16171a', '--raised': '#1c1d21', '--text': '#ededef' };
+  assert.deepEqual(colors, expected, `${theme} retains the specified root palette`); checks++;
+  check(await page.locator('html').evaluate(node => getComputedStyle(node).backgroundColor)
+    === (theme === 'light' ? 'rgb(241, 242, 244)' : 'rgb(15, 16, 17)'), `${theme} root paints the selected background`);
+}
+async function checkContextTheme(page, theme) {
+  const contexts = page.locator('.composer-context:visible');
+  await contexts.first().waitFor();
+  for (const context of await contexts.all()) {
+    check(await context.evaluate(node => getComputedStyle(node).backgroundColor)
+      === (theme === 'light' ? 'rgb(230, 232, 236)' : 'rgb(16, 17, 18)'), `${theme} composer context follows the app palette`);
+  }
+}
+async function checkSetupTheme(page, theme) {
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await page.locator('.settings-link-list a[href="#machines"]').click();
+  await page.getByRole('link', { name: 'Add server', exact: true }).click();
+  const dialog = page.locator('dialog.server-setup-dialog[open]');
+  await dialog.waitFor();
+  check(await dialog.evaluate(node => node.matches(':modal')), 'Theme is checked on the real setup modal');
+  const style = await dialog.evaluate(node => {
+    const style = getComputedStyle(node);
+    return { scheme: style.colorScheme, background: style.backgroundColor };
+  });
+  check(style.scheme === theme, `Setup dialog uses manual ${theme}, not the opposite OS theme`);
+  check(style.background === (theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(27, 28, 31)'),
+    `Setup dialog paints its ${theme} palette independently of the OS`);
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+}
+async function checkThemePreferences() {
+  for (const scheme of ['dark', 'light']) {
+    const manual = scheme === 'dark' ? 'light' : 'dark';
+    const page = await open({ scheme });
+    await resolvedTheme(page, 'auto', scheme);
+    await nativeTheme(page, null);
+    await checkContextTheme(page, scheme);
+    await settings(page);
+    await checkTheme(page, 'auto', scheme);
+    await checkThemePalette(page, scheme);
+    const group = page.getByRole('group', { name: 'Theme', exact: true });
+    check(await group.evaluate(node => node.tagName === 'FIELDSET'), 'Theme choices have a native accessible fieldset');
+    check(await group.getByRole('radio').count() === 3, 'Theme fieldset exposes exactly Auto, Light and Dark');
+    const inputs = await group.getByRole('radio').evaluateAll(nodes => nodes.map(node => ({ tag: node.tagName, type: node.type, name: node.name })));
+    check(inputs.every(node => node.tag === 'INPUT' && node.type === 'radio' && node.name && node.name === inputs[0].name),
+      'Theme choices are native radios in one keyboard group');
+    await page.emulateMedia({ colorScheme: manual });
+    await checkTheme(page, 'auto', manual);
+    await checkThemePalette(page, manual);
+    await page.emulateMedia({ colorScheme: scheme });
+    await checkTheme(page, 'auto', scheme);
+    check((await savedAppearance(page)).theme === 'auto', 'OS changes do not replace the saved Auto preference');
+    check(await page.evaluate(() => window.__themeRequests.every(theme => theme === null)), 'Auto never sends a resolved manual theme to native chrome');
+    await themeRadio(page, manual).check();
+    await checkTheme(page, manual, manual);
+    await nativeTheme(page, manual);
+    await checkThemePalette(page, manual);
+    check((await savedAppearance(page)).theme === manual, 'Manual theme is saved immediately');
+    await page.getByRole('button', { name: 'New task', exact: false }).click();
+    await checkContextTheme(page, manual);
+    await settings(page);
+    await checkSetupTheme(page, manual);
+    await settings(page);
+    await page.reload();
+    await page.getByRole('heading', { name: 'Appearance', exact: true, level: 1 }).waitFor();
+    await checkTheme(page, manual, manual);
+    await nativeTheme(page, manual);
+    check(await page.evaluate(theme => window.__themeRequests.every(value => value === theme), manual),
+      'Saved manual theme is applied to native chrome on startup without an Auto reset');
+    const requests = await page.evaluate(() => window.__themeRequests.length);
+    for (const colorScheme of [manual, scheme]) {
+      await page.emulateMedia({ colorScheme });
+      // Allow media change listeners and the delayed native mock to finish before asserting no override.
+      await page.waitForTimeout(100);
+      await checkTheme(page, manual, manual);
+      await checkThemePalette(page, manual);
+    }
+    check(await page.evaluate(() => window.__themeRequests.length) === requests, 'Manual theme ignores OS changes without extra native calls');
+    await themeRadio(page, 'auto').check();
+    await checkTheme(page, 'auto', scheme);
+    await nativeTheme(page, null);
+    await page.reload();
+    await page.getByRole('heading', { name: 'Appearance', exact: true, level: 1 }).waitFor();
+    await checkTheme(page, 'auto', scheme);
+    await nativeTheme(page, null);
+    await page.emulateMedia({ colorScheme: manual });
+    await checkTheme(page, 'auto', manual);
+    await page.close();
+  }
+  const invalidPreferences = ['{broken', 'null', '[]', '"dark"', ...['system', 'Dark', '', null, true, 42, {}].map(theme => JSON.stringify({ theme }))];
+  for (const [index, storedAppearance] of invalidPreferences.entries()) {
+    const scheme = index % 2 ? 'light' : 'dark';
+    const page = await open({ scheme, storedAppearance });
+    await settings(page);
+    await checkTheme(page, 'auto', scheme);
+    await nativeTheme(page, null);
+    check((await savedAppearance(page)).theme === 'auto', `Corrupt/invalid preference falls back to Auto: ${storedAppearance}`);
+    await themeRadio(page, 'light').check();
+    await nativeTheme(page, 'light');
+    check((await savedAppearance(page)).theme === 'light', 'Invalid storage does not prevent saving a valid replacement');
+    await page.close();
+  }
+  {
+    const preferences = { theme: 'invalid', frosted: true, opacity: 64, sidebarCollapsed: true, conversationWidth: 'large' };
+    const page = await open({ storedAppearance: JSON.stringify(preferences) });
+    await settings(page);
+    await checkTheme(page, 'auto', 'dark');
+    await themeRadio(page, 'light').check();
+    await nativeTheme(page, 'light');
+    assert.deepEqual(await savedAppearance(page), { ...preferences, theme: 'light', conversationDetail: 'compact' }, 'Theme validation and selection preserve every other appearance preference and initialize conversation detail'); checks++;
+    await page.reload();
+    await page.getByRole('heading', { name: 'Appearance', exact: true, level: 1 }).waitFor();
+    await checkTheme(page, 'light', 'light');
+    check(await page.getByRole('switch', { name: 'Frosted glass', exact: true }).isChecked()
+      && await page.locator('#glass-opacity').inputValue() === '64'
+      && await page.getByRole('switch', { name: 'Collapse sidebar', exact: true }).isChecked()
+      && await page.getByRole('radio', { name: 'Large', exact: true }).isChecked(), 'Other preferences remain effective after theme reload');
+    await page.close();
+  }
+  {
+    const page = await open({ scheme: 'dark' });
+    await settings(page);
+    await nativeTheme(page, null);
+    await themeRadio(page, 'auto').focus();
+    // Native WebKit radios stop at group edges; Chromium wraps. Exercise traversal shared by both.
+    for (const [key, preference] of [['ArrowRight', 'light'], ['ArrowRight', 'dark'], ['ArrowLeft', 'light'], ['ArrowLeft', 'auto']]) {
+      await page.keyboard.press(key);
+      await checkTheme(page, preference, preference === 'auto' ? 'dark' : preference);
+      check(await themeRadio(page, preference).evaluate(node => node === document.activeElement), 'Arrow keys move both theme selection and focus');
+    }
+    await themeRadio(page, 'light').focus();
+    await page.keyboard.press('Space');
+    await checkTheme(page, 'light', 'light');
+    await nativeTheme(page, 'light');
+    await themeRadio(page, 'auto').check();
+    await nativeTheme(page, null);
+    const start = await page.evaluate(() => { window.__holdNextTheme = true; return window.__themeRequests.length; });
+    await themeRadio(page, 'light').check();
+    await page.waitForFunction(() => typeof window.__releaseTheme === 'function');
+    for (const preference of ['dark', 'auto', 'dark']) {
+      await themeRadio(page, preference).check();
+      await checkTheme(page, preference, preference === 'auto' ? 'dark' : preference);
+    }
+    assert.deepEqual(await page.evaluate(start => window.__themeRequests.slice(start), start), ['light'], 'Native theme changes wait behind the in-flight request'); checks++;
+    await page.evaluate(() => window.__releaseTheme());
+    await nativeTheme(page, 'dark');
+    await page.waitForTimeout(100);
+    assert.deepEqual(await page.evaluate(start => window.__themeRequests.slice(start), start), ['light', 'dark'], 'Superseded queued theme requests are skipped'); checks++;
+    check(await page.evaluate(() => window.__maxThemeInFlight === 1 && window.__nativeThemes.at(-1) === 'dark'),
+      'Rapid switching serializes native calls and leaves the last requested theme applied');
+    check((await savedAppearance(page)).theme === 'dark', 'Rapid switching persists only the latest selected preference');
+    await page.evaluate(() => { window.__failTheme = true; });
+    await themeRadio(page, 'light').check();
+    const alert = page.getByRole('alert').filter({ hasText: /theme/i });
+    await alert.waitFor();
+    check(await alert.isVisible(), 'Native theme IPC failure is surfaced accessibly');
+    await checkTheme(page, 'light', 'light');
+    check(await page.evaluate(() => window.__nativeThemes.at(-1) === 'dark'), 'Failed theme IPC is not recorded as native success');
+    await page.evaluate(() => { window.__failTheme = false; });
+    await themeRadio(page, 'auto').check();
+    await nativeTheme(page, null);
+    await alert.waitFor({ state: 'hidden' });
+    await themeRadio(page, 'light').check();
+    await nativeTheme(page, 'light');
+    await checkTheme(page, 'light', 'light');
+    check(!await alert.isVisible(), 'Theme IPC queue recovers after rejection and clears the error');
+    await page.close();
+  }
+  {
+    const page = await open({ failTheme: true });
+    await settings(page);
+    await page.getByRole('alert').filter({ hasText: /theme/i }).waitFor();
+    await checkTheme(page, 'auto', 'dark');
+    check(await page.evaluate(() => window.__nativeThemes.length === 0), 'Startup theme failure leaves the app usable without reporting native success');
+    await page.evaluate(() => { window.__failTheme = false; });
+    await themeRadio(page, 'light').check();
+    await nativeTheme(page, 'light');
+    await page.getByRole('alert').filter({ hasText: /theme/i }).waitFor({ state: 'hidden' });
+    await page.close();
+  }
+  {
+    const page = await open({ scheme: 'dark', scenario: 'preview' });
+    await settings(page);
+    for (const preference of ['light', 'dark', 'auto']) {
+      await themeRadio(page, preference).check();
+      await checkTheme(page, preference, preference === 'auto' ? 'dark' : preference);
+      await checkThemePalette(page, preference === 'auto' ? 'dark' : preference);
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+    await checkTheme(page, 'auto', 'light');
+    await page.waitForTimeout(100);
+    assert.deepEqual(await page.evaluate(() => window.__nativeCalls), [], 'Browser preview never invokes native IPC on startup, selection, or OS changes'); checks++;
+    await page.close();
+  }
+}
 async function geometry(page) {
   const result = await page.evaluate(() => {
     const rect = document.querySelector('.main-shell').getBoundingClientRect();
@@ -184,6 +430,7 @@ try {
   const config = JSON.parse(readFileSync('desktop/src-tauri/tauri.conf.json', 'utf8'));
   check(config.app.macOSPrivateApi && config.app.windows[0].transparent, 'Native transparency is enabled, not simulated with CSS');
   check(config.app.windows[0].shadow === false, 'Native window shadow and its outline are disabled');
+  await checkThemePreferences();
   for (const scheme of ['dark', 'light']) {
     const page = await open({ scheme });
     await geometry(page);
@@ -272,8 +519,12 @@ try {
     if (scenario === 'blocked') check(await page.getByRole('alert').filter({ hasText: 'could not be saved' }).isVisible(), 'Storage failures are visible and nonfatal');
     else if (scenario === 'preview') check(await page.getByRole('switch', { name: 'Frosted glass', exact: true }).isDisabled(), 'Browser preview never claims native blur');
     else check(await page.locator('#glass-opacity').inputValue() === (scenario === 'clamp' ? '100' : '45'), 'Stored values validated and clamped');
+    check(await page.getByRole('radio', { name: 'Narrow', exact: true }).isChecked(), 'Missing or invalid stored width defaults to Narrow');
+    await page.getByRole('radio', { name: 'Wide', exact: true }).check();
+    await page.waitForFunction(() => document.documentElement.style.getPropertyValue('--conversation-width') === '864px');
+    check(await page.getByRole('radio', { name: 'Wide', exact: true }).isChecked(), 'Width remains usable in preview and with unavailable storage');
     await page.close();
   }
   check(errors.length === 0, errors.join('\n'));
-  console.log(`PASS: ${checks} appearance checks (${engine.name()}); native IPC contract, persistence, accessibility, fallback, sidebar and corner geometry.`);
+  console.log(`PASS: ${checks} appearance checks (${engine.name()}); Auto/Light/Dark, native IPC contract, persistence, accessibility, fallback, sidebar and corner geometry.`);
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }

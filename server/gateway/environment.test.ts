@@ -8,6 +8,7 @@ import { once } from 'node:events';
 import { Ledger } from '../core/ledger.js';
 import { id } from '../core/contracts.js';
 import { EnvironmentDescriptor } from '../environment/contracts.js';
+import { RecoveryReport } from '../diagnostics/recovery.js';
 import { Coordinator } from './coordinator.js';
 import { httpServer } from './http.js';
 
@@ -257,5 +258,67 @@ test('bound artifact uploads/downloads and streams work without changing the v1 
       assert.match(frame, /"protocolVersion":1/);
       assert.ok(frame.includes(taskId));
     } finally { await reader.cancel(); }
+  } finally { await environment.close(); }
+});
+
+test('recovery diagnostics uses signed v1/v2 queries during holds without writes or environment/auth bypass', async () => {
+  const one = await fixture(), two = await fixture();
+  const owner = device();
+  try {
+    await pair(one, owner); await pair(two, owner);
+    const missing = await request(one, '/v2/query', query(one, owner, 'recovery.diagnostics'), owner);
+    assert.equal(missing.status, 200);
+    const missingReport = RecoveryReport.parse(await missing.json());
+    assert.deepEqual(missingReport.recovery, { state: 'missing', revision: null });
+    assert.equal(missingReport.dispatchEnabled, true);
+    assert.equal(one.db.get('recovery', 'server'), undefined);
+    one.db.put('recovery', 'server', 0, { dispatchEnabled: false, reason: 'PRIVATE-RECOVERY-REASON' });
+    one.db.put('runtime_update', 'server', 0, { state: 'prepared', secret: 'PRIVATE-MAINTENANCE' });
+    const before = one.db.db.prepare('SELECT total_changes() AS n').get()?.n;
+    const cursor = one.db.cursor();
+    const bound = query(one, owner, 'recovery.diagnostics');
+    const legacy = { deviceId: owner.id, issuedAt: Date.now(), type: 'recovery.diagnostics', payload: {} };
+    for (const [path, envelope] of [['/v1/query', legacy], ['/v2/query', bound]] as const) {
+      const response = await request(one, path, envelope, owner);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get('cache-control'), 'no-store');
+      const text = await response.text(), value = RecoveryReport.parse(JSON.parse(text));
+      assert.equal(value.environmentId, one.coordinator.environment.environmentId);
+      assert.deepEqual(value.recovery, { state: 'held', revision: 1 });
+      assert.equal(value.dispatchEnabled, false);
+      assert.deepEqual(value.maintenance, { state: 'prepared', holding: true });
+      assert.equal(value.agent.available, false);
+      assert.equal(text.includes('PRIVATE-'), false);
+      assert.equal(text.includes(token), false);
+    }
+    const anonymous = await fetch(one.base + '/v2/query', { method: 'POST', body: JSON.stringify(bound) });
+    assert.notEqual(anonymous.status, 200);
+    await expectError(await request(one, '/v2/query', bound, device()), 'invalid_signature');
+    await expectError(await request(one, '/v2/query', { ...bound, issuedAt: 0 }, owner), 'expired_request');
+    await expectError(await request(one, '/v2/query', { ...bound, payload: { command: 'arbitrary shell read' } }, owner), 'invalid_request', 400);
+    await expectError(await request(one, '/v1/query', { ...legacy, payload: { goal: 'arbitrary goal' } }, owner), 'invalid_request', 400);
+    await expectError(await request(two, '/v2/query', bound, owner), 'environment_mismatch');
+    await expectError(await request(two, '/v2/query', { ...bound, environmentId: two.coordinator.environment.environmentId }, owner, bound), 'invalid_signature');
+    await expectError(await request(one, '/v1/query', bound, owner), 'unsupported_protocol', 426);
+    assert.equal(one.db.db.prepare('SELECT total_changes() AS n').get()?.n, before);
+    assert.equal(one.db.cursor(), cursor);
+    one.coordinator.devices.revoke(owner.id, 1);
+    await expectError(await request(one, '/v2/query', bound, owner), 'revoked_device');
+    await expectError(await request(one, '/v1/query', legacy, owner), 'revoked_device');
+    assert.equal((await request(two, '/v2/query', query(two, owner, 'recovery.diagnostics'), owner)).status, 200);
+  } finally { await one.close(); await two.close(); }
+});
+
+test('recovery diagnostics respects disabled legacy access while remaining available over v2', async () => {
+  const environment = await fixture(false), owner = device();
+  try {
+    await pair(environment, owner);
+    environment.db.put('recovery', 'server', 0, { dispatchEnabled: 'malformed' });
+    await expectError(await request(environment, '/v1/query', { deviceId: owner.id, issuedAt: Date.now(), type: 'recovery.diagnostics', payload: {} }, owner), 'legacy_protocol_disabled', 426);
+    const response = await request(environment, '/v2/query', query(environment, owner, 'recovery.diagnostics'), owner);
+    assert.equal(response.status, 200);
+    const value = RecoveryReport.parse(await response.json());
+    assert.equal(value.recovery.state, 'invalid');
+    assert.equal(value.dispatchEnabled, false);
   } finally { await environment.close(); }
 });

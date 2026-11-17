@@ -1,5 +1,5 @@
 import { useId, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from 'react';
-import { Check, ChevronRight, Copy, Download, LockKeyhole, Server, Terminal, TriangleAlert } from 'lucide-react';
+import { Check, ChevronRight, Copy, Download, LockKeyhole, Server, SquareTerminal as Terminal, TriangleAlert } from 'lucide-react';
 import type { Entry, Inspection, Target } from './server-setup-state';
 import { call, nativeApp } from './api';
 

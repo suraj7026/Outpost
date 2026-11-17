@@ -38,15 +38,13 @@ html:root[data-glass="true"] .web-sidebar :is(.sidebar-chrome, .sidebar-section)
   background-color: var(--keyboard-focus-bg, color-mix(in srgb, var(--focus-surface) var(--sidebar-selection-opacity), transparent));
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    --focus-surface: color-mix(in srgb, var(--surface) 70%, var(--raised));
-    --focus-composer: color-mix(in srgb, var(--raised) 70%, var(--surface));
-  }
+:root[data-theme="light"] {
+  --focus-surface: color-mix(in srgb, var(--surface) 70%, var(--raised));
+  --focus-composer: color-mix(in srgb, var(--raised) 70%, var(--surface));
 }
 
 @media (forced-colors: active) {
-  :root { --focus-surface: Highlight; --focus-composer: Highlight; }
+  :root, :root[data-theme] { --focus-surface: Highlight; --focus-composer: Highlight; }
   :root :focus-visible:not([tabindex="-1"]) {
     --keyboard-focus-bg: Highlight;
     --text: HighlightText;

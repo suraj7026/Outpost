@@ -1,0 +1,10 @@
+.appearance-settings .appearance-width { border: 0; padding: 0; margin: 0; min-width: 0; }
+.appearance-settings .appearance-width legend { padding: 0; font-size: 14px; font-weight: 500; color: var(--text); }
+.appearance-settings .appearance-width > p { margin: 6px 0 12px; max-width: 56ch; }
+.appearance-width-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; max-width: 420px; padding: 4px; gap: 4px; background: var(--raised); border-radius: 10px; }
+.appearance-width-options.appearance-detail-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.appearance-settings .appearance-width-options label { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; min-height: 40px; margin: 0; border-radius: 7px; color: var(--muted); cursor: pointer; }
+.appearance-settings .appearance-width-options label:hover { background: var(--active); }
+.appearance-settings .appearance-width-options label:has(input:checked) { background: var(--active); color: var(--text); }
+.appearance-settings .appearance-width-options label:has(input:focus-visible) { background: var(--focus-surface); }
+.appearance-settings .appearance-width-options input[type=radio] { appearance: auto; width: 14px; height: 14px; min-height: 14px; min-width: 14px; margin: 0; padding: 0; flex: none; accent-color: var(--text); }

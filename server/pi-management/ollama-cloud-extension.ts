@@ -5,7 +5,7 @@ import { PiProfile } from './profile.js';
 import { refreshSubscriptionModels } from './subscription-models.js';
 import { refreshOllamaModels } from './ollama-access.js';
 
-/** Managed CLI entry: the same provider and access policies as the worker, with no package tools. */
+/** Loaded after native package extensions to preserve the worker's composed provider/access policies. */
 export default async function managedProviders(pi: ExtensionAPI) {
   try {
     const profile = new PiProfile(process.env.PI_CODING_AGENT_DIR ?? join(homedir(), '.pi', 'agent'));

@@ -12,7 +12,7 @@
           },
           {
             "name": "coordinator",
-            "image": "docker.io/library/homelab-pi-workspace:1.4.0-1",
+            "image": "docker.io/library/homelab-pi-workspace:1.5.2-1",
             "imagePullPolicy": "Never",
             "command": ["/usr/bin/tini", "--", "node", "--import", "/home/node/outpost-runtime/node_modules/tsx/dist/loader.mjs", "/home/node/outpost-runtime/server/main.ts"],
             "workingDir": "/home/node/outpost-runtime",

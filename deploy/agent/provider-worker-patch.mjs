@@ -13,7 +13,7 @@ export function providerWorkerPatch(release) {
       { name: 'coordinator', command: ['/usr/bin/tini','--','node','--import','/opt/outpost/node_modules/tsx/dist/loader.mjs','/opt/outpost/server/main.ts'], workingDir: '/opt/outpost',
         env: [{ name: 'OUTPOST_PI_WORKER_URL', value: 'http://127.0.0.1:4320' }, { name: 'OUTPOST_PI_WORKER_TOKEN_FILE', value: '/run/outpost-worker/token' }],
         volumeMounts: [releaseMount, tokenMount] },
-      { name: 'pi-worker', image: 'docker.io/library/homelab-pi-workspace:1.4.0-1', imagePullPolicy: 'Never',
+      { name: 'pi-worker', image: 'docker.io/library/homelab-pi-workspace:1.5.2-1', imagePullPolicy: 'Never',
         command: ['/usr/bin/tini','--','node','--import','/opt/outpost/node_modules/tsx/dist/loader.mjs','/opt/outpost/server/pi-worker/main.ts'], workingDir: '/opt/outpost',
         securityContext: security,
         env: [

@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { ProviderTransfers } from './transfers.js';
 import { TransferRequest } from './transfer-contracts.js';
 import { ReleaseManifest, UpdateRequest } from './update-contracts.js';
-import { ollamaCloudVersion } from './ollama-cloud.js';
+import { bundledExtensions } from './bundled-extensions.js';
 import { AuthFlows } from './auth-flows.js';
 import { ProviderRequest, managementProtocol, managementError, type Catalogue } from './contracts.js';
 import { PiProfile } from './profile.js';
@@ -43,7 +43,7 @@ export class ProviderManagement {
   inventory() {
     let manifest: unknown = null;
     try { manifest = ReleaseManifest.parse(JSON.parse(readFileSync(join(dirname(process.env.OUTPOST_PI_RELEASE_FILE ?? ''), 'host-manifest.json'), 'utf8'))); } catch { /* Legacy/container releases have no qualified native manifest. */ }
-    return { piVersion: this.profile.version, releaseId: this.profile.releaseId, extensions: [{ name: 'pi-ollama-cloud', version: ollamaCloudVersion }], manifest, providerTransfer: true };
+    return { piVersion: this.profile.version, releaseId: this.profile.releaseId, ...bundledExtensions(), manifest, providerTransfer: true };
   }
   async runtime() {
     const generation = this.profile.generation();

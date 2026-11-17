@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef, useState } from 'react';
+import { memo, useMemo, useRef, type ReactNode } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Check, ChevronRight, UserRound } from 'lucide-react';
@@ -8,6 +8,7 @@ import { actionNeedsReview, text, type ServerRecord } from './types';
 import type { Connection } from './useConnection';
 import { groupConversation, linkedToolStreams, type ConversationGroup } from './conversation-model';
 import ExecutionEntry from './ExecutionEntry';
+import { ThinkingIndicator, useConversationDisclosure } from './conversation-detail';
 import OutpostMark from './OutpostMark';
 
 import Artifact from './image-viewer/Artifact';
@@ -23,14 +24,24 @@ const MessageText = memo(function MessageText({ record, onError }: { record: Ser
 });
 
 function RunReasoning({ records }: { records: ServerRecord[] }) {
-  const [open, setOpen] = useState(false);
-  const messages = records.filter(record => record.kind === 'message' && text(record, 'thinking'));
-  if (!messages.length) return null;
+  const { open, setOpen } = useConversationDisclosure();
+  const messages = records.filter(record => record.kind === 'message');
+  const traces = messages.filter(message => text(message, 'thinking'));
+  const latest = messages.at(-1);
+  const active = !!latest && latest.data.streaming === true && !latest.data.interrupted && !text(latest, 'error') && text(latest, 'stopReason') !== 'error' && !text(latest, 'text');
+  if (!traces.length && !active) return null;
   return <details className="thinking-block run-reasoning" open={open} onToggle={event => {
     if (event.currentTarget.open !== open) setOpen(event.currentTarget.open);
-  }}><summary><ChevronRight size={13} className="disclosure" aria-hidden="true" /><span>Reasoning</span><span className="small">Model-provided{messages.length > 1 ? ` · ${messages.length} segments` : ''}</span></summary>
-    <div className="reasoning-segments">{messages.map(message => <pre key={message.id}>{text(message, 'thinking')}</pre>)}</div>
+  }}><summary><ChevronRight size={13} className="disclosure" aria-hidden="true" /><ThinkingIndicator active={active} /><span>{active ? text(latest!, 'thinking') ? 'Thinking…' : 'Waiting for model output…' : 'Thinking'}</span><span className="small">{active ? 'In progress' : latest?.data.interrupted ? 'Interrupted' : 'Model-provided'}{traces.length > 1 ? ` · ${traces.length} segments` : ''}</span></summary>
+    <div className="reasoning-segments">{traces.map(message => <pre key={message.id}>{text(message, 'thinking')}</pre>)}{active && !text(latest!, 'thinking') && <p className="small">No thinking trace has been provided yet.</p>}</div>
   </details>;
+}
+
+function CompletedActions({ count, children }: { count: number; children: ReactNode }) {
+  const { open, setOpen } = useConversationDisclosure();
+  return <details className="completed-action-group" open={open} onToggle={event => {
+    if (event.currentTarget.open !== open) setOpen(event.currentTarget.open);
+  }}><summary><ChevronRight size={13} className="disclosure" aria-hidden="true" /><Check size={15} aria-hidden="true" /><span>Completed actions</span><span className="small">{count} actions</span></summary><div>{children}</div></details>;
 }
 
 function completedAction(record: ServerRecord) {
@@ -83,7 +94,7 @@ function Run({ group, connection, streams, onReview }: {
     <div className="run-content">
       <RunReasoning records={group.records} />
       {chunks.map(chunk => chunk.length > 1
-        ? <details className="completed-action-group" key={`completed:${chunk[0].id}`}><summary><ChevronRight size={13} className="disclosure" aria-hidden="true" /><Check size={15} aria-hidden="true" /><span>Completed actions</span><span className="small">{chunk.length} actions</span></summary><div>{chunk.map(render)}</div></details>
+        ? <CompletedActions key={`completed:${chunk[0].id}`} count={chunk.length}>{chunk.map(render)}</CompletedActions>
         : render(chunk[0]))}
     </div>
   </article>;

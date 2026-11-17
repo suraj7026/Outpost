@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, webkit } from 'playwright';
+import { openSettings } from './settings-test-navigation.mjs';
 
 // Run from any directory: node desktop/test-unified-conversation.mjs
 // Optional: OUTPOST_TEST_BROWSER=chromium|webkit, OUTPOST_TEST_FILTER=<case substring>, OUTPOST_TEST_SCREENSHOTS=<directory>, OUTPOST_TEST_DIST=<built directory>.
@@ -52,6 +53,7 @@ function fixture(options = {}) {
 }
 
 function installTransport({ records, options, environmentId, taskId }) {
+  if (options.conversationDetail) localStorage.setItem('outpost.appearance.v1', JSON.stringify({ conversationDetail: options.conversationDetail }));
   const callbacks = new Map();
   let sequence = 0, channel, index = 0, endStream;
   const live = new Map();
@@ -78,9 +80,11 @@ function installTransport({ records, options, environmentId, taskId }) {
   const legacy = options.retired === true;
   window.isTauri = true;
   window.__TAURI_INTERNALS__ = {
+    metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
     transformCallback(fn) { const id = ++sequence; callbacks.set(id, fn); return id; },
     unregisterCallback(id) { callbacks.delete(id); },
     async invoke(wireCommand, args = {}) {
+      if (wireCommand === 'plugin:window|set_theme' && args?.label === 'main' && [null, 'light', 'dark'].includes(args.value)) return;
       if (wireCommand === 'environment_list') return {
         registry: { version: 1, legacyMutationsRetired: legacy, selectedEnvironmentId: legacy ? null : environmentId,
           environments: legacy ? {} : { [environmentId]: { environmentId, label: 'Unified fixture', activeRoute: 'https://fixture.invalid', routes: ['https://fixture.invalid'] } } },
@@ -211,6 +215,8 @@ async function runHeaderLayout(page) {
       headerBottom: header?.getBoundingClientRect().bottom, contentTop: content.getBoundingClientRect().top,
       firstChildGap: first ? first.getBoundingClientRect().top - content.getBoundingClientRect().top : null,
       marginLeft: parseFloat(getComputedStyle(content).marginLeft),
+      avatarRight: header.querySelector('.assistant-avatar').getBoundingClientRect().right,
+      contentLeft: content.getBoundingClientRect().left,
       inset: content.getBoundingClientRect().left - run.getBoundingClientRect().left };
   }));
   check(runs.length > 0, 'Header layout regression inspects mounted assistant runs');
@@ -220,9 +226,9 @@ async function runHeaderLayout(page) {
     check(run.contentTop >= run.headerBottom - 1, `${run.id}: content is below, not overlapping, the header`);
     check(run.firstChildGap !== null, `${run.id}: fixture contains visible run content`);
     near(run.firstChildGap, 0, `${run.id}: first visible content has no extra header spacer`);
-    const inset = page.viewportSize().width <= 620 ? 40 : 48;
-    near(run.marginLeft, inset, `${run.id}: responsive content margin-left`);
-    near(run.inset, inset, `${run.id}: responsive content alignment`);
+    near(run.marginLeft, 0, `${run.id}: response uses the whole text column`);
+    near(run.inset, 0, `${run.id}: response aligns to the column edge`);
+    check(run.avatarRight <= run.contentLeft - 7, `${run.id}: assistant avatar sits outside the text column`);
   }
 }
 async function ownerLayout(page, expectedOwners) {
@@ -260,7 +266,8 @@ async function ownerLayout(page, expectedOwners) {
         }) };
     });
     check(layout.avatar.left >= layout.content.right - 1, `${id}: avatar sits to the right of owner content`);
-    near(layout.avatar.right, layout.owner.right, `${id}: avatar aligns to the message's right edge`);
+    near(layout.avatar.left - layout.owner.right, page.viewportSize().width <= 620 ? 8 : 14, `${id}: avatar sits in the outer gutter`);
+    near(layout.content.right, layout.owner.right, `${id}: owner text uses the whole column`);
     check(layout.avatar.width > 0, `${id}: owner avatar has a nonzero width`);
     equal(layout.bylinePrecedesText, true, `${id}: You and timestamp precede the plain text`);
     check(layout.byline.bottom <= layout.markdown.top + 1, `${id}: byline is above the text`);
@@ -424,12 +431,18 @@ try {
           equal(await page.locator('.run-reasoning').count(), 2, 'One aggregated reasoning disclosure per run');
           equal(await page.locator('.run-reasoning[open]').count(), 0, 'Reasoning begins collapsed');
           equal(await page.locator('.run-reasoning').first().locator('.reasoning-segments pre').count(), 2, 'First run retains both reasoning segments');
-          const output = entry(page, 'active-action').locator('.execution-output');
+          check(await gap(page) < 4, 'Initial render is pinned to latest');
+          equal(await follow(page).getAttribute('aria-disabled'), 'true', 'Initial follow is armed');
+          const activeAction = entry(page, 'active-action');
+          check(!(await activeAction.evaluate(node => node.open)), 'Compact starts active execution collapsed');
+          await activeAction.locator(':scope > summary').click();
+          await frames(page);
+          const output = activeAction.locator('.execution-output');
           equal(await output.textContent(), initialOutput.split('\n').slice(-5).join('\n'), 'Output shows exactly the latest five lines');
           const outputBox = await output.evaluate(node => ({ height: node.getBoundingClientRect().height, lineHeight: parseFloat(getComputedStyle(node).lineHeight) }));
           near(outputBox.height, outputBox.lineHeight * 5, 'Output viewport is exactly five lines tall');
-          check(await gap(page) < 4, 'Initial render is pinned to latest');
-          equal(await follow(page).getAttribute('aria-disabled'), 'true', 'Initial follow is armed');
+          // Inspecting a disclosure pauses follow; restore the tail for layout checks.
+          await follow(page).click(); await frames(page);
           equal(await page.locator('.composer-context-run .composer-run-status').count(), 1, 'Status lives inside the composer context, not a separate banner');
           equal(await page.locator('.composer-context-run').evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(16, 17, 18)', 'Composer context remains black in both themes');
           for (const label of ['Message Outpost', 'Attach file', 'Task control mode', 'Send message']) check(await page.getByLabel(label, { exact: true }).isVisible(), `Composer retains ${label}`);
@@ -491,6 +504,76 @@ try {
         });
       }
 
+      await scenario(engine, 'conversation-width-preference', { width: 1600 }, async page => {
+        for (const [label, value, pixels] of [['Narrow', 'narrow', 672], ['Wide', 'wide', 864], ['Large', 'large', 1056]]) {
+          await openSettings(page, { page: 'appearance' });
+          await page.getByRole('radio', { name: label, exact: true }).check();
+          await page.waitForFunction(value => document.documentElement.dataset.conversationWidth === value, value);
+          equal(await page.evaluate(() => JSON.parse(localStorage.getItem('outpost.appearance.v1')).conversationWidth), value, 'Width preference is persisted');
+          if (value === 'large') await screenshot(page, `${engine.name()}-conversation-width-settings`);
+          await page.locator(`.chat-server-group[data-server-id="${environmentId}"] [data-task-id="${taskId}"]`).evaluate(node => node.click());
+          await page.locator('.conversation').waitFor(); await frames(page);
+          near(await page.locator('.conversation-content').evaluate(node => node.getBoundingClientRect().width), pixels, `${label} text column has its configured width`);
+          near(await page.locator('.reply-composer-stack').evaluate(node => node.getBoundingClientRect().width), pixels, 'Reply composer follows the text width');
+          await runHeaderLayout(page); await ownerLayout(page, 2);
+          await page.locator('.conversation').evaluate(node => { node.scrollTop = 0; }); await frames(page);
+          await screenshot(page, `${engine.name()}-conversation-${value}`);
+        }
+        await page.reload(); await page.locator('.conversation').waitFor(); await frames(page);
+        equal(await page.evaluate(() => document.documentElement.dataset.conversationWidth), 'large', 'Preference survives a reload');
+        await page.setViewportSize({ width: 390, height: 1000 }); await frames(page);
+        const clipping = await page.locator('.conversation-content').evaluate(node => {
+          const viewport = document.querySelector('.conversation').getBoundingClientRect();
+          return [...node.querySelectorAll('.message-avatar')].some(avatar => { const box = avatar.getBoundingClientRect(); return box.left < viewport.left || box.right > viewport.right; });
+        });
+        check(!clipping, 'Large mode clamps to a narrow window and keeps avatars visible');
+        check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)), 'No horizontal page overflow');
+        equal(await page.evaluate(() => window.__unified.commands), [], 'Width changes do not dispatch server commands');
+      });
+
+      await scenario(engine, 'composer-consistency', {}, async page => {
+        const measure = async selector => page.locator(selector).evaluate(node => {
+          const style = getComputedStyle(node), box = node.getBoundingClientRect();
+          return { height: box.height, radius: style.borderRadius, padding: style.padding, appearance: style.appearance, background: style.backgroundColor };
+        });
+        const permission = page.getByLabel('Task control mode', { exact: true });
+        equal(await permission.locator('..').locator('svg').count(), 1, 'Control mode keeps its shield without a dropdown arrow');
+                equal(await page.locator('.composer-stack .lucide-chevron-down:visible').count(), 0, 'Composer model control has no visible dropdown arrow');
+        equal((await measure('.composer-permission select')).appearance, 'none', 'Native select chrome is removed');
+        const unfocused = await measure('.composer-permission');
+        await permission.hover();
+        check((await measure('.composer-permission')).background !== unfocused.background, 'The entire control highlights on hover');
+        const taskComposer = await measure('.reply-composer');
+        const taskField = await measure('.composer-permission');
+        equal(taskField.height, 36, 'Permission control uses shared 36px height');
+        const terminal = page.getByRole('button', { name: 'Terminal', exact: true });
+        equal(await terminal.locator('svg.lucide-square-terminal').count(), 1, 'Terminal uses the shared Lucide glyph');
+        equal(await page.locator('.new-work').count(), 0, 'Task starts in conversation');
+        await page.keyboard.press('Meta+n');
+        await page.getByLabel('Task goal').waitFor();
+        equal(await page.getByText('What should run next?', { exact: true }).count(), 0, 'Old home heading is removed');
+        equal(await page.locator('.home .recent, .home .session-list').count(), 0, 'New task no longer contains the old recent-session table');
+        equal(await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: 'Memory', exact: true }).locator('svg.lucide-notebook-pen').count(), 1, 'Memory uses the approved notebook icon, not Sparkles');
+        equal(await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: 'Automations', exact: true }).locator('svg.lucide-calendar-clock').count(), 1, 'Automations uses the schedule icon');
+        const placement = await page.locator('.new-work').evaluate(node => { const box = node.getBoundingClientRect(), home = node.closest('.home').getBoundingClientRect(); return { width: box.width, difference: Math.abs((box.top + box.bottom - home.top - home.bottom) / 2) }; });
+        check(placement.width <= 673 && placement.difference < 60, 'New task is bounded and centered like the approved mock');
+        const homeComposer = await measure('.composer');
+        equal(homeComposer.padding, taskComposer.padding, 'New task and reply composer padding match');
+        equal(homeComposer.radius, taskComposer.radius, 'New task and reply composer roundness match');
+        equal((await measure('.composer-permission')).height, taskField.height, 'Control sizing matches across composers');
+                equal(await page.locator('.composer-stack .lucide-chevron-down:visible').count(), 0, 'New-task model control has no visible dropdown arrow');
+                equal(await page.locator('.new-task-server summary').evaluate(node => getComputedStyle(node, '::after').content), 'none', 'Server selector has no dropdown arrow');
+        check(await page.getByRole('button', { name: 'Terminal', exact: true }).isVisible(), 'New task has a real server terminal control');
+        for (const width of [1440, 900, 390]) {
+          await page.setViewportSize({ width, height: 1000 }); await frames(page);
+          const overflow = await page.locator('.composer-stack').evaluate(node => ({ scroll: node.scrollWidth, width: node.clientWidth }));
+          check(overflow.scroll <= overflow.width + 1, `Home composer fits at ${width}px`);
+        }
+        await page.setViewportSize({ width: 1440, height: 1000 }); await frames(page);
+        await screenshot(page, `${engine.name()}-refined-new-task`);
+        equal(await page.evaluate(() => window.__unified.commands), [], 'Style inspection does not dispatch commands');
+      });
+
       await scenario(engine, 'reasoning-and-disclosure-persistence', {}, async page => {
         const reasoning = page.locator('.run-reasoning').first();
         await reasoning.locator('summary').click();
@@ -503,7 +586,9 @@ try {
         await frames(page);
         check(!(await reasoning.evaluate(node => node.open)), 'User-closed aggregated reasoning stays closed');
         const action = entry(page, 'active-action');
-        check(await action.evaluate(node => node.open), 'Active execution starts expanded');
+        check(!(await action.evaluate(node => node.open)), 'Compact starts active execution collapsed');
+        await action.locator(':scope > summary').click();
+        check(await action.evaluate(node => node.open), 'Reader can open active execution');
         await action.locator(':scope > summary').click();
         await update(page, 'active-action', { state: 'succeeded', result: { stdout: replacementOutput, exitCode: 0 } });
         await frames(page);
@@ -528,7 +613,7 @@ try {
         await emit(page, { type: 'live', record: stream });
         const liveEntry = entry(page, stream.id);
         await liveEntry.waitFor();
-        await liveEntry.locator(':scope > summary').click();
+        check(!(await liveEntry.evaluate(node => node.open)), 'Compact starts new streams collapsed');
         await liveEntry.locator(':scope > summary').click();
         await liveEntry.locator('.execution-raw > summary').click();
         await liveEntry.locator('.execution-raw pre').first().waitFor();
@@ -548,6 +633,9 @@ try {
           tool: 'host.execute', state: 'dispatching', arguments: { host: 'fixture-host', command: 'printf late-output' },
         }) });
         const action = entry(page, 'late-action');
+        await action.waitFor();
+        check(!(await action.evaluate(node => node.open)), 'Compact starts unlinked actions collapsed');
+        await action.locator(':scope > summary').click();
         await action.locator(':scope > summary').click();
         check(!(await action.evaluate(node => node.open)), 'Reader collapses action before its first linked stream arrives');
         await emit(page, { type: 'live', record: row('tool_stream', 'late-linked', 10, {
@@ -580,7 +668,7 @@ try {
         equal(await follow(page).getAttribute('aria-disabled'), 'false', 'Anchor correction does not rearm follow');
       });
 
-      await scenario(engine, 'live-follow-pause-completion-jump', {}, async page => {
+      await scenario(engine, 'live-follow-pause-completion-jump', { conversationDetail: 'extended' }, async page => {
         const liveMessage = row('message', 'tail-message', 9, { author: 'assistant', text: 'Live follow paragraph.\n\n'.repeat(12), streaming: true }, 0);
         await emit(page, { type: 'live', record: liveMessage });
         await page.waitForFunction(() => { const node = document.querySelector('.conversation'); return document.querySelector('[data-record-id="tail-message"]') && node.scrollHeight - node.clientHeight - node.scrollTop < 4; });

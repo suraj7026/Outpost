@@ -1,0 +1,78 @@
+.settings-parity .settings-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 20px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.settings-parity .settings-back-link:hover { color: var(--text); }
+.settings-parity .page-heading { flex-wrap: nowrap; }
+.settings-parity .server-settings-tabs { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; gap: 4px; margin-bottom: 32px; }
+.settings-parity .server-settings-tabs a { flex: none; }
+.settings-parity .settings-page-content,
+.settings-parity .environment-settings { display: grid; gap: 24px; min-width: 0; }
+.settings-parity .settings-page-content > *,
+.settings-parity .environment-settings > * { min-width: 0; }
+.settings-parity .settings-page-content > .ui-details { margin-top: 0; }
+.settings-workspace.settings-parity .ui-form.settings-name-form,
+.settings-workspace.settings-parity .ui-form.settings-route-form {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 0;
+}
+.settings-name-form > label { flex: 1 1 240px; max-width: 400px; min-width: 0; }
+.settings-route-form > label { flex: 1 1 280px; max-width: 480px; min-width: 0; }
+.settings-name-form > button,
+.settings-route-form > button { flex: none; }
+.settings-section-action { display: grid; justify-items: start; gap: 16px; padding-top: 16px; }
+.settings-safety-note { font-size: 12px; line-height: 1.65; color: var(--muted); margin: 12px 0; }
+.settings-parity .settings-device-row { padding: 0; margin: 0; border-bottom: 1px solid var(--line); }
+.settings-parity .settings-device-row:last-of-type { border-bottom: 0; }
+.settings-parity .settings-device-row > .ui-row { border: 0; }
+.settings-parity .settings-page-check,
+.settings-parity .ui-form .settings-page-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text);
+}
+.settings-page-check input { flex: none; }
+.settings-parity .ui-facts dd { user-select: text; }
+.settings-recovery-state {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+}
+.settings-recovery-state > svg { flex: none; color: var(--positive); }
+.settings-recovery-held > svg { color: var(--warning); }
+.settings-recovery-state > div { flex: 1; min-width: 0; }
+.settings-recovery-state h3 { margin: 0 0 4px; font-size: 16px; font-weight: 550; line-height: 1.5; }
+.settings-recovery-state p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
+.settings-recovery-state > .recovery-review-trigger { color: var(--warning); background: color-mix(in srgb,var(--warning) 10%,var(--surface)); border-radius: 6px; font-size: 12px; white-space: nowrap; }
+.settings-recovery-state > .recovery-review-trigger:hover { background: color-mix(in srgb,var(--warning) 18%,var(--surface)); }
+.recovery-review-actions { justify-content: flex-start; margin: 16px 0; }
+.recovery-review-links { display: grid; gap: 4px; margin: 16px 0; }
+.recovery-review-links a { padding: 6px 0; min-height: 36px; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.settings-queued-tasks { display: grid; gap: 8px; padding-left: 20px; overflow-wrap: anywhere; }
+.settings-legacy-connection > .ui-section { margin-top: 24px; }
+@container settings (max-width: 640px) {
+  .settings-parity .server-settings-tabs { gap: 0; }
+  .settings-parity .server-settings-tabs a { padding-inline: 8px; font-size: 12px; }
+  .settings-parity .server-settings-tabs a[aria-current]::after { left: 8px; right: 8px; }
+}
+@media (max-width: 640px) {
+  .settings-parity .page-heading { gap: 10px; align-items: center; }
+  .settings-parity .settings-header-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .settings-recovery-state { flex-wrap: wrap; }
+  .settings-recovery-state > div { flex-basis: calc(100% - 40px); }
+  .settings-recovery-state > :is(.ui-badge, .recovery-review-trigger) { margin-left: 38px; }
+  .settings-parity .ui-facts { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .settings-parity .ui-facts dd { margin-bottom: 12px; }
+}

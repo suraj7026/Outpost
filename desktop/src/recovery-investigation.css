@@ -1,0 +1,13 @@
+.recovery-investigation { width: min(720px, calc(100vw - 32px)); }
+.recovery-investigation h3 { font-size: 15px; line-height: 1.6; margin: 20px 0 8px; }
+.recovery-investigation h4 { font-size: 14px; margin: 16px 0 8px; }
+.recovery-investigation li { margin-block: 8px; }
+.recovery-investigation pre { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; font-size: 12px; line-height: 1.7; padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); max-height: 240px; overflow-y: auto; }
+.recovery-investigation .ui-facts dd { overflow-wrap: anywhere; min-width: 0; }
+.recovery-investigation .ui-form { padding-block: 12px; }
+.recovery-investigation .ui-form select { width: 100%; min-width: 0; }
+.recovery-investigation .settings-page-check { display: flex; align-items: flex-start; gap: 10px; }
+.recovery-investigation .settings-page-check input { flex: none; margin-top: 4px; }
+.recovery-command { border-top: 1px solid var(--line); padding-block: 4px 12px; }
+.recovery-investigation .ui-details { margin-top: 20px; }
+@media (max-width: 640px) { .recovery-investigation .ui-facts { grid-template-columns: minmax(0, 1fr); } }
