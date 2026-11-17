@@ -71,6 +71,7 @@ function installTransport({ owner, state }) {
       if (wireCommand.startsWith('plugin:event|')) return 1;
       if (wireCommand === 'environment_list') return { registry: structuredClone(registry), legacy: { endpoint: null, pending: false } };
       if (wireCommand === 'setup_list') return [];
+      if (wireCommand === 'automatic_updates_status' || wireCommand === 'automatic_updates_tick') return { enabled: false, targets: [], activeEnvironmentId: null, servers: [] };
       if (wireCommand === 'connection_info') return { endpoint: null, pending: false, nativeSidebar: false };
       if (wireCommand === 'disconnect') return;
       if (!wireCommand.startsWith('environment_') || args.environmentId !== owner) return unexpected(`Unscoped or wrong-owner IPC: ${wireCommand}`);

@@ -104,7 +104,9 @@ test('stale, missing and duplicate create records cannot be overwritten', async 
 });
 
 test('server notes match the verified memory.save strict owner contract, not memory.shared', async () => {
-  const contract = readFileSync(new URL('../server/gateway/coordinator.ts', import.meta.url), 'utf8').split('\n').slice(129, 138).join('\n');
+  const coordinator = readFileSync(new URL('../server/gateway/coordinator.ts', import.meta.url), 'utf8');
+  const contract = coordinator.match(/case 'memory\.save':([\s\S]*?)(?=\n\s*case |\n\s*default:)/)?.[1];
+  assert.ok(contract, 'Coordinator exposes the memory.save case');
   assert.ok(contract.includes("z.strictObject({ text: z.string(),project: z.string(),identityId: z.string(),source: z.string(),provenance: z.literal('owner') }).parse(payload)"));
   const memory = readFileSync(new URL('../server/memory/memory.ts', import.meta.url), 'utf8');
   assert.match(memory, /input.text.length > 0 && input.text.length <= 20000 && input.source.length > 0/);

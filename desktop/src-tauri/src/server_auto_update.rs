@@ -77,6 +77,8 @@ struct Server {
     policy: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     previous_policy: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    enrollment_attempt_id: Option<String>,
     review_id: Option<String>,
     operation_id: Option<String>,
 }
@@ -89,6 +91,7 @@ impl Server {
             release_id: None,
             policy: None,
             previous_policy: None,
+            enrollment_attempt_id: None,
             review_id: None,
             operation_id: None,
         }
@@ -165,6 +168,9 @@ impl Journal {
             }
             if let Some(operation) = &server.operation_id {
                 environments::validate_id(operation)?;
+            }
+            if let Some(attempt) = &server.enrollment_attempt_id {
+                environments::validate_id(attempt)?;
             }
         }
         Ok(())
@@ -561,7 +567,101 @@ fn ssh_json(setup: &Setup, entry: &Entry, source: &str, timeout: u64) -> Result<
     .map_err(|_| "Pinned SSH verification unavailable; no authorization was assumed")?;
     serde_json::from_slice(&bytes).map_err(|_| "Invalid pinned SSH verification".into())
 }
-fn enrollment_source(policy: &Value, previous: Option<&Value>) -> Result<String, String> {
+const RENEWAL_RECEIPT: &str = "/etc/outpost-native/auto-update-native-renewal.json";
+fn enrollment_inspection_source() -> Result<String, String> {
+    Ok(format!(
+        r#"import base64,contextlib,io,json,pathlib
+output=io.StringIO()
+with contextlib.redirect_stdout(output):
+ exec(base64.b64decode('{probe}'))
+policy=json.loads(output.getvalue())
+receipt_path=pathlib.Path('{receipt}')
+receipt=json.loads(read(receipt_path,65536)) if receipt_path.exists() or receipt_path.is_symlink() else None
+print(json.dumps({{'policy':policy,'receipt':receipt}}))
+"#,
+        probe = STANDARD.encode(policy_probe_source()?),
+        receipt = RENEWAL_RECEIPT
+    ))
+}
+fn terminal_previous_renewal(server: &Server, observed: &Value, receipt: &Value) -> bool {
+    let Some(attempt) = server.enrollment_attempt_id.as_deref() else {
+        return false;
+    };
+    let (Some(previous), Some(desired)) = (&server.previous_policy, &server.policy) else {
+        return false;
+    };
+    let fields = [
+        "schema",
+        "attemptId",
+        "environmentId",
+        "previousPolicy",
+        "desiredPolicy",
+        "state",
+    ];
+    environments::validate_id(attempt).is_ok()
+        && receipt.as_object().is_some_and(|object| {
+            object.len() == fields.len() && fields.iter().all(|field| object.contains_key(*field))
+        })
+        && receipt["schema"] == 1
+        && receipt["state"] == "previous_retained"
+        && receipt["attemptId"] == attempt
+        && receipt["environmentId"] == server.environment_id
+        && receipt["previousPolicy"] == *previous
+        && receipt["desiredPolicy"] == *desired
+        && observed == previous
+        && previous["environmentId"] == server.environment_id
+        && policy_identity(previous)
+            .ok()
+            .zip(policy_identity(desired).ok())
+            .is_some_and(|(a, b)| a == b)
+}
+fn renewal_action(policy: &Value, previous: &Value, attempt: &str) -> Result<String, String> {
+    environments::validate_id(attempt)?;
+    if policy_identity(previous)? != *policy {
+        return Err("Renewal identity mismatch".into());
+    }
+    let receipt = json!({"schema":1,"attemptId":attempt,"environmentId":policy["environmentId"],"previousPolicy":previous,"desiredPolicy":public_policy(policy),"state":"running"});
+    Ok(format!(
+        r#"receipt=json.loads(base64.b64decode('{receipt}'))
+previous=receipt['previousPolicy']
+h=sys.modules['auto_update']
+h.require(h.os.geteuid()==0)
+h.validate_public_policy(previous)
+h.validate_public_policy(receipt['desiredPolicy'])
+h.secure_path(h.CONFIG,directory=True)
+receipt_path=h.CONFIG/'auto-update-native-renewal.json'
+if receipt_path.exists() or receipt_path.is_symlink(): h.secure_path(receipt_path)
+h.atomic_json(receipt_path,receipt,0o644)
+try:
+ value=h.reauthorize(p,previous,raw['auto_update'],raw['host_install'],raw['host_update'])
+except Exception:
+ receipt['state']='unknown'
+ try:
+  actual=h.read_public(h.CONFIG/'auto-update.json')
+  if actual==previous:
+   h.verify_sources(h.active_library(actual),actual)
+   receipt['state']='previous_retained'
+ except Exception:
+  pass
+ h.atomic_json(receipt_path,receipt,0o644)
+ raise
+else:
+ receipt['state']='complete'
+ h.atomic_json(receipt_path,receipt,0o644)
+ print(json.dumps(value))
+"#,
+        receipt =
+            STANDARD.encode(serde_json::to_vec(&receipt).map_err(|_| "Invalid renewal receipt")?)
+    ))
+}
+fn enrollment_source(
+    policy: &Value,
+    previous: Option<&Value>,
+    attempt: Option<&str>,
+) -> Result<String, String> {
+    if previous.is_some() != attempt.is_some() {
+        return Err("Renewal requires its own durable attempt identity".into());
+    }
     if let Some(previous) = previous {
         if policy_identity(previous)? != *policy {
             return Err("Renewed authorization cannot change enrollment identity".into());
@@ -569,7 +669,7 @@ fn enrollment_source(policy: &Value, previous: Option<&Value>) -> Result<String,
     }
     let policy_bytes = serde_json::to_vec(policy).map_err(|_| "Invalid enrollment policy")?;
     let action = if let Some(previous) = previous {
-        format!("previous=json.loads(base64.b64decode('{}'))\nprint(json.dumps(sys.modules['auto_update'].reauthorize(p,previous,raw['auto_update'],raw['host_install'],raw['host_update'])))", STANDARD.encode(serde_json::to_vec(previous).map_err(|_| "Invalid reviewed public policy")?))
+        renewal_action(policy, previous, attempt.ok_or("Missing renewal attempt")?)?
     } else {
         "print(json.dumps(sys.modules['auto_update'].enroll(p,raw['auto_update'],raw['host_install'],raw['host_update'])))".into()
     };
@@ -650,6 +750,7 @@ fn enroll(
     entry: &Entry,
     policy: &Value,
     previous: Option<&Value>,
+    attempt: Option<&str>,
     password: bool,
     mut input: zeroize::Zeroizing<Vec<u8>>,
 ) -> Result<(), String> {
@@ -660,7 +761,7 @@ fn enroll(
     };
     // Large modules travel on stdin, never in an SSH command argument. Read exactly one
     // source line without buffering into sudo's password reader or an executable file.
-    let source = STANDARD.encode(enrollment_source(policy, previous)?);
+    let source = STANDARD.encode(enrollment_source(policy, previous, attempt)?);
 
     input.extend_from_slice(source.as_bytes());
     input.push(b'\n');
@@ -830,6 +931,7 @@ pub async fn automatic_updates_enable(
                 let server = journal.servers.get_mut(&id).ok_or("Missing target")?;
                 server.policy = Some(observed);
                 server.previous_policy = None;
+                server.enrollment_attempt_id = None;
                 server.state = Phase::Ready;
                 server.message =
                     "Existing current helper verified; no renewed authorization needed".into();
@@ -848,9 +950,11 @@ pub async fn automatic_updates_enable(
             .await
             .map_err(|_| "Native enrollment prompt interrupted")??
         };
+        let attempt = renewal.then(|| Uuid::new_v4().to_string());
         let server = journal.servers.get_mut(&id).ok_or("Missing target")?;
         server.policy = Some(public_policy(&expected));
         server.previous_policy = previous.clone();
+        server.enrollment_attempt_id = attempt.clone();
         journal.hold(&id,Phase::Enrolling,"Enrollment reserved. If interrupted, inspect public policy only; never repeat root bootstrap automatically.");
         journal.write(&setup.directory)?;
         let result = {
@@ -861,6 +965,7 @@ pub async fn automatic_updates_enable(
                     &entry,
                     &expected,
                     previous.as_ref(),
+                    attempt.as_deref(),
                     password,
                     input,
                 )
@@ -874,6 +979,7 @@ pub async fn automatic_updates_enable(
                 let s = journal.servers.get_mut(&id).ok_or("Missing target")?;
                 s.state = Phase::Ready;
                 s.previous_policy = None;
+                s.enrollment_attempt_id = None;
                 s.message =
                     "Enrolled current helper; waiting for an idle-drained signed update".into();
             }
@@ -1281,6 +1387,46 @@ fn apply_progress(journal: &mut Journal, id: &str, review: &Value) -> Result<(),
     journal.hold(id, phase, message);
     Ok(())
 }
+fn finish_enrollment_observation(
+    journal: &mut Journal,
+    id: &str,
+    observed: &Value,
+    terminal_previous: bool,
+) -> Result<(), String> {
+    if journal.active_environment_id.as_deref() != Some(id) {
+        return Err("Enrollment observation does not own the queue".into());
+    }
+    let server = journal
+        .servers
+        .get_mut(id)
+        .ok_or("Missing enrollment target")?;
+    if server.state != Phase::Enrolling {
+        return Err("Only enrollment receipts can release enrollment reservations".into());
+    }
+    let desired = server
+        .policy
+        .as_ref()
+        .ok_or("Reserved enrollment policy missing")?;
+    if observed == desired {
+        journal.active_environment_id = None;
+        server.state = Phase::Ready;
+        server.previous_policy = None;
+        server.enrollment_attempt_id = None;
+        server.message =
+            "Existing enrollment reconciled from pinned public policy; no root call repeated"
+                .into();
+    } else if terminal_previous && server.previous_policy.as_ref() == Some(observed) {
+        // A terminal, bound helper receipt proves that this attempt cannot commit
+        // later. This releases only the latch, never retries the privileged call.
+        journal.active_environment_id = None;
+        journal.enabled = false;
+        server.policy = server.previous_policy.take();
+        server.enrollment_attempt_id = None;
+        server.state = Phase::Blocked;
+        server.message = "Renewal ended without committing; the previous helper policy is intact. Automatic updates remain disabled. Enable them again for a new protected authorization; nothing was retried.".into();
+    }
+    Ok(())
+}
 async fn reconcile(
     app: &tauri::AppHandle,
     setup: Arc<Setup>,
@@ -1301,20 +1447,15 @@ async fn reconcile(
             .ok_or("Reserved enrollment route missing; queue held")?
             .1;
         let entry = setup.entry(&binding.setup_id)?;
-        let expected = server
-            .policy
-            .ok_or("Reserved enrollment identity missing")?;
-        let result = tauri::async_runtime::spawn_blocking(move || inspect_policy(&setup, &entry))
-            .await
-            .map_err(|_| "Enrollment inspection interrupted")?;
-        if result.is_ok_and(|actual| actual == expected) {
-            journal.active_environment_id = None;
-            let s = journal.servers.get_mut(id).ok_or("Missing target")?;
-            s.state = Phase::Ready;
-            s.previous_policy = None;
-            s.message =
-                "Existing enrollment reconciled from pinned public policy; no root call repeated"
-                    .into();
+        let result = tauri::async_runtime::spawn_blocking(move || {
+            ssh_json(&setup, &entry, &enrollment_inspection_source()?, 15)
+        })
+        .await
+        .map_err(|_| "Enrollment inspection interrupted")?;
+        if let Ok(observation) = result {
+            let previous_terminal =
+                terminal_previous_renewal(&server, &observation["policy"], &observation["receipt"]);
+            finish_enrollment_observation(journal, id, &observation["policy"], previous_terminal)?;
         }
         return Ok(());
     }

@@ -255,7 +255,7 @@ fn enrollment_only_loads_pinned_bundled_modules_and_fixed_no_arg_launcher() {
     assert!(isolated_python(BOOTSTRAP_LOADER).starts_with("/usr/bin/python3 -I -c "));
     assert!(isolated_python(BOOTSTRAP_LOADER).len() < 4096);
     let policy = policy(ENVIRONMENT, DEVICE, &STANDARD.encode([7; 32]), "operator");
-    let source = enrollment_source(&policy, None).unwrap();
+    let source = enrollment_source(&policy, None, None).unwrap();
     assert!(source.contains(".enroll(p,raw['auto_update'],raw['host_install'],raw['host_update'])"));
     assert!(source.contains(&sha(HELPER.as_bytes())));
     assert!(source.contains(&sha(INSTALLER.as_bytes())));
@@ -1126,30 +1126,54 @@ fn renewal_bootstrap_binds_exact_old_policy_without_invoking_the_update_helper()
     let identity = policy_identity(&current).unwrap();
     let mut old = current.clone();
     old["sourcesSha256"]["host_update.py"] = json!("f".repeat(64));
-    let source = enrollment_source(&identity, Some(&old)).unwrap();
+    let source = enrollment_source(&identity, Some(&old), Some(OPERATION)).unwrap();
     assert!(source.contains(
         ".reauthorize(p,previous,raw['auto_update'],raw['host_install'],raw['host_update'])"
     ));
     assert!(!source.contains(".enroll(p,"));
     assert!(!source.contains(LAUNCH));
-    let packet = json!({"source":source,"identity":identity,"previous":old});
-    // Execute only the generated argument-decoding/call nodes against a fake
-    // helper. No bundled module, sudo, keychain or network operation is executed.
-    let script = r#"import ast,base64,json,sys,types
+    let packet = json!({"source":renewal_action(&identity, &old, OPERATION).unwrap(),"identity":identity,"previous":old,"desired":current,"attemptId":OPERATION});
+    // Execute only the native receipt wrapper against a synchronous fake helper.
+    // No bundled module, privileged command, keychain or network is executed.
+    let script = r#"import base64,contextlib,copy,io,json,pathlib,sys,tempfile,types
 packet=json.load(sys.stdin)
-calls=[]
-def reauthorize(policy,previous,helper,installer,updater):
- assert policy==packet['identity'] and previous==packet['previous']
- assert (helper,installer,updater)==(b'helper',b'installer',b'updater')
- calls.append(previous)
- return {'verified':True}
-fake=types.SimpleNamespace(modules={'auto_update':types.SimpleNamespace(reauthorize=reauthorize)})
-namespace={'base64':base64,'json':json,'sys':fake,'raw':{'auto_update':b'helper','host_install':b'installer','host_update':b'updater'}}
-nodes=ast.parse(packet['source']).body[-3:]
-assert isinstance(nodes[0],ast.Assign) and nodes[0].targets[0].id=='p'
-assert isinstance(nodes[1],ast.Assign) and nodes[1].targets[0].id=='previous'
-exec(compile(ast.Module(body=nodes,type_ignores=[]),'fixture','exec'),namespace)
-assert len(calls)==1
+results={}
+class Interrupted(BaseException): pass
+for mode in ['success','before','after','killed','corrupt']:
+ with tempfile.TemporaryDirectory() as directory:
+  events=[]; receipts=[]; inside=[False]; calls=[]
+  def require(condition):
+   if not condition: raise ValueError('Refused')
+  def atomic_json(path,value,permissions):
+   assert path==pathlib.Path(directory)/'auto-update-native-renewal.json' and permissions==0o644
+   if value['state']!='running': assert not inside[0] and events[-1]=='returned'
+   receipts.append(copy.deepcopy(value))
+  def reauthorize(policy,previous,helper,installer,updater):
+   assert policy==packet['identity'] and previous==packet['previous']
+   assert (helper,installer,updater)==(b'helper',b'installer',b'updater')
+   assert receipts[-1]['state']=='running' and receipts[-1]['attemptId']==packet['attemptId']
+   calls.append(previous); inside[0]=True
+   try:
+    if mode=='killed': raise Interrupted()
+    if mode!='success': raise ValueError('Synthetic terminal refusal')
+    return packet['desired']
+   finally:
+    inside[0]=False; events.append('returned')
+  def verify_sources(root,policy):
+   assert policy==packet['previous']
+   if mode=='corrupt': raise ValueError('Corrupt previous helper')
+  helper=types.SimpleNamespace(CONFIG=pathlib.Path(directory),os=types.SimpleNamespace(geteuid=lambda:0),require=require,validate_public_policy=lambda p:require(p in [packet['previous'],packet['desired']]),secure_path=lambda *a,**k:None,atomic_json=atomic_json,reauthorize=reauthorize,read_public=lambda p:packet['desired'] if mode=='after' else packet['previous'],active_library=lambda p:pathlib.Path(directory),verify_sources=verify_sources)
+  fake=types.SimpleNamespace(modules={'auto_update':helper})
+  namespace={'base64':base64,'json':json,'sys':fake,'p':packet['identity'],'raw':{'auto_update':b'helper','host_install':b'installer','host_update':b'updater'}}
+  try:
+   with contextlib.redirect_stdout(io.StringIO()): exec(packet['source'],namespace)
+   assert mode=='success'
+  except (ValueError,Interrupted):
+   assert mode!='success'
+  assert len(calls)==1
+  assert len(receipts)==(1 if mode=='killed' else 2)
+  results[mode]=receipts[-1]
+print(json.dumps(results))
 "#;
     let bytes = run(
         "python3",
@@ -1159,13 +1183,26 @@ assert len(calls)==1
         &AtomicBool::new(false),
     )
     .unwrap();
-    assert_eq!(
-        serde_json::from_slice::<Value>(&bytes).unwrap(),
-        json!({"verified":true})
-    );
+    let receipts: Value = serde_json::from_slice(&bytes).unwrap();
+    let (journal, _, _) = pending_renewal();
+    for (mode, state) in [
+        ("success", "complete"),
+        ("before", "previous_retained"),
+        ("after", "unknown"),
+        ("killed", "running"),
+        ("corrupt", "unknown"),
+    ] {
+        assert_eq!(receipts[mode]["state"], state);
+        assert_eq!(
+            terminal_previous_renewal(&journal.servers[ENVIRONMENT], &old, &receipts[mode]),
+            mode == "before"
+        );
+    }
     let mut foreign = old.clone();
     foreign["deviceId"] = json!(OPERATION);
-    assert!(enrollment_source(&identity, Some(&foreign)).is_err());
+    assert!(enrollment_source(&identity, Some(&foreign), Some(OPERATION)).is_err());
+    assert!(enrollment_source(&identity, Some(&old), None).is_err());
+    assert!(enrollment_source(&identity, None, Some(OPERATION)).is_err());
 }
 #[test]
 fn renewal_journal_retains_both_policies_for_inspect_only_recovery() {
@@ -1251,21 +1288,138 @@ print('policy layouts verified')
     .unwrap();
     assert_eq!(output, b"policy layouts verified\n");
 }
+fn pending_renewal() -> (Journal, Value, Value) {
+    let mut journal = journal();
+    let desired = current_enrollment_policy();
+    let mut previous = desired.clone();
+    previous["sourcesSha256"]["host_update.py"] = json!("f".repeat(64));
+    let server = journal.servers.get_mut(ENVIRONMENT).unwrap();
+    server.policy = Some(desired.clone());
+    server.previous_policy = Some(previous.clone());
+    server.enrollment_attempt_id = Some(OPERATION.into());
+    journal.hold(ENVIRONMENT, Phase::Enrolling, "Renewal outcome uncertain");
+    (journal, previous, desired)
+}
+#[test]
+fn terminal_renewal_receipt_requires_exact_attempt_identity_policies_and_state() {
+    let (journal, previous, desired) = pending_renewal();
+    let server = &journal.servers[ENVIRONMENT];
+    let receipt = json!({"schema":1,"attemptId":OPERATION,"environmentId":ENVIRONMENT,"previousPolicy":previous,"desiredPolicy":desired,"state":"previous_retained"});
+    assert!(terminal_previous_renewal(server, &previous, &receipt));
+    for field in [
+        "schema",
+        "attemptId",
+        "environmentId",
+        "previousPolicy",
+        "desiredPolicy",
+        "state",
+    ] {
+        let mut changed = receipt.clone();
+        changed[field] = Value::Null;
+        assert!(
+            !terminal_previous_renewal(server, &previous, &changed),
+            "{field}"
+        );
+    }
+    for state in ["running", "unknown", "complete", "failed", "cancelled"] {
+        let mut changed = receipt.clone();
+        changed["state"] = json!(state);
+        assert!(!terminal_previous_renewal(server, &previous, &changed));
+    }
+    let mut stale = receipt.clone();
+    stale["attemptId"] = json!(DEVICE);
+    assert!(!terminal_previous_renewal(server, &previous, &stale));
+    let mut unknown = receipt.clone();
+    unknown["unreviewed"] = json!(true);
+    assert!(!terminal_previous_renewal(server, &previous, &unknown));
+    assert!(!terminal_previous_renewal(server, &desired, &receipt));
+    let mut legacy = server.clone();
+    legacy.enrollment_attempt_id = None;
+    assert!(!terminal_previous_renewal(&legacy, &previous, &receipt));
+    let mut foreign = server.clone();
+    foreign.environment_id = DEVICE.into();
+    assert!(!terminal_previous_renewal(&foreign, &previous, &receipt));
+    let fixture = Fixture::new();
+    journal.write(&fixture.0).unwrap();
+    let restored = Journal::read(&fixture.0).unwrap();
+    assert!(terminal_previous_renewal(
+        &restored.servers[ENVIRONMENT],
+        &previous,
+        &receipt
+    ));
+}
+#[test]
+fn terminal_previous_policy_releases_only_enrollment_latch_and_requires_new_consent() {
+    let fixture = Fixture::new();
+    let (mut journal, previous, _) = pending_renewal();
+    journal.write(&fixture.0).unwrap();
+    let mut restored = Journal::read(&fixture.0).unwrap();
+    finish_enrollment_observation(&mut restored, ENVIRONMENT, &previous, true).unwrap();
+    assert!(restored.active_environment_id.is_none());
+    assert!(!restored.enabled);
+    assert_eq!(restored.servers[ENVIRONMENT].state, Phase::Blocked);
+    assert_eq!(restored.servers[ENVIRONMENT].policy, Some(previous));
+    assert!(restored.servers[ENVIRONMENT].previous_policy.is_none());
+    assert!(restored.servers[ENVIRONMENT]
+        .enrollment_attempt_id
+        .is_none());
+    assert!(restored.servers[ENVIRONMENT]
+        .message
+        .contains("new protected authorization"));
+    restored.write(&fixture.0).unwrap();
+    let restarted = Journal::read(&fixture.0).unwrap();
+    assert!(restarted.active_environment_id.is_none());
+    assert!(!restarted.enabled);
+    assert_eq!(restarted.status()["servers"][0]["state"], "not_enabled");
+    journal.enabled = false;
+    assert!(journal.active_environment_id.is_some());
+}
+#[test]
+fn old_policy_without_terminal_evidence_does_not_release_or_retry_renewal() {
+    let (mut journal, previous, _) = pending_renewal();
+    let before = serde_json::to_value(&journal).unwrap();
+    finish_enrollment_observation(&mut journal, ENVIRONMENT, &previous, false).unwrap();
+    assert_eq!(serde_json::to_value(&journal).unwrap(), before);
+    finish_enrollment_observation(&mut journal, ENVIRONMENT, &Value::Null, true).unwrap();
+    assert_eq!(serde_json::to_value(&journal).unwrap(), before);
+    let mut foreign = previous.clone();
+    foreign["environmentId"] = json!(DEVICE);
+    finish_enrollment_observation(&mut journal, ENVIRONMENT, &foreign, true).unwrap();
+    assert_eq!(serde_json::to_value(&journal).unwrap(), before);
+    assert!(finish_enrollment_observation(&mut journal, DEVICE, &previous, true).is_err());
+    journal.servers.get_mut(ENVIRONMENT).unwrap().state = Phase::Unknown;
+    assert!(finish_enrollment_observation(&mut journal, ENVIRONMENT, &previous, true).is_err());
+}
+#[test]
+fn completed_policy_reconciliation_keeps_existing_inspect_only_success_path() {
+    let (mut journal, _, desired) = pending_renewal();
+    journal.enabled = false;
+    finish_enrollment_observation(&mut journal, ENVIRONMENT, &desired, false).unwrap();
+    assert!(journal.active_environment_id.is_none());
+    assert_eq!(journal.servers[ENVIRONMENT].state, Phase::Ready);
+    assert_eq!(journal.servers[ENVIRONMENT].policy, Some(desired));
+    assert!(journal.servers[ENVIRONMENT].previous_policy.is_none());
+    assert!(!journal.enabled);
+}
 #[test]
 fn embedded_python_compiles_without_executing_network_or_privileged_work() {
     let source = enrollment_source(
         &policy(ENVIRONMENT, DEVICE, &STANDARD.encode([7; 32]), "operator"),
+        None,
         None,
     )
     .unwrap();
     let renewal = enrollment_source(
         &policy_identity(&current_enrollment_policy()).unwrap(),
         Some(&current_enrollment_policy()),
+        Some(OPERATION),
     )
     .unwrap();
     let probe = policy_probe_source().unwrap();
     assert!(isolated_python(&probe).len() < 131072);
-    let packet = json!([probe, SERVICE_PROBE, source, renewal, HELPER]);
+    let recovery = enrollment_inspection_source().unwrap();
+    assert!(isolated_python(&recovery).len() < 131072);
+    let packet = json!([probe, recovery, SERVICE_PROBE, source, renewal, HELPER]);
     let script = "import ast,json,sys\nfor source in json.load(sys.stdin):\n ast.parse(source)\n";
     let mut child = Command::new("python3")
         .args(["-I", "-c", script])

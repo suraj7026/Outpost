@@ -112,6 +112,7 @@ function installTransport({ records, options, storageKey, environmentId }) {
       if (['set_sidebar_window_controls', 'set_window_blur', 'update_sidebar'].includes(wireCommand)) return;
       if (wireCommand === 'sidebar_pointer_inside') return false;
       if (['setup_list', 'setup_history_list'].includes(wireCommand)) return [];
+      if (wireCommand === 'automatic_updates_status' || wireCommand === 'automatic_updates_tick') return { enabled: false, targets: [], activeEnvironmentId: null, servers: [] };
       const bound = wireCommand.startsWith('environment_');
       if (bound && args.environmentId !== environmentId) throw new Error('Wrong synthetic environment owner');
       const command = bound ? wireCommand.slice('environment_'.length) : wireCommand;

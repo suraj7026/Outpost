@@ -36,6 +36,7 @@ async function open(width, colorScheme) {
       window.__calls.push({ command, args: structuredClone(args) });
       if (command.startsWith('plugin:') || ['set_sidebar_window_controls', 'sidebar_pointer_inside', 'connections_wake'].includes(command)) return;
       if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: A, environments: { [A]: saved(A, 'Studio server'), [B]: saved(B, 'Build server') } } };
+      if (command === 'automatic_updates_status' || command === 'automatic_updates_tick') return { enabled: false, targets: [], activeEnvironmentId: null, servers: [] };
       if (command === 'provider_transfer_review') return { reviewId: 'review', source: { installationId: B, providers }, destination: { installationId: A, providers: [providers[0]] } };
       if (command === 'provider_transfer_start') {
         const receipt = { operationId: args.operationId, state: 'complete', providers: args.selection.map(p => ({ id: p.id, state: 'saved' })) }; window.__receipts.push(receipt);
@@ -398,7 +399,9 @@ try {
       check(await runtime.getByText(nativeExtensionsNotice, { exact: true }).count() === (Object.values(states ?? {}).includes('enabled') ? 1 : 0), 'Automatic availability and worker permissions are explained only for reported enabled packages');
       check(await runtime.getByText(inactiveExtensionsNotice, { exact: true }).count() === (Object.values(states ?? {}).includes('inactive') ? 1 : 0), 'Only reported inactive packages require a server update');
       check(await runtime.getByText(subagentsNotice, { exact: true }).count() === 0, 'Inventory never assumes approval-aware integration is required');
-      check(await runtime.getByRole('button', { name: /enable|activate|install|npm/i }).count() === 0 && await runtime.locator('input[type="checkbox"], [role="switch"]').count() === 0, 'Inventory offers no extension installation or activation controls');
+      const extensions = runtime.locator('section').filter({ has: page.getByRole('heading', { name: 'Extensions & browser tools', exact: true }) });
+      check(await extensions.count() === 1, 'Extension inventory section is present');
+      check(await extensions.getByRole('button', { name: /enable|activate|install|npm/i }).count() === 0 && await extensions.locator('input[type="checkbox"], [role="switch"]').count() === 0, 'Inventory offers no extension installation or activation controls');
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'State-specific inventory and permission notice fit the viewport');
       await page.evaluate(A => window.__endStreams[A](), A);
       await runtime.getByText('Disconnected', { exact: true }).waitFor();

@@ -85,6 +85,10 @@ function installTransport({ records, options, environmentId, taskId }) {
     unregisterCallback(id) { callbacks.delete(id); },
     async invoke(wireCommand, args = {}) {
       if (wireCommand === 'plugin:window|set_theme' && args?.label === 'main' && [null, 'light', 'dark'].includes(args.value)) return;
+      // Supervisor polling is synthetic and read-only; enrollment and update mutations remain unexpected.
+      if (wireCommand === 'automatic_updates_status' || wireCommand === 'automatic_updates_tick') return {
+        enabled: false, targets: [], activeEnvironmentId: null, servers: [],
+      };
       if (wireCommand === 'environment_list') return {
         registry: { version: 1, legacyMutationsRetired: legacy, selectedEnvironmentId: legacy ? null : environmentId,
           environments: legacy ? {} : { [environmentId]: { environmentId, label: 'Unified fixture', activeRoute: 'https://fixture.invalid', routes: ['https://fixture.invalid'] } } },
@@ -338,7 +342,15 @@ async function scenario(engine, name, options, run) {
     console.error(`FAIL ${engine.name()} / ${name}\n${error.stack}`);
     if (errors.length) console.error('PAGE ERRORS', errors);
     if (!page.isClosed()) {
-      console.error('APP STATE', await page.evaluate(() => ({ status: document.querySelector('.composer-run-status')?.outerHTML, commands: window.__unified?.commands, unexpected: window.__unified?.unexpected })).catch(() => null));
+      console.error('APP STATE', await page.evaluate(() => ({
+        theme: document.documentElement.dataset.theme,
+        prefersDark: matchMedia('(prefers-color-scheme: dark)').matches,
+        status: document.querySelector('.composer-run-status')?.outerHTML,
+        primaryControl: document.querySelector('.reply-composer .send-button')?.outerHTML,
+        focusedElement: document.activeElement?.cloneNode(false).outerHTML,
+        commands: window.__unified?.commands,
+        unexpected: window.__unified?.unexpected,
+      })).catch(() => null));
       await screenshot(page, `${engine.name()}-failure-${name.replaceAll(/[^a-z0-9-]/gi, '-')}`).catch(error => console.error('Screenshot failed:', error.message));
     }
   } finally { await page.close(); }
