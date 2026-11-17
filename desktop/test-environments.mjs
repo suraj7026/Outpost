@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, webkit } from 'playwright';
+import { openInitialTestChat } from './chat-test-navigation.mjs';
 import { openSettings, serverTab } from './settings-test-navigation.mjs';
 
 // Integrated dist only; all records, credentials and IPC callbacks are synthetic. No build is run.
@@ -189,6 +190,7 @@ try {
     };
   }, { A, B, C });
   await page.goto(`http://127.0.0.1:${server.address().port}`);
+  await openInitialTestChat(page);
   const picker = { inputValue: () => page.locator('.main-shell').getAttribute('data-owner-id') };
   const closeSetup = async () => {
     const setup = page.getByRole('dialog', { name: 'Server setup', exact: true });

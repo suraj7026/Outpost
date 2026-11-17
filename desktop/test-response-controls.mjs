@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { extname, resolve, sep } from 'node:path';
 import { chromium, webkit } from 'playwright';
+import { openInitialTestChat } from './chat-test-navigation.mjs';
 
 // Run from the repository root against an existing build: node desktop/test-response-controls.mjs
 // Optional: OUTPOST_TEST_BROWSER=chromium|webkit, OUTPOST_TEST_FILTER=<case substring>, OUTPOST_TEST_SCREENSHOTS=<directory>, OUTPOST_TEST_DIST=<built directory>.
@@ -181,6 +182,7 @@ async function scenario(engine, name, options, run) {
     await context.routeWebSocket('**/*', socket => { external.push(socket.url()); socket.close(); });
     await context.addInitScript(installTransport, { owner, state: fixture(options) });
     await page.goto(origin);
+    await openInitialTestChat(page);
     await input(page).waitFor();
     await page.waitForFunction(() => window.__responseControls.state.ready);
     await page.evaluate(() => document.fonts.ready);

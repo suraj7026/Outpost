@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import { chromium, webkit } from 'playwright';
+import { openInitialTestChat } from './chat-test-navigation.mjs';
 import { openSettings } from './settings-test-navigation.mjs';
 
 // Offline synthetic preview only; never uses native IPC, Keychain or live servers.
@@ -41,6 +42,7 @@ async function open(width, colorScheme, fallback = false) {
   if (fallback) await page.route('**/GoogleSansFlex-*.woff2', route => route.abort());
   await page.addInitScript(fixture => { window.__OUTPOST_RECORDED_PREVIEW__ = fixture; }, fixture);
   await page.goto(address);
+  await openInitialTestChat(page);
   await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
   await page.evaluate(() => document.fonts.ready);
   return page;

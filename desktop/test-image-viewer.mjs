@@ -5,6 +5,7 @@ import { resolve, extname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { chromium, webkit } from 'playwright';
 import { assertIconControls } from './icon-control-assertions.mjs';
+import { openInitialTestChat } from './chat-test-navigation.mjs';
 
 // Synthetic IPC and generated images only. No Keychain, live server or provider calls.
 const root = resolve('desktop/dist');
@@ -120,6 +121,7 @@ async function open({ width = 1440, scenario = 'live', colorScheme = 'dark', red
     };
   }, { fixture: testFixture, images: imageData, scenario, stream });
   await page.goto(origin);
+  await openInitialTestChat(page);
   await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
   await page.locator('.conversation .stream-artifact').first().waitFor();
   return page;

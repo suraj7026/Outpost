@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { chromium, webkit } from 'playwright';
+import { openInitialTestChat } from './chat-test-navigation.mjs';
 const root = resolve('desktop/dist');
 const server = createServer((request, response) => {
   const file = resolve(root, new URL(request.url, 'http://local').pathname.slice(1) || 'index.html');
@@ -88,6 +89,8 @@ async function open({ width = 1320, scheme = 'dark', scenario = 'native', stored
     };
   }, { fixture, scenario, storageKey, storedAppearance, failTheme });
   await page.goto(`http://127.0.0.1:${server.address().port}`);
+  await page.waitForFunction(() => !window.isTauri || window.__themeRequests.length > 0 && window.__themeInFlight === 0);
+  await openInitialTestChat(page);
   await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
   await page.evaluate(() => document.fonts.ready);
   return page;
@@ -320,7 +323,7 @@ async function checkThemePreferences() {
     await checkTheme(page, 'auto', 'dark');
     await themeRadio(page, 'light').check();
     await nativeTheme(page, 'light');
-    assert.deepEqual(await savedAppearance(page), { ...preferences, theme: 'light', conversationDetail: 'compact' }, 'Theme validation and selection preserve every other appearance preference and initialize conversation detail'); checks++;
+    assert.deepEqual(await savedAppearance(page), { ...preferences, theme: 'light', conversationDetail: 'compact', startupPage: 'home' }, 'Theme validation and selection preserve every other appearance preference and initialize conversation detail'); checks++;
     await page.reload();
     await page.getByRole('heading', { name: 'Appearance', exact: true, level: 1 }).waitFor();
     await checkTheme(page, 'light', 'light');

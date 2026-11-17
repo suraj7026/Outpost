@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { chromium, webkit } from 'playwright';
+import { openInitialTestChat } from './chat-test-navigation.mjs';
 
 const root = resolve('desktop/dist');
 const server = createServer((request, response) => {
@@ -109,6 +110,7 @@ try {
       window.__emit = message => callbacks.get(channel.id)({ index: index++, message });
     }, { fixture });
     await page.goto(`http://127.0.0.1:${server.address().port}`);
+    await openInitialTestChat(page);
     await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(150);

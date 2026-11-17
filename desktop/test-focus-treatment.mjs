@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import { chromium, webkit } from 'playwright';
+import { openInitialTestChat } from './chat-test-navigation.mjs';
 import { openSettings } from './settings-test-navigation.mjs';
 
 // Run from the repository root against an already-built desktop/dist. Never builds,
@@ -191,6 +192,7 @@ async function open(browser, width, colorScheme, label, forcedColors = 'none') {
   }, fixture);
   const page = await context.newPage(); page.setDefaultTimeout(8000);
   await page.goto(address);
+  await openInitialTestChat(page);
   await page.getByRole('textbox', { name: 'Message Outpost', exact: true }).waitFor();
   await page.locator('.model-picker-trigger:not(:disabled)').waitFor();
   await page.evaluate(() => document.fonts.ready);

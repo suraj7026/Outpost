@@ -35,6 +35,7 @@ import { preferredCloudModel } from "./models";
 import { useAppearance, useMediaQuery, type Appearance } from "./appearance";
 import { ConversationDetailContext } from './conversation-detail';
 import { useSidebar } from "./useSidebar";
+import { rememberWorkingLocation, type WorkingPage, type WorkingLocation } from "./startup-navigation";
 import ComposerContext from "./ComposerContext";
 import { ControlMode, ComposerModelSelect } from './ComposerControls';
 import TerminalPane from './server-terminal/TerminalPane';
@@ -218,7 +219,8 @@ function settingsSelection() {
   return hash === "#machines" || /^#settings\/servers(?:\/|$)/.test(hash) ? "machines" : hash.startsWith("#settings") ? "connection" : null;
 }
 
-export default function App({ connection, initialTask, environmentNavigation, newTaskNavigation, draftConnection, draftLabel, renderSettings, groups, connections, sharedMemory, openChat, showHistory, history, dismissHistory, ownerLabel }: {
+export default function App({ connection, initialTask, initialPage = "home", initialHash, restoringTask = false, onWorkingLocation, environmentNavigation, newTaskNavigation, draftConnection, draftLabel, renderSettings, groups, connections, sharedMemory, openChat, showHistory, history, dismissHistory, ownerLabel }: {
+  initialPage?: WorkingPage; initialHash?: string; restoringTask?: boolean; onWorkingLocation: (location: WorkingLocation) => void;
   connection: Connection; initialTask: string | null; environmentNavigation: ReactNode; newTaskNavigation: ReactNode; renderSettings: (appearance: Appearance) => ReactNode;
   draftConnection: Connection | undefined; draftLabel: string; connections: Record<string, Connection>; sharedMemory: ReactNode;
   groups: ChatGroup[]; openChat: OpenChat; showHistory: () => void;
@@ -229,7 +231,10 @@ export default function App({ connection, initialTask, environmentNavigation, ne
   useEffect(() => () => { mounted.current = false; }, []);
   const appearance = useAppearance();
   const narrow = useMediaQuery("(max-width: 780px)");
-  const [selection, setSelection] = useState<string | null>(settingsSelection() ?? initialTask),
+  const [selection, setSelection] = useState<string>(() => {
+    if (initialHash && !window.location.hash) window.history.replaceState(null, "", window.location.pathname + window.location.search + initialHash);
+    return settingsSelection() ?? initialTask ?? initialPage;
+  }),
     [searchOpen, setSearchOpen] = useState(false),
     [taskSearch, setTaskSearch] = useState("");
   const locationHash = useSyncExternalStore(subscribeLocation, locationSnapshot);
@@ -256,10 +261,20 @@ export default function App({ connection, initialTask, environmentNavigation, ne
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [connection.records],
   );
-  useEffect(() => {
-    if (selection === null && connection.connected) setSelection(tasks[0]?.id ?? "home");
-  }, [selection, connection.connected, tasks]);
   const selectedTask = tasks.find((task) => task.id === selection);
+  useEffect(() => {
+    const missingLegacyServer = connection.environmentId === null && connection.info?.endpoint === "";
+    if (restoringTask && selection === initialTask && (connection.connected || missingLegacyServer) && !connection.connecting && !selectedTask) setSelection("home");
+  }, [restoringTask, selection, initialTask, connection.connected, connection.connecting, connection.environmentId, connection.info?.endpoint, selectedTask]);
+  useEffect(() => {
+    let location: WorkingLocation | undefined;
+    if (showingHistory) location = { page: "history" };
+    else if (selectedTask) location = { page: "task", environmentId: connection.environmentId, taskId: selectedTask.id };
+    else if (selection === "connection" || selection === "machines") {
+      location = { page: selection, hash: window.location.hash || (selection === "connection" ? "#settings" : "#machines") };
+    } else if (selection === "home" || isWorkspaceSection(selection)) location = { page: selection };
+    if (location) { rememberWorkingLocation(location); onWorkingLocation(location); }
+  }, [selection, showingHistory, locationHash, connection.environmentId, selectedTask?.id, onWorkingLocation]);
   const pending = groups.filter(group => !group.archived).reduce((count, group) =>
     count + (connections[group.id ?? "legacy"]?.records.filter(record => isApproval(record) && text(record, "state") === "pending").length ?? 0), 0);
   useEffect(() => {

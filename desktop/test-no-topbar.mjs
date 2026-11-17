@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, webkit } from 'playwright';
+import { openInitialTestChat } from './chat-test-navigation.mjs';
 import { openSettings } from './settings-test-navigation.mjs';
 
 // Existing production dist only; no build, real Tauri, live server, or native effects.
@@ -218,6 +219,7 @@ async function scenario(engine, name, options, run) {
     await context.routeWebSocket('**/*', socket => { external.push(socket.url()); socket.close(); });
     await context.addInitScript(installTransport, { A, B, states: { [A]: { cursor: 1, records: records('Alpha', 41, options.state), pending: options.pending, pendingError: options.pendingError, browserDirect: options.browserDirect }, [B]: { cursor: 1, records: records('Beta', 71) } } });
     await page.goto(origin);
+    await openInitialTestChat(page);
     await page.locator('.task-unified .conversation').waitFor();
     await page.waitForFunction(({ A, B }) => window.__noTopbar.states[A].ready && window.__noTopbar.states[B].ready, { A, B });
     await page.evaluate(() => document.fonts.ready); await frames(page);

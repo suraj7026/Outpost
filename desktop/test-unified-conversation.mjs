@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, webkit } from 'playwright';
+import { openInitialTestChat } from './chat-test-navigation.mjs';
 import { openSettings } from './settings-test-navigation.mjs';
 
 // Run from any directory: node desktop/test-unified-conversation.mjs
@@ -329,6 +330,7 @@ async function scenario(engine, name, options, run) {
     if (options.clock) await page.clock.install({ time: new Date(epoch) });
     await page.addInitScript(installTransport, { records: fixture(options), options, environmentId, taskId });
     await page.goto(origin);
+    await openInitialTestChat(page);
     await page.locator('.task-unified .conversation').waitFor();
     await page.waitForFunction(() => window.__unified.ready === true);
     await page.evaluate(() => document.fonts.ready);
@@ -531,7 +533,7 @@ try {
           await page.locator('.conversation').evaluate(node => { node.scrollTop = 0; }); await frames(page);
           await screenshot(page, `${engine.name()}-conversation-${value}`);
         }
-        await page.reload(); await page.locator('.conversation').waitFor(); await frames(page);
+        await page.reload(); await openInitialTestChat(page); await page.locator('.conversation').waitFor(); await frames(page);
         equal(await page.evaluate(() => document.documentElement.dataset.conversationWidth), 'large', 'Preference survives a reload');
         await page.setViewportSize({ width: 390, height: 1000 }); await frames(page);
         const clipping = await page.locator('.conversation-content').evaluate(node => {

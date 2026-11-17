@@ -4,6 +4,7 @@ import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { openInitialTestChat } from './chat-test-navigation.mjs';
 
 // Explicit, read-only preview input. No fixtures or credentials ship in the application.
 const root = dirname(fileURLToPath(import.meta.url));
@@ -27,7 +28,7 @@ try {
     const page = await browser.newPage({ viewport: { width, height }, colorScheme: 'dark' });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.addInitScript(value => { window.__OUTPOST_RECORDED_PREVIEW__ = value; }, preview);
-    await page.goto(address); await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
+    await page.goto(address); await openInitialTestChat(page); await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
     if (width <= 900) await page.getByRole('button', { name: 'Show sidebar' }).click();
     await page.getByRole('button', { name: /New task/ }).click();
     await page.getByRole('heading', { name: 'What should run next?' }).waitFor(); checks++;
@@ -54,7 +55,7 @@ try {
   }
   const page = await browser.newPage({ viewport: { width: 1200, height: 800 }, colorScheme: 'light' });
   await page.addInitScript(value => { window.__OUTPOST_RECORDED_PREVIEW__ = value; }, preview);
-  await page.goto(address); await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
+  await page.goto(address); await openInitialTestChat(page); await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
   await page.getByRole('button', { name: /New task/ }).click();
   await page.getByRole('heading', { name: 'What should run next?' }).waitFor();
   await page.screenshot({ path: `${out}/home-light.png` });

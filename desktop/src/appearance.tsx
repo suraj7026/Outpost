@@ -11,10 +11,12 @@ const maxBlurRadius = 32;
 export const conversationWidths = { narrow: 672, wide: 864, large: 1056 } as const;
 export type ConversationWidth = keyof typeof conversationWidths;
 const isConversationWidth = (value: unknown): value is ConversationWidth => value === 'narrow' || value === 'wide' || value === 'large';
+export type StartupPage = 'home' | 'last';
+const isStartupPage = (value: unknown): value is StartupPage => value === 'home' || value === 'last';
 export type ThemePreference = 'auto' | 'light' | 'dark';
 const isThemePreference = (value: unknown): value is ThemePreference => value === 'auto' || value === 'light' || value === 'dark';
 const isConversationDetail = (value: unknown): value is ConversationDetail => value === 'compact' || value === 'extended';
-const defaults = { theme: 'auto' as ThemePreference, frosted: false, opacity: 45, sidebarCollapsed: false, conversationWidth: 'narrow' as ConversationWidth, conversationDetail: 'compact' as ConversationDetail };
+const defaults = { startupPage: 'home' as StartupPage, theme: 'auto' as ThemePreference, frosted: false, opacity: 45, sidebarCollapsed: false, conversationWidth: 'narrow' as ConversationWidth, conversationDetail: 'compact' as ConversationDetail };
 type Preferences = typeof defaults;
 // App remounts when switching chats; retain choices even when storage is blocked.
 let sessionPreferences: Preferences | undefined;
@@ -27,6 +29,7 @@ function readPreferences(): Preferences {
   try {
     const value = JSON.parse(localStorage.getItem(storageKey) || "{}");
     return {
+      startupPage: isStartupPage(value?.startupPage) ? value.startupPage : defaults.startupPage,
       theme: isThemePreference(value?.theme) ? value.theme : defaults.theme,
       frosted: value?.frosted === true,
       sidebarCollapsed: value?.sidebarCollapsed === true,
@@ -36,6 +39,10 @@ function readPreferences(): Preferences {
         ? clampGlassOpacity(value.opacity) : defaults.opacity,
     };
   } catch { return defaults; }
+}
+
+export function readStartupPage(): StartupPage {
+  return (sessionPreferences ?? readPreferences()).startupPage;
 }
 
 function applyTheme(theme: ThemePreference, systemDark: boolean) {
@@ -121,6 +128,7 @@ export function useAppearance() {
   }, [glassEnabled, blurRadius]);
   return {
     ...preferences, supported, reduced, error: [error, storageError, themeError].filter(Boolean).join(' '),
+    setStartupPage: (startupPage: StartupPage) => setPreferences(value => ({ ...value, startupPage })),
     setTheme: (theme: ThemePreference) => setPreferences(value => ({ ...value, theme })),
     setFrosted: (frosted: boolean) => setPreferences(value => ({ ...value, frosted })),
     setOpacity: (opacity: number) => setPreferences(value => ({ ...value, opacity: clampGlassOpacity(opacity) })),
@@ -135,6 +143,11 @@ export function AppearanceSettings({ appearance }: { appearance: Appearance }) {
   return <section className="settings-section appearance-settings" aria-labelledby="appearance-heading">
     <div><h2 id="appearance-heading">Appearance</h2><p>Theme, window and navigation preferences saved on this Mac.</p></div>
     <div className="appearance-controls">
+      <fieldset className="appearance-width" aria-describedby="startup-page-description">
+        <legend>On startup</legend>
+        <p className="small" id="startup-page-description">Applies next launch. New task home page is the default.</p>
+        <div className="appearance-width-options appearance-detail-options">{(['home', 'last'] as const).map(startupPage => <label key={startupPage}><input type="radio" name="startup-page" value={startupPage} checked={appearance.startupPage === startupPage} onChange={() => appearance.setStartupPage(startupPage)} /><span>{startupPage === 'home' ? 'New task home page' : 'Last working page'}</span></label>)}</div>
+      </fieldset>
       <fieldset className="appearance-width"><legend>Theme</legend><p className="small">Auto follows your Mac’s appearance. Light and Dark stay as selected.</p><div className="appearance-width-options">{(['auto', 'light', 'dark'] as const).map(theme => <label key={theme}><input type="radio" name="theme" value={theme} checked={appearance.theme === theme} onChange={() => appearance.setTheme(theme)} /><span>{theme[0].toUpperCase() + theme.slice(1)}</span></label>)}</div></fieldset>
       <fieldset className="appearance-width"><legend>Conversation width</legend><p className="small">Choose the text column width. Avatars sit outside it; the layout fits smaller windows automatically.</p><div className="appearance-width-options">{(['narrow', 'wide', 'large'] as const).map(width => <label key={width}><input type="radio" name="conversation-width" value={width} checked={appearance.conversationWidth === width} onChange={() => appearance.setConversationWidth(width)} /><span>{width[0].toUpperCase() + width.slice(1)}</span></label>)}</div></fieldset>
       <fieldset className="appearance-width" aria-describedby="conversation-detail-description">

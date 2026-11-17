@@ -4,6 +4,7 @@ import { readFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
 import { dirname, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, webkit } from 'playwright';
+import { openInitialTestChat } from './chat-test-navigation.mjs';
 
 // Real production React + xterm, synthetic native IPC only. No SSH or reboot occurs.
 // OUTPOST_TEST_DIST selects an existing immutable build; this suite never builds it.
@@ -112,6 +113,7 @@ async function open(browser, options = {}) {
   await page.context().routeWebSocket('**/*', socket => { external.push(socket.url()); socket.close(); });
   await page.addInitScript(install, { A, B, options });
   await page.goto(origin);
+  await openInitialTestChat(page);
   await page.getByRole('button', { name: 'Terminal', exact: true }).waitFor();
   return page;
 }

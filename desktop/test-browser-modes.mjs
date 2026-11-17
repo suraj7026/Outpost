@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { chromium, webkit } from 'playwright';
+import { openInitialTestChat } from './chat-test-navigation.mjs';
 
 const root = resolve('desktop/dist');
 const server = createServer((request, response) => {
@@ -107,6 +108,7 @@ try {
       } };
     });
     await page.goto(`http://127.0.0.1:${server.address().port}`);
+    await openInitialTestChat(page);
     await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
     await openResources(page);
     const viewer = page.getByRole('region', { name: 'Server browser' });
@@ -227,6 +229,7 @@ try {
     await page.screenshot({ path: `${out}/${width}-offline.png` });
     await page.emulateMedia({ colorScheme: 'light' });
     await page.reload();
+    await openInitialTestChat(page);
     await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
     await openResources(page);
     await viewer.locator('img').waitFor();
@@ -238,6 +241,7 @@ try {
     await enlarged.getByRole('button', { name: 'Close browser view' }).click();
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.goto(`http://127.0.0.1:${server.address().port}?takeover=0`);
+    await openInitialTestChat(page);
     await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
     await openResources(page);
     await viewer.locator('img').waitFor();

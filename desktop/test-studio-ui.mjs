@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { chromium, webkit } from 'playwright';
+import { openInitialTestChat } from './chat-test-navigation.mjs';
 import { assertIconControls } from './icon-control-assertions.mjs';
 
 // Entirely synthetic IPC: no connection to Keychain, a coordinator or a provider.
@@ -91,6 +92,7 @@ async function open(width, scenario = 'live', colorScheme = 'dark', reducedMotio
     };
   }, { fixture, scenario });
   await page.goto(`http://127.0.0.1:${server.address().port}`);
+  await openInitialTestChat(page);
   await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
   await page.evaluate(() => document.fonts.ready);
   return page;
@@ -290,6 +292,7 @@ try {
     }
     if (width === 1440) {
       await page.reload();
+      await openInitialTestChat(page);
       await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
       check(await page.locator('#task-evidence').isVisible(), 'Evidence remains present after app reload');
     }

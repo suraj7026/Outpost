@@ -8,6 +8,7 @@ import { AllChats, type ChatGroup } from "./ChatHistory";
 import SettingsWorkspace from "./SettingsWorkspace";
 import SharedMemory, { useSharedMemory } from "./SharedMemory";
 import { AutomaticUpdatesProvider } from "./AutomaticUpdates";
+import { readStartupLocation, resolveStartupLocation, type WorkingLocation } from "./startup-navigation";
 
 export interface SavedEnvironment { environmentId: string; label: string; routes: string[]; activeRoute: string }
 export interface Metadata { version: 1; legacyMutationsRetired: boolean; selectedEnvironmentId: EnvironmentId; environments: Record<string, SavedEnvironment> }
@@ -31,7 +32,10 @@ function Supervisor({ id, route, retired, publish }: { id: EnvironmentId; route:
 export default function Environments() {
   const [registry, setRegistry] = useState<Metadata | null>(null), [error, setError] = useState("");
   const [connections, setConnections] = useState<Record<string, Connection>>({});
-  const [task, setTask] = useState<string | null>(null), [history, setHistory] = useState(false);
+  const [startup] = useState(readStartupLocation);
+  const workingLocation = useRef<WorkingLocation>(startup);
+  const rememberLocation = useCallback((location: WorkingLocation) => { workingLocation.current = location; }, []);
+  const [history, setHistory] = useState(startup.page === "history");
   const [draftOwner, setDraftOwner] = useState<EnvironmentId>();
   const selecting = useRef(false);
   const [knownOwners, setKnownOwners] = useState<Record<string, SavedEnvironment>>({});
@@ -89,7 +93,8 @@ export default function Environments() {
         setArchiveSelection(null);
       }
       window.history.replaceState(null, "", window.location.pathname + window.location.search);
-      setTask(taskId); setNavigation(value => value + 1); setHistory(false); setError("");
+      workingLocation.current = taskId ? { page: "task", environmentId: id, taskId } : { page: "home" };
+      setNavigation(value => value + 1); setHistory(false); setError("");
     } catch (error) { setError(String(error)); }
     finally { selecting.current = false; }
   };
@@ -106,7 +111,9 @@ export default function Environments() {
   });
   const sharedMemory = useSharedMemory(groups, connections);
   if (!registry) return <main className="page registry-page"><h1>Saved environments</h1><p role="alert">{error || "Loading secure connection registry…"}</p><button onClick={() => void refresh()}>Retry registry</button></main>;
-  const selected = archiveSelection ?? registry.selectedEnvironmentId, source = connections[ownerKey(selected)];
+  const restored = navigation === 0 ? resolveStartupLocation(workingLocation.current, Object.keys(registry.environments)) : workingLocation.current;
+  const startupOwner = resolveStartupLocation(navigation === 0 ? startup : { page: "home" }, Object.keys(registry.environments));
+  const selected = archiveSelection ?? (startupOwner.page === "task" ? startupOwner.environmentId : registry.selectedEnvironmentId), source = connections[ownerKey(selected)];
   // Removed routes have no live supervisor. Keep their cached conversations readable,
   // but fence all commands even if the last published connection was online.
   const connection = source && archiveSelection && !registry.environments[archiveSelection] ? { ...source, connected: false, connecting: false, streaming: false, retired: true,
@@ -122,7 +129,9 @@ export default function Environments() {
   return <AutomaticUpdatesProvider registry={registry} connections={connections}>
     {supervisors.map(owner => <Supervisor key={ownerKey(owner.environmentId)} id={owner.environmentId} route={owner.activeRoute} retired={owner.environmentId === null && registry.legacyMutationsRetired} publish={publish} />)}
     {connection && <EnvironmentContext.Provider value={connection}>
-      <App key={`${navigation}:${ownerKey(selected)}:${registry.legacyMutationsRetired}`} connection={connection} initialTask={task}
+      <App key={`${navigation}:${ownerKey(selected)}:${registry.legacyMutationsRetired}`} connection={connection} initialTask={restored.page === "task" && restored.environmentId === selected ? restored.taskId : null} onWorkingLocation={rememberLocation}
+        initialPage={restored.page === "task" || restored.page === "history" ? "home" : restored.page}
+        initialHash={restored.page === "task" ? undefined : restored.hash} restoringTask={navigation === 0 && restored.page === "task"}
         environmentNavigation={<div className="environment-navigation"><Server size={16} /><span>{label}</span><span className={`environment-status ${connection.connected ? "online" : ""}`} title={connection.connected ? "Connected" : "Offline"} />{error && <p role="alert">{error}</p>}</div>}
         draftConnection={draftConnection} draftLabel={draftLabel} connections={connections} sharedMemory={<SharedMemory memory={sharedMemory} />}
         newTaskNavigation={<details className="new-task-server"><summary aria-label={`Run on ${draftLabel}`}><span className={`environment-status ${draftConnection?.connected ? 'online' : ''}`} aria-hidden="true" />{draftLabel}</summary><div role="group" aria-label="New task server">{draftOwners.map(owner => <button key={ownerKey(owner.environmentId)} onClick={event => {

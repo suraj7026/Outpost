@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { chromium, webkit } from 'playwright';
+import { openInitialTestChat } from './chat-test-navigation.mjs';
 import { openSettings } from './settings-test-navigation.mjs';
 
 // Synthetic native lifecycle and owner-bound IPC; no real servers or credentials.
@@ -83,6 +84,7 @@ try {
   check(await page.getByRole('button', { name: 'Retry connection', exact: true }).count() === 0, 'Ordinary restoration is a status, not a manual-retry error');
   check(await page.evaluate(A => !window.__requests.some(request => request.command === 'environment_query' && request.args.environmentId === A), A), 'No reads are sent to the stale loopback endpoint during restoration');
   await page.evaluate(() => window.__transition('connected', 58001));
+  await openInitialTestChat(page);
   await page.getByText('Alpha private history', { exact: true }).waitFor();
   check(await page.locator('.main-shell').getAttribute('data-owner-id') === A, 'Startup restores the same owner');
   check(await page.getByRole('button', { name: 'Retry same command', exact: true }).count() === 1, 'Unknown command outcome is retained, never replayed by reconnection');

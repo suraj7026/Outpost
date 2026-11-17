@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import { chromium, webkit } from 'playwright';
+import { openInitialTestChat } from './chat-test-navigation.mjs';
 
 // Offline fixture: no native IPC or live server access.
 const markdown = `## Verified state
@@ -82,6 +83,7 @@ try {
       page.on('pageerror', error => errors.push(error.message));
       await page.addInitScript(value => { window.__OUTPOST_RECORDED_PREVIEW__ = value; }, fixture);
       await page.goto(`http://127.0.0.1:${server.address().port}`);
+      await openInitialTestChat(page);
       await page.locator('.message.assistant table').waitFor();
       await page.evaluate(() => document.fonts.ready);
       const measurements = await page.locator('.message.assistant').evaluate(message => {

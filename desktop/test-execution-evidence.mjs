@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { chromium, webkit } from 'playwright';
+import { openInitialTestChat } from './chat-test-navigation.mjs';
 
 const root = resolve('desktop/dist'), types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.ttf': 'font/ttf' };
 const server = createServer((req, res) => {
@@ -54,6 +55,7 @@ try {
       } };
     }, records);
     await page.goto(`http://127.0.0.1:${server.address().port}`);
+    await openInitialTestChat(page);
     await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
     const conversation = page.locator('.conversation');
     const entries = conversation.locator('.execution-entry');
