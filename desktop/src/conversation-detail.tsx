@@ -3,13 +3,26 @@ import { createContext, useContext, useState } from 'react';
 export type ConversationDetail = 'compact' | 'extended';
 export const ConversationDetailContext = createContext<ConversationDetail>('compact');
 
-export function useConversationDisclosure() {
+export interface ExecutionViewState {
+  disclosure?: { detail: ConversationDetail; open: boolean };
+  rawOpen?: boolean;
+  inspectedDetail?: ConversationDetail;
+}
+
+export function useConversationDisclosure(memory?: ExecutionViewState) {
   const detail = useContext(ConversationDetailContext);
-  const [choice, setChoice] = useState({ detail, open: detail === 'extended' });
+  const [choice, setChoice] = useState(() => memory?.disclosure ?? { detail, open: detail === 'extended' });
   const open = choice.detail === detail ? choice.open : detail === 'extended';
-  // Reset only for an explicit preference change, never for a streaming update.
-  if (choice.detail !== detail) setChoice({ detail, open });
-  return { open, setOpen: (value: boolean) => setChoice({ detail, open: value }) };
+  // Run-owned memory preserves inspection when late visible text splits a stack.
+  if (memory) memory.disclosure = { detail, open };
+  if (choice.detail !== detail) {
+    if (memory) memory.inspectedDetail = undefined;
+    setChoice({ detail, open });
+  }
+  return { detail, open, setOpen: (value: boolean) => {
+    if (memory) memory.disclosure = { detail, open: value };
+    setChoice({ detail, open: value });
+  } };
 }
 
 export function ThinkingIndicator({ active }: { active: boolean }) {

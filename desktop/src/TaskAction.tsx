@@ -6,14 +6,30 @@ import OutcomeDot from "./OutcomeDot";
 import { actionNeedsReview, object, text, type ServerRecord } from "./types";
 import type { Connection } from "./useConnection";
 
+export function ActionDecisions({ record, connection }: { record: ServerRecord; connection: Connection }) {
+  const blocked = connection.retired || !!connection.info?.pendingError || connection.busy || !connection.connected || Boolean(connection.info?.pending) || recordedPreview();
+  const state = text(record, 'state');
+  const decide = (decision: 'approve' | 'deny') => {
+    if (blocked) return;
+    void connection.command('approval.decide', record.id, record.revision, { nonce: text(record, 'nonce'), actionDigest: text(record, 'actionDigest'), decision });
+  };
+  return state === 'pending' ? <>
+    <button type="button" className="action-deny" disabled={blocked} onClick={() => decide('deny')}>Deny</button>
+    <button type="button" className="primary" disabled={blocked} onClick={() => decide('approve')}>Approve</button>
+  </> : state === 'authorized' ? <button type="button" className="primary" disabled={blocked} onClick={() => {
+    if (!blocked) void connection.command('action.dispatch', record.id, record.revision);
+  }}>Run approved action</button> : null;
+}
+
 export function Action({
   record,
   connection,
+  showDecisions = true,
 }: {
   record: ServerRecord;
   connection: Connection;
+  showDecisions?: boolean;
 }) {
-  const mutationBlocked = connection.retired || !!connection.info?.pendingError || connection.busy || !connection.connected || Boolean(connection.info?.pending) || recordedPreview();
   const result = object(record.data.result),
     args = object(record.data.arguments),
     state = text(record, "state");
@@ -58,60 +74,7 @@ export function Action({
       <div className="action-body">
         <p className="small">{text(record, "target")}</p>
         <pre>{JSON.stringify(record.data.arguments, null, 2)}</pre>
-        {state === "pending" && (
-          <div className="button-row">
-            <button
-              onClick={() =>
-                void connection.command(
-                  "approval.decide",
-                  record.id,
-                  record.revision,
-                  {
-                    nonce: text(record, "nonce"),
-                    actionDigest: text(record, "actionDigest"),
-                    decision: "approve",
-                  },
-                )
-              }
-              className="primary"
-              disabled={mutationBlocked}
-            >
-              Approve
-            </button>
-            <button
-              onClick={() =>
-                void connection.command(
-                  "approval.decide",
-                  record.id,
-                  record.revision,
-                  {
-                    nonce: text(record, "nonce"),
-                    actionDigest: text(record, "actionDigest"),
-                    decision: "deny",
-                  },
-                )
-              }
-              disabled={mutationBlocked}
-            >
-              Deny
-            </button>
-          </div>
-        )}
-        {state === "authorized" && (
-          <button
-            onClick={() =>
-              void connection.command(
-                "action.dispatch",
-                record.id,
-                record.revision,
-              )
-            }
-            className="primary"
-            disabled={mutationBlocked}
-          >
-            Run approved action
-          </button>
-        )}
+        {showDecisions && ['pending', 'authorized'].includes(state) && <div className="button-row"><ActionDecisions record={record} connection={connection} /></div>}
         {typeof result.stdout === "string" && (
           <pre>{result.stdout || "(no output)"}</pre>
         )}

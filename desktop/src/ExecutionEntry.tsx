@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronRight, FileText, Globe, Image, Shield, SquareTerminal as Terminal } from 'lucide-react';
 import { actionLabel } from './conversation-model';
-import { useConversationDisclosure } from './conversation-detail';
+import { useConversationDisclosure, type ExecutionViewState } from './conversation-detail';
 import { EvidenceTime } from './LiveContent';
 import OutcomeDot from './OutcomeDot';
 import { actionNeedsReview, labelState, object, text, type ServerRecord } from './types';
@@ -12,14 +12,16 @@ export function executionIsActive(record: ServerRecord): boolean {
     : record.data.streaming === true && !record.data.interrupted && ['preparing', 'running'].includes(text(record, 'state'));
 }
 
-export default function ExecutionEntry({ record, streams = [], onReview }: {
+export default function ExecutionEntry({ record, streams = [], onReview, viewState }: {
   record: ServerRecord;
   streams?: ServerRecord[];
+  viewState?: ExecutionViewState;
   onReview: (record: ServerRecord) => void;
 }) {
-  const { open: expanded, setOpen: setExpanded } = useConversationDisclosure();
+  const { detail: detailPreference, open: expanded, setOpen: setExpanded } = useConversationDisclosure(viewState);
   const [copied, setCopied] = useState(false);
-  const [rawOpen, setRawOpen] = useState(false);
+  const [rawOpen, setRawOpen] = useState(() => viewState?.rawOpen ?? false);
+  const markInspected = () => { if (viewState) viewState.inspectedDetail = detailPreference; };
   const stream = record.kind === 'tool_stream';
   const envelope = object(record.data.arguments);
   const args = stream && typeof envelope.tool === 'string' ? object(envelope.arguments) : envelope;
@@ -47,7 +49,7 @@ export default function ExecutionEntry({ record, streams = [], onReview }: {
   }, null, 2) : '', [rawOpen, record, args, result, stream]);
 
   return <details className={`action execution-entry ${stream ? 'live-tool' : ''} ${failed ? 'action-failed' : ''}`}
-    data-record-id={record.id} data-state={state} open={expanded}
+    data-record-id={record.id} data-state={state} open={expanded} onPointerDownCapture={markInspected} onFocusCapture={markInspected}
     onToggle={event => { if (event.currentTarget.open !== expanded) setExpanded(event.currentTarget.open); }}>
     <summary>
       <ChevronRight size={13} className="disclosure" aria-hidden="true" />
@@ -75,7 +77,11 @@ export default function ExecutionEntry({ record, streams = [], onReview }: {
       {typeof result.result === 'string' && <p>{result.result}</p>}
       {failed && !stdout && !stderr && !error && !detail && <p className="small">This attempt did not complete successfully. No additional error detail was recorded.</p>}
       {review && <p className="small">Review the exact arguments before {state === 'authorized' ? 'dispatching this approved action' : 'approving this action'}.</p>}
-      <details className="execution-raw" open={rawOpen} onToggle={event => { if (event.currentTarget.open !== rawOpen) setRawOpen(event.currentTarget.open); }}><summary><ChevronRight size={13} className="disclosure" aria-hidden="true" />Input &amp; full output</summary>
+      <details className="execution-raw" open={rawOpen} onToggle={event => {
+              if (event.target !== event.currentTarget || event.currentTarget.open === rawOpen) return;
+              if (viewState) viewState.rawOpen = event.currentTarget.open;
+              setRawOpen(event.currentTarget.open);
+            }}><summary><ChevronRight size={13} className="disclosure" aria-hidden="true" />Input &amp; full output</summary>
         {rawOpen && <><pre tabIndex={0}>{rawPayload}</pre>
           {streams.map(item => <div key={item.id}><p className="small">Tool stream · {labelState(text(item, 'state'))}{item.data.interrupted ? ' · interrupted' : ''}</p><pre tabIndex={0}>{text(item, 'output') || '(no output)'}</pre></div>)}
         </>}

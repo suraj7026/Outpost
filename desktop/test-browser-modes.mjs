@@ -70,6 +70,7 @@ try {
       window.isTauri = true;
       window.__TAURI_INTERNALS__ = { metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } }, transformCallback: () => 1, unregisterCallback() {}, async invoke(command, args) {
         if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: null, environments: {} }, legacy: { endpoint: null, pending: false } };
+        if (command === 'automatic_updates_status') return { enabled: false, targets: [], activeEnvironmentId: null, servers: [] };
         if (['disconnect', 'set_sidebar_window_controls', 'set_sidebar_window_control_mode', 'set_sidebar_window_control_presentation'].includes(command)) return;
         if (command === 'sidebar_pointer_inside') return false;
         if (command === 'connection_info') return { endpoint: 'Synthetic transport', deviceId: 'fixture', pending: false, nativeSidebar: false };
@@ -91,6 +92,7 @@ try {
           if (args.kind === 'runtime') return { configured: true, model: 'fixture:cloud', browserEngine: 'camoufox', browserDirect: true, browserTakeover: !location.search.includes('takeover=0') };
           if (args.kind === 'models') return { models: ['fixture:cloud'], defaultModel: 'fixture:cloud' };
           if (args.kind === 'events') return { events: [], nextCursor: 1, hasMore: false };
+          if (args.kind === 'workspace.files') return { files: [], truncated: false };
           if (args.kind === 'browser.frame') {
             window.__frameCalls++;
             if (window.__frameError) throw new Error('Synthetic frame failure');
@@ -134,11 +136,11 @@ try {
     check(await viewer.locator('img').count() === 0, 'Failed requests never leave a stale frame labelled live');
     await page.evaluate(() => { window.__frameError = false; });
     await viewer.locator('img').waitFor();
-    await viewer.getByRole('button', { name: /Server browser/ }).click();
+    await page.getByRole('tab', { name: 'Documents', exact: true }).click();
     const count = await page.evaluate(() => window.__frameCalls);
     await page.waitForTimeout(1200);
-    check(await page.evaluate(() => window.__frameCalls) === count, 'Collapsed viewer stops polling');
-    await viewer.getByRole('button', { name: /Server browser/ }).click();
+    check(await page.evaluate(() => window.__frameCalls) === count, 'Hidden browser tab stops polling');
+    await page.getByRole('tab', { name: 'Browser', exact: true }).click();
     await viewer.locator('img').waitFor();
     await page.evaluate(() => { window.__frameState = 'closed'; });
     await viewer.getByText('Browser closed. The task profile and saved files are retained.').waitFor();
@@ -151,7 +153,7 @@ try {
     await page.screenshot({ path: `${out}/${width}-closed.png` });
     await page.keyboard.press('Escape');
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Viewer fits the viewport');
-    check(await page.evaluate(() => window.__mutations.length) === 0, 'Watching never sends mutations');
+    check(await page.evaluate(() => window.__mutations.length) === 0, `Watching never sends mutations: ${JSON.stringify(await page.evaluate(() => window.__mutations))}`);
     await page.evaluate(() => { window.__frameState = 'idle'; });
     await viewer.locator('img').waitFor();
     await viewer.getByRole('button', { name: 'Take control', exact: true }).click();

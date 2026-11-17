@@ -14,7 +14,7 @@ export function Section({ title, description, action, children, className = '' }
 export function SettingRow({ title, description, icon, children, className = '' }: { title: ReactNode; description?: ReactNode; icon?: ReactNode; children?: ReactNode; className?: string }) {
   return <div className={`ui-row ${className}`}>{icon && <span className="ui-row-icon" aria-hidden="true">{icon}</span>}<div className="ui-row-content"><strong>{title}</strong>{description && <div className="ui-row-description">{description}</div>}</div>{children && <div className="ui-row-actions">{children}</div>}</div>;
 }
-export function Dialog({ title, children, onClose, busy = false, className = '' }: { title: string; children: ReactNode; onClose: () => void; busy?: boolean; className?: string }) {
+export function Dialog({ title, children, onClose, busy = false, className = '', bodyClassName = '', footer, closeLabel = 'Close dialog' }: { title: string; children: ReactNode; onClose: () => void; busy?: boolean; className?: string; bodyClassName?: string; footer?: ReactNode; closeLabel?: string }) {
   const element = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useEffect(() => {
@@ -23,7 +23,8 @@ export function Dialog({ title, children, onClose, busy = false, className = '' 
     return () => { dialog?.close(); if (previous instanceof HTMLElement && previous.isConnected) previous.focus({ preventScroll: true }); };
   }, []);
   return <dialog ref={element} className={`ui-dialog ${className}`} aria-labelledby={titleId} onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
-    <header className="ui-dialog-heading"><h2 id={titleId}>{title}</h2><Button className="ui-close" variant="ghost" aria-label="Close dialog" title="Close dialog" disabled={busy} onClick={onClose}><X size={18} /></Button></header>
-    <div className="ui-dialog-body">{children}</div>
+    <header className="ui-dialog-heading"><h2 id={titleId}>{title}</h2><Button className="ui-close" variant="ghost" aria-label={closeLabel} title={closeLabel} disabled={busy} onClick={onClose}><X size={18} aria-hidden="true" /></Button></header>
+    <div className={`ui-dialog-body ${bodyClassName}`}>{children}</div>
+    {footer != null && <footer className="ui-dialog-footer ui-dialog-actions">{footer}</footer>}
   </dialog>;
 }

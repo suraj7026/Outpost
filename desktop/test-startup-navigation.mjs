@@ -420,7 +420,16 @@ async function run() {
     });
   }
 
-  for (const [destination, label] of [['decisions', 'Approvals'], ['outputs', 'Library'], ['automations', 'Automations'], ['memory', 'Memory'], ['machines', 'Machines'], ['history', 'All chats']]) {
+  await scenario('Stored decisions page migrates to All chats', { appearance: lastPreference, location: JSON.stringify({ page: 'decisions' }) }, async page => {
+    await ready(page); await heading(page, 'All chats').waitFor();
+    check(!await home(page).isVisible() && !await chat(page).isVisible(), 'Legacy Approvals location opens All chats, not Home or a selected chat');
+    equal(await page.getByRole('navigation', { name: 'Main navigation', exact: true }).getByRole('button', { name: 'Approvals', exact: true }).count(), 0, 'Standalone Approvals is absent from navigation');
+    await savedLocation(page, { page: 'history' });
+    await freshLaunch(page); await ready(page); await heading(page, 'All chats').waitFor();
+    await savedLocation(page, { page: 'history' });
+  });
+
+  for (const [destination, label] of [['outputs', 'Library'], ['automations', 'Automations'], ['memory', 'Memory'], ['machines', 'Machines'], ['history', 'All chats']]) {
     await scenario(`Remember and restore ${label}`, { appearance: lastPreference }, async page => {
       await ready(page); await assertHome(page);
       await navigate(page, label);

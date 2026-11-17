@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarClock, Pause, Play, Plus } from 'lucide-react';
+import { CalendarClock, Pause, Play, Plus, X } from 'lucide-react';
 import { nativeApp, recordedPreview } from './api';
 import type { ChatGroup } from './ChatHistory';
 import type { Connection } from './useConnection';
 import { title, type ServerRecord } from './types';
 import { automationBlocker, buildSchedule, intervalLabel, legacyModelSelection, modelRefSelection, readSchedule, saveAutomation, scheduleDraft, scheduleTime, type AutomationDraft, type AutomationSchedule } from './automation-form';
-import { Badge } from './Interface';
+import { Badge, Button } from './Interface';
 import { displayTimeZones } from './workspace-presentation';
 import './workspace-refinement.css';
 
@@ -21,7 +21,7 @@ function modelOptions(connection: Connection | undefined) {
 function ScheduleDialog({ editor, groups, connections, close, saved }: {
   editor: Editor; groups: ChatGroup[]; connections: Record<string, Connection>; close: () => void; saved: (message: string) => void;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const dialog = useRef<HTMLDialogElement>(null), nameInput = useRef<HTMLInputElement>(null);
   const [server, setServer] = useState(editor.server);
   const [draft, setDraft] = useState(() => scheduleDraft(editor.initial));
   const [zoneSearch, setZoneSearch] = useState('');
@@ -39,6 +39,7 @@ function ScheduleDialog({ editor, groups, connections, close, saved }: {
   useEffect(() => {
     const element = dialog.current, trigger = document.activeElement;
     element?.showModal();
+    nameInput.current?.focus({ preventScroll: true });
     return () => { element?.close(); if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus(); };
   }, []);
   const submit = async () => {
@@ -56,11 +57,12 @@ function ScheduleDialog({ editor, groups, connections, close, saved }: {
     finally { writing.current = false; setBusy(false); }
   };
   const dismiss = () => { if (!writing.current) close(); };
-  return <dialog className="workspace-dialog" ref={dialog} aria-labelledby="schedule-dialog-title" onCancel={event => { event.preventDefault(); dismiss(); }}>
+  return <dialog className="workspace-dialog workspace-form-dialog schedule-dialog" ref={dialog} aria-labelledby="schedule-dialog-title" onCancel={event => { event.preventDefault(); dismiss(); }}>
     <form onSubmit={event => { event.preventDefault(); void submit(); }}>
-      <h2 id="schedule-dialog-title">{editor.revision ? 'Edit schedule' : 'New schedule'}</h2>
+      <header className="ui-dialog-heading"><h2 id="schedule-dialog-title">{editor.revision ? 'Edit schedule' : 'New schedule'}</h2><Button className="ui-close" variant="ghost" aria-label="Close dialog" title="Close dialog" disabled={busy} onClick={dismiss}><X size={18} aria-hidden="true" /></Button></header>
+      <div className="dialog-form-body">
       <fieldset disabled={busy} className="workspace-fields">
-        <label>Schedule name<input autoFocus required value={draft.name} onChange={event => field('name', event.target.value)} /></label>
+        <label>Schedule name<input ref={nameInput} autoFocus required value={draft.name} onChange={event => field('name', event.target.value)} /></label>
         <label>What should it do?<textarea required maxLength={20000} rows={4} value={draft.goal} onChange={event => field('goal', event.target.value)} /></label>
         <label>Server<select value={server} disabled={!!editor.revision} onChange={event => { setServer(event.target.value); field('model', ''); }}>
           {groups.filter(group => !group.archived).map(group => <option key={serverKey(group)} value={serverKey(group)}>{group.label}{group.connected ? '' : ' · Offline'}</option>)}
@@ -90,7 +92,8 @@ function ScheduleDialog({ editor, groups, connections, close, saved }: {
       {blocker && <p className="small" role="status">{blocker}</p>}
       {stale && <p role="alert" className="error-text">This schedule changed on the server. Close and reopen it before saving.</p>}
       {error && <p className="error-text" role="alert">{error}</p>}
-      <div className="workspace-dialog-actions"><button type="button" disabled={busy} onClick={dismiss}>Cancel</button><button className="primary" disabled={busy || !!blocker || stale || unavailableModel}>{busy ? 'Saving…' : editor.revision ? 'Save changes' : 'Create schedule'}</button></div>
+      </div>
+      <footer className="workspace-dialog-actions"><button type="button" disabled={busy} onClick={dismiss}>Cancel</button><button className="primary" disabled={busy || !!blocker || stale || unavailableModel}>{busy ? 'Saving…' : editor.revision ? 'Save changes' : 'Create schedule'}</button></footer>
     </form>
   </dialog>;
 }
@@ -113,7 +116,7 @@ export default function Automations({ groups, connections }: { groups: ChatGroup
     finally { writing.current = false; setWorking(false); }
   };
   return <main className="page workspace-refinement workspace-view">
-    <div className="page-heading"><div><h1>Automations</h1><p>Scheduled tasks, kept on the server that runs them.</p></div><button className="primary" disabled={!first || working || !!editor} onClick={() => first && setEditor({ server: serverKey(first), id: crypto.randomUUID(), revision: 0 })}><Plus size={15} /> New schedule</button></div>
+    <div className="page-heading"><span className="page-header-icon" aria-hidden="true"><CalendarClock size={20} /></span><div><h1>Automations</h1><p>Scheduled tasks, kept on the server that runs them.</p></div><button className="primary" disabled={!first || working || !!editor} onClick={() => first && setEditor({ server: serverKey(first), id: crypto.randomUUID(), revision: 0 })}><Plus size={15} /> New schedule</button></div>
     {!first && <p className="small">{automationBlocker(available.length ? connections[serverKey(available[0])] : undefined, nativeApp(), recordedPreview())} <a href="#settings/servers">Manage servers</a></p>}
     {notice && <p role="status">{notice}</p>}{error && <p className="error-text" role="alert">{error}</p>}
     {servers.map(({ group, connection, rows }) => <section key={serverKey(group)} className="workspace-server" aria-label={`${group.label} automations`}>

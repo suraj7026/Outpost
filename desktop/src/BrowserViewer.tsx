@@ -17,15 +17,18 @@ interface Frame {
   control?: Control | null; controlEpoch?: string;
 }
 
-export default function BrowserViewer({ taskId, api, connected, session, engine, takeover = false, deviceId = '' }: {
+export default function BrowserViewer({ taskId, api, connected, session, engine, takeover = false, deviceId = '', active: viewActive = true, embedded = false }: {
   taskId: string; api: EnvironmentApi; connected: boolean; session: ServerRecord | undefined; engine?: string | null;
-  takeover?: boolean; deviceId?: string;
+  takeover?: boolean; deviceId?: string; active?: boolean; embedded?: boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [enlarged, setEnlarged] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   const enlargeButton = useRef<HTMLButtonElement>(null);
   const wasEnlarged = useRef(false);
+  useEffect(() => {
+    if (!viewActive) { dialog.current?.close(); setEnlarged(false); }
+  }, [viewActive]);
   useEffect(() => {
     if (enlarged) dialog.current?.showModal();
     else if (wasEnlarged.current) enlargeButton.current?.focus({ preventScroll: true });
@@ -57,8 +60,17 @@ export default function BrowserViewer({ taskId, api, connected, session, engine,
     alive.current = true; lifetime.current++;
     current.current = null; setFrame(null); setError(''); setInputText(''); setAddress(''); setBusy(sending.current);
     let cancelled = false, timer: ReturnType<typeof setTimeout> | undefined;
-    const clock = setInterval(() => setNow(Date.now()), 1000);
-    if (connected && expanded && hasSession && !recordedPreview()) {
+    let clock: ReturnType<typeof setInterval> | undefined;
+    const updateClock = () => {
+      clearInterval(clock);
+      if (viewActive && connected && hasSession && !document.hidden) {
+        setNow(Date.now());
+        clock = setInterval(() => setNow(Date.now()), 1000);
+      }
+    };
+    updateClock();
+    document.addEventListener('visibilitychange', updateClock);
+    if (connected && viewActive && expanded && hasSession && !recordedPreview()) {
       const poll = async () => {
         if (cancelled) return;
         if (!document.hidden) {
@@ -75,8 +87,8 @@ export default function BrowserViewer({ taskId, api, connected, session, engine,
       };
       void poll();
     }
-    return () => { cancelled = true; alive.current = false; lifetime.current++; generation.current++; clearTimeout(timer); clearInterval(clock); };
-  }, [api, taskId, connected, expanded, hasSession, deviceId, refresh]);
+    return () => { cancelled = true; alive.current = false; lifetime.current++; generation.current++; clearTimeout(timer); clearInterval(clock); document.removeEventListener('visibilitychange', updateClock); };
+  }, [api, taskId, connected, viewActive, expanded, hasSession, deviceId, refresh]);
 
   const state = frame?.session?.state ?? (session ? text(session, 'state') : '');
   const mode = frame?.session?.mode ?? (session ? text(session, 'mode') : '');
@@ -124,7 +136,7 @@ export default function BrowserViewer({ taskId, api, connected, session, engine,
   const image = <img src={`data:image/jpeg;base64,${frame?.frame}`} draggable={false} alt="Current page in this task’s server browser" />;
   const content = <>
     <div className="browser-heading-row">
-      {enlarged ? <div className="browser-viewer-title"><Globe size={17} /><h2>Server browser</h2></div>
+      {enlarged || embedded ? <div className="browser-viewer-title"><Globe size={17} /><h2 className={embedded && !enlarged && url ? 'browser-viewer-url' : undefined} title={embedded && !enlarged ? url : undefined}>{embedded && !enlarged && url ? url : 'Server browser'}</h2></div>
         : <button className="browser-viewer-heading" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>
           <ChevronRight size={13} className={expanded ? 'expanded' : ''} /><Globe size={15} /><span>Server browser</span>
         </button>}
@@ -147,7 +159,7 @@ export default function BrowserViewer({ taskId, api, connected, session, engine,
       {controlError && <p className="browser-control-error" role="alert">{controlError}</p>}
       <div className="browser-workspace" data-controls={showInputs}>
         <div className="browser-viewer-main">
-          {url && <p className="browser-viewer-url" title={url}>{url}</p>}
+          {url && (!embedded || enlarged) && <p className="browser-viewer-url" title={url}>{url}</p>}
           <div className="browser-frame" data-empty={!hasFrame}>
             {hasFrame ? mine && lease.state === 'human'
               ? <button className="browser-page-input" aria-label="Click server browser page" disabled={!canInput} onClick={event => {
@@ -188,5 +200,5 @@ export default function BrowserViewer({ taskId, api, connected, session, engine,
   </>;
   return enlarged ? <dialog ref={dialog} className="browser-viewer browser-viewer-dialog" data-empty={!hasFrame} aria-label="Server browser"
     onCancel={event => { event.preventDefault(); setEnlarged(false); }}>{content}</dialog>
-    : <section className="browser-viewer" aria-label="Server browser">{content}</section>;
+    : <section className={`browser-viewer${embedded ? ' browser-viewer-embedded' : ''}`} aria-label="Server browser">{content}</section>;
 }

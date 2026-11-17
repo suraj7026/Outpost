@@ -877,6 +877,150 @@ pub async fn save_artifact(
     Ok(path.to_string_lossy().into_owned())
 }
 
+const WORKSPACE_FILE_LIMIT: usize = 1024 * 1024;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct WorkspaceFile {
+    path: String,
+    name: String,
+    text: String,
+    size: u64,
+    hash: String,
+    modified_at: String,
+}
+
+fn validate_workspace_request(task_id: &str, path: &str, hash: &str) -> Result<(), String> {
+    environments::validate_id(task_id).map_err(|_| "Invalid task UUID")?;
+    if hash.len() != 64
+        || !hash
+            .bytes()
+            .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+    {
+        return Err("Expected a lowercase SHA256 hash".into());
+    }
+    if path.encode_utf16().count() > 1000
+        || path
+            .chars()
+            .any(|c| c.is_control() || matches!(c, '\\' | ':' | '%'))
+        || path
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == ".." || part.len() > 255)
+    {
+        return Err("Invalid workspace path".into());
+    }
+    let name = path.rsplit('/').next().ok_or("Invalid filename")?;
+    if name.ends_with(['.', ' ']) || name.contains(['<', '>', '"', '|', '?', '*']) {
+        return Err("Invalid filename".into());
+    }
+    Ok(())
+}
+
+fn validate_workspace_file(
+    value: Value,
+    task_id: &str,
+    path: &str,
+    hash: &str,
+) -> Result<WorkspaceFile, String> {
+    validate_workspace_request(task_id, path, hash)?;
+    let file: WorkspaceFile =
+        serde_json::from_value(value).map_err(|_| "Invalid workspace file response")?;
+    if file.path != path
+        || Some(file.name.as_str()) != path.rsplit('/').next()
+        || file.modified_at.is_empty()
+        || file.modified_at.chars().any(char::is_control)
+    {
+        return Err("Invalid workspace file metadata".into());
+    }
+    if file.text.len() > WORKSPACE_FILE_LIMIT
+        || file
+            .text
+            .chars()
+            .any(|c| c.is_control() && !matches!(c, '\t' | '\n' | '\r'))
+    {
+        return Err("Workspace download requires text of at most 1 MiB".into());
+    }
+    if file.size != file.text.len() as u64
+        || file.hash != format!("{:x}", Sha256::digest(file.text.as_bytes()))
+    {
+        return Err("Workspace file integrity check failed".into());
+    }
+    if file.hash != hash {
+        return Err(
+            "Workspace file changed since preview; preview it again before downloading".into(),
+        );
+    }
+    Ok(file)
+}
+
+async fn workspace_file(
+    state: &State,
+    task_id: &str,
+    path: &str,
+    hash: &str,
+) -> Result<WorkspaceFile, String> {
+    validate_workspace_request(task_id, path, hash)?;
+    let value = environments::query_value(
+        state,
+        "workspace.read".into(),
+        json!({ "taskId": task_id, "path": path }),
+    )
+    .await?;
+    validate_workspace_file(value, task_id, path, hash)
+}
+
+fn save_workspace_snapshot(
+    downloads: &std::path::Path,
+    snapshot: WorkspaceFile,
+) -> Result<String, String> {
+    use std::io::Write;
+    let name: String = snapshot
+        .name
+        .chars()
+        .take(180)
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let path = downloads.join(format!("{}-{name}", Uuid::new_v4()));
+    let mut options = fs::OpenOptions::new();
+    options.create_new(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&path).map_err(|e| e.to_string())?;
+    if let Err(error) = file
+        .write_all(snapshot.text.as_bytes())
+        .and_then(|_| file.sync_all())
+    {
+        let _ = fs::remove_file(&path);
+        return Err(error.to_string());
+    }
+    Ok(path.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+pub async fn save_workspace_file(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, State>,
+    task_id: String,
+    path: String,
+    hash: String,
+) -> Result<String, String> {
+    let owner = state.inner();
+    let snapshot = workspace_file(owner, &task_id, &path, &hash).await?;
+    save_workspace_snapshot(
+        &app.path().download_dir().map_err(|e| e.to_string())?,
+        snapshot,
+    )
+}
+
 #[tauri::command]
 pub fn open_url(url: String) -> Result<(), String> {
     let parsed = reqwest::Url::parse(&url).map_err(|_| "Invalid URL")?;
@@ -894,6 +1038,236 @@ pub fn open_url(url: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    const WORKSPACE_TASK: &str = "11111111-1111-4111-8111-111111111111";
+    const WORKSPACE_PATH: &str = "reports/summary.txt";
+
+    fn workspace_response(text: &str) -> Value {
+        json!({
+            "path": WORKSPACE_PATH,
+            "name": "summary.txt",
+            "text": text,
+            "size": text.len(),
+            "hash": format!("{:x}", Sha256::digest(text.as_bytes())),
+            "modifiedAt": "2026-11-17T00:00:00.000Z"
+        })
+    }
+
+    #[test]
+    fn workspace_validation_preserves_exact_utf8_bytes_and_limits() {
+        for text in [
+            String::new(),
+            "\u{feff}Résumé 🦀\r\n\t".into(),
+            "é".repeat(WORKSPACE_FILE_LIMIT / 2),
+        ] {
+            let value = workspace_response(&text);
+            let hash = value["hash"].as_str().unwrap().to_owned();
+            let file =
+                validate_workspace_file(value, WORKSPACE_TASK, WORKSPACE_PATH, &hash).unwrap();
+            assert_eq!(file.text.as_bytes(), text.as_bytes());
+        }
+        let value = workspace_response(&"é".repeat(WORKSPACE_FILE_LIMIT / 2 + 1));
+        let hash = value["hash"].as_str().unwrap().to_owned();
+        assert!(validate_workspace_file(value, WORKSPACE_TASK, WORKSPACE_PATH, &hash).is_err());
+    }
+
+    #[test]
+    fn workspace_validation_rejects_invalid_requests_and_malicious_names() {
+        let hash = "a".repeat(64);
+        for task in ["", "../task", "not-a-uuid"] {
+            assert!(validate_workspace_request(task, WORKSPACE_PATH, &hash).is_err());
+        }
+        for hash in [
+            String::new(),
+            "a".repeat(63),
+            "a".repeat(65),
+            "A".repeat(64),
+            "g".repeat(64),
+        ] {
+            assert!(validate_workspace_request(WORKSPACE_TASK, WORKSPACE_PATH, &hash).is_err());
+        }
+        for path in [
+            "",
+            "/absolute.txt",
+            "a/../b",
+            "./a",
+            "a//b",
+            "a/",
+            "a\\b",
+            "C:file",
+            "%2e%2e/file",
+            "a\0b",
+            "a\nb",
+            "..",
+            ".",
+            "file.",
+            "file ",
+            "a<b",
+            "a>b",
+            "a\"b",
+            "a|b",
+            "a?b",
+            "a*b",
+        ] {
+            assert!(
+                validate_workspace_request(WORKSPACE_TASK, path, &hash).is_err(),
+                "{path:?}"
+            );
+        }
+        assert!(validate_workspace_request(WORKSPACE_TASK, &"a".repeat(256), &hash).is_err());
+        assert!(validate_workspace_request(WORKSPACE_TASK, &"a/".repeat(501), &hash).is_err());
+    }
+
+    #[test]
+    fn workspace_validation_requires_exact_response_fields_and_types() {
+        let original = workspace_response("hello");
+        let hash = original["hash"].as_str().unwrap();
+        for field in ["path", "name", "text", "size", "hash", "modifiedAt"] {
+            let mut value = original.clone();
+            value.as_object_mut().unwrap().remove(field);
+            assert!(
+                validate_workspace_file(value, WORKSPACE_TASK, WORKSPACE_PATH, hash).is_err(),
+                "missing {field}"
+            );
+            let mut value = original.clone();
+            value[field] = Value::Null;
+            assert!(
+                validate_workspace_file(value, WORKSPACE_TASK, WORKSPACE_PATH, hash).is_err(),
+                "null {field}"
+            );
+        }
+        for (field, bad) in [
+            ("extra", json!(true)),
+            ("path", json!("other/summary.txt")),
+            ("name", json!("../summary.txt")),
+            ("name", json!("other.txt")),
+            ("name", json!("summary.txt\0")),
+            ("text", json!(42)),
+            ("size", json!("5")),
+            ("size", json!(-1)),
+            ("size", json!(5.0)),
+            ("modifiedAt", json!(42)),
+            ("modifiedAt", json!("")),
+        ] {
+            let mut value = original.clone();
+            value[field] = bad;
+            assert!(
+                validate_workspace_file(value, WORKSPACE_TASK, WORKSPACE_PATH, hash).is_err(),
+                "{field}"
+            );
+        }
+    }
+
+    #[test]
+    fn workspace_validation_rejects_tampering_and_stale_preview() {
+        let original = workspace_response("é");
+        let hash = original["hash"].as_str().unwrap();
+        for (field, bad) in [
+            ("text", json!("different")),
+            ("size", json!(1)),
+            ("hash", json!("0".repeat(64))),
+            ("hash", json!(hash.to_uppercase())),
+        ] {
+            let mut value = original.clone();
+            value[field] = bad;
+            assert!(validate_workspace_file(value, WORKSPACE_TASK, WORKSPACE_PATH, hash).is_err());
+        }
+        let changed = workspace_response("updated");
+        assert!(
+            validate_workspace_file(changed, WORKSPACE_TASK, WORKSPACE_PATH, hash)
+                .err()
+                .unwrap()
+                .contains("changed since preview")
+        );
+        for text in ["binary\0", "escape\u{1b}", "delete\u{7f}", "control\u{85}"] {
+            let value = workspace_response(text);
+            let hash = value["hash"].as_str().unwrap().to_owned();
+            assert!(validate_workspace_file(value, WORKSPACE_TASK, WORKSPACE_PATH, &hash).is_err());
+        }
+    }
+
+    #[test]
+    fn workspace_snapshot_download_uses_unique_sanitized_names_and_verified_bytes() {
+        let downloads =
+            std::env::temp_dir().join(format!("outpost-workspace-test-{}", Uuid::new_v4()));
+        fs::create_dir(&downloads).unwrap();
+        let name = "résumé report.txt";
+        let mut value = workspace_response("\u{feff}hello\r\n");
+        value["path"] = json!(format!("reports/{name}"));
+        value["name"] = json!(name);
+        let hash = value["hash"].as_str().unwrap();
+        let mut paths = Vec::new();
+        for _ in 0..2 {
+            let file = validate_workspace_file(
+                value.clone(),
+                WORKSPACE_TASK,
+                value["path"].as_str().unwrap(),
+                hash,
+            )
+            .unwrap();
+            let path = PathBuf::from(save_workspace_snapshot(&downloads, file).unwrap());
+            assert_eq!(path.parent(), Some(downloads.as_path()));
+            let filename = path.file_name().unwrap().to_str().unwrap();
+            assert!(Uuid::parse_str(&filename[..36]).is_ok());
+            assert!(filename.ends_with("-r_sum__report.txt"));
+            assert_eq!(fs::read(&path).unwrap(), "\u{feff}hello\r\n".as_bytes());
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                assert_eq!(
+                    fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                    0o600
+                );
+            }
+            paths.push(path);
+        }
+        assert_ne!(paths[0], paths[1]);
+        assert_eq!(fs::read_dir(&downloads).unwrap().count(), 2);
+        fs::remove_dir_all(downloads).unwrap();
+    }
+
+    #[test]
+    fn workspace_read_uses_authenticated_query_and_propagates_errors() {
+        tauri::async_runtime::block_on(async {
+            let value = workspace_response("hello");
+            let hash = value["hash"].as_str().unwrap().to_owned();
+            for (status, response, expected_error) in [
+                ("200 OK", value, None),
+                (
+                    "403 Forbidden",
+                    json!({"message": "workspace_denied"}),
+                    Some("workspace_denied"),
+                ),
+                (
+                    "200 OK",
+                    json!({"message": "workspace_unavailable"}),
+                    Some("Invalid workspace file response"),
+                ),
+                (
+                    "200 OK",
+                    workspace_response("changed"),
+                    Some("changed since preview"),
+                ),
+            ] {
+                let (state, request) = fixture(status, response);
+                let result = workspace_file(&state, WORKSPACE_TASK, WORKSPACE_PATH, &hash).await;
+                if let Some(error) = expected_error {
+                    assert!(result.err().unwrap().contains(error));
+                } else {
+                    assert_eq!(result.unwrap().text, "hello");
+                }
+                let (headers, body) = request.join().unwrap();
+                assert!(headers.starts_with("POST /v1/query HTTP/1.1"));
+                assert_eq!(body["type"], "workspace.read");
+                assert_eq!(
+                    body["payload"],
+                    json!({"taskId": WORKSPACE_TASK, "path": WORKSPACE_PATH})
+                );
+                assert_eq!(fs::read_dir(&state.directory).unwrap().count(), 0);
+                fs::remove_dir_all(state.directory).unwrap();
+            }
+        });
+    }
+
     // Loopback-only fixtures use a fixed ephemeral identity, never macOS Keychain.
     fn fixture(status: &str, reply: Value) -> (State, std::thread::JoinHandle<(String, Value)>) {
         use std::io::{Read, Write};

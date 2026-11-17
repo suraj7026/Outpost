@@ -60,7 +60,7 @@ export async function call<T>(
 // The immutable owner is captured before any await (including file reads/hashing).
 export type EnvironmentId = string | null; // null is the explicit, unbound legacy slot.
 type ServerCall = "connection_info" | "query" | "send_command" | "retry_command" |
-  "agent_request" | "browser_request" | "enroll_device" | "disconnect" | "connection_policy" | "stream_events" | "artifact" | "save_artifact";
+  "agent_request" | "browser_request" | "enroll_device" | "disconnect" | "connection_policy" | "stream_events" | "artifact" | "save_artifact" | "save_workspace_file";
 export function environmentApi(environmentId: EnvironmentId) {
   const request = <T>(command: ServerCall, args: Record<string, unknown> = {}) =>
     call<T>(environmentId === null ? command : `environment_${command}`,

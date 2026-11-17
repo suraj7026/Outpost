@@ -1,0 +1,106 @@
+/* Load after the existing theme/component CSS. Leave native high-contrast colors alone. */
+@media (forced-colors: none) {
+  html:root[data-theme="dark"] {
+    --bg: #0f0f0f;
+    --sidebar: #0f0f0f;
+    --surface: #1e1e1e;
+    --raised: #282828;
+    --active: #363636;
+    --line: #363636;
+    --control: #4e4e4e;
+    --text: #eeeeee;
+    --muted: #b3b3b3;
+    --subtle: #999999;
+    --card-surface: #222222;
+    --dialog-surface: #242424;
+    --segmented-track: #191919;
+    --focus-surface: color-mix(in srgb, var(--active) 94%, var(--text));
+    --focus-composer: color-mix(in srgb, var(--raised) 96%, var(--text));
+    --composer-context-bg: #141414;
+    --composer-context-active: #363636;
+  }
+
+  /* Glass uses the existing app-shell opacity and overlay backdrop, not an opaque sidebar. */
+  html[data-theme="dark"]:not([data-glass="true"]) .web-sidebar { background: var(--sidebar); }
+  html[data-theme="dark"] .main-shell { background: var(--surface); }
+
+  html[data-theme="dark"] .main-shell > .page :is(.machines-server-card, .workspace-chat, .workspace-note-card):not(:focus-visible),
+  html[data-theme="dark"] .main-shell > .workspace-view .outputs-grid > .artifact { background-color: var(--card-surface); }
+  html[data-theme="dark"] .main-shell > .page .workspace-chat:hover:not(:disabled):not(:focus-visible) { background-color: var(--raised); }
+
+  html[data-theme="dark"] :is(.appearance-width-options, .workspace-scope) { background: var(--segmented-track); }
+  html[data-theme="dark"] .appearance-width-options label:has(input:checked):not(:has(input:focus-visible)),
+  html[data-theme="dark"] .workspace-scope button[aria-pressed="true"]:not(:focus-visible) {
+    background: var(--active);
+    color: var(--text);
+    box-shadow: none;
+  }
+
+  /* Keep real radios in the tab order; only replace their paint, at the existing 14px size. */
+  html[data-theme="dark"] .appearance-width-options input[type="radio"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    min-width: 14px;
+    min-height: 14px;
+    padding: 0;
+    margin: 0;
+    border: 1.5px solid var(--subtle);
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: none;
+    flex: none;
+  }
+  html[data-theme="dark"] .appearance-width-options input[type="radio"]:checked {
+    border-color: var(--text);
+    background: var(--text);
+    box-shadow: inset 0 0 0 3px var(--active);
+  }
+  html[data-theme="dark"] .appearance-width-options input[type="radio"]:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 3px;
+  }
+
+  html[data-theme="dark"] .main-shell > .page :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea):not(:focus-visible):not(:hover) {
+    background-color: var(--raised);
+    border-color: var(--line);
+    color: var(--text);
+  }
+  html[data-theme="dark"] :is(input, textarea)::placeholder { color: var(--subtle); opacity: 1; }
+
+  /* Surface roles only: dialog layout, actions and hit targets belong to the dialog stylesheet. */
+  html[data-theme="dark"] :is(.ui-dialog, .workspace-dialog, .action-review-dialog, .agent-dialog, .settings-dialog, .server-reboot-dialog, .server-setup-dialog),
+  html[data-theme="dark"] .new-task-server > div {
+    --surface: var(--dialog-surface);
+    background-color: var(--dialog-surface);
+    border-color: var(--control);
+  }
+  html[data-theme="dark"] :is(.ui-dialog, .workspace-dialog, .action-review-dialog, .agent-dialog, .settings-dialog, .server-reboot-dialog) :is(.ui-dialog-heading, .modal-top, .agent-dialog-heading, .settings-dialog-heading, .server-reboot-heading, .workspace-dialog-actions) {
+    background-color: var(--dialog-surface);
+  }
+
+  /* composer.css has local dark tokens; neutralize those without changing its status colors. */
+  html:root[data-theme="dark"] .composer-context-run {
+    --bg: #141414;
+    --raised: #282828;
+    --text: #eeeeee;
+    --muted: #b3b3b3;
+    --subtle: #999999;
+    --active: #363636;
+    --line: #363636;
+    --keyboard-focus-bg: #404040;
+    --composer-context-bg: #141414;
+    --composer-context-active: #363636;
+  }
+  html[data-theme="dark"] .appearance-preview[data-frost="off"] .appearance-preview-sidebar { background: var(--sidebar); }
+  html[data-theme="dark"] .appearance-preview[data-frost="off"] .appearance-preview-content { background: var(--surface); }
+
+  html[data-theme="dark"] .all-chats-page .chat-attention-filter:not(:focus-visible) { background: var(--raised); border-color: var(--control); }
+  html[data-theme="dark"] .all-chats-page .chat-attention-filter[aria-pressed="true"]:not(:focus-visible) { background: var(--active); }
+  html[data-theme="dark"] .new-task-button { border-color: var(--control); }
+  html[data-theme="dark"] .main-shell > .page :is(.primary, .ui-button-primary):not(:disabled):not(:focus-visible) { background: var(--text); color: var(--bg); }
+  html[data-theme="dark"] .main-shell > .page :is(.primary, .ui-button-primary):hover:not(:disabled):not(:focus-visible) { background: color-mix(in srgb, var(--text) 85%, var(--bg)); }
+  html[data-theme="dark"] .workspace-chat .ui-badge-success { background: color-mix(in srgb, var(--positive) 10%, var(--card-surface)); }
+  html[data-theme="dark"] .workspace-chat .ui-badge-warning { background: color-mix(in srgb, var(--warning) 10%, var(--card-surface)); }
+}

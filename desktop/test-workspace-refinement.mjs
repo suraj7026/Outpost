@@ -11,6 +11,7 @@ import './src/styles.css';
 import './src/studio.css';
 import Automations from './src/Automations';
 import WorkspaceView from './src/WorkspaceViews';
+import ActionReviewDialog from './src/ActionReviewDialog';
 import SharedMemory, { useSharedMemory } from './src/SharedMemory';
 import { AllChats } from './src/ChatHistory';
 window.isTauri = true;
@@ -35,6 +36,7 @@ function ReplicaHarness() {
 function Harness() {
  const [rows, setRows] = useState(initialRows), [view, setView] = useState('automations'), [flags, setFlags] = useState({}), [notes, setNotes] = useState([]), [failNote, setFailNote] = useState(false);
  const [offlineB, setOfflineB] = useState(false), [archivedA, setArchivedA] = useState(false), [counts, setCounts] = useState(true), [serverNotesB, setServerNotesB] = useState([]);
+ const [review, setReview] = useState(null);
  const saveNote = (payload) => row('memory', 'server-generated-' + calls.length, { ...payload, confirmed: true, forgotten: false });
  const command = async (kind, id, revision, payload = {}) => {
    calls.push({ server: 'a', kind, id, revision, payload });
@@ -47,12 +49,18 @@ function Harness() {
      return result;
    }
    if (kind === 'memory.save') { if (window.fixture.failServerNote) return undefined; const result = saveNote(payload); setRows(current => [...current, result]); return result; }
-   if (kind === 'action.dispatch') { setRows(current => current.filter(row => row.id !== id)); return row('action', id, { state: 'dispatching' }, revision + 1); }
-   if (kind === 'approval.decide') { setRows(current => current.filter(row => row.id !== id)); return row('action', id, { state: payload.decision === 'approve' ? 'authorized' : 'denied' }, revision + 1); }
+   if (kind === 'action.dispatch' || kind === 'approval.decide') {
+     const action = rows.find(row => row.kind === 'action' && row.id === id);
+     if (!action || action.revision !== revision) throw Error('fixture action revision conflict');
+     const state = kind === 'action.dispatch' ? 'dispatching' : payload.decision === 'approve' ? 'authorized' : 'denied';
+     const result = row('action', id, { ...action.data, state }, revision + 1);
+     setRows(current => current.map(row => row.kind === 'action' && row.id === id ? result : row));
+     return result;
+   }
    throw Error('Unexpected synthetic command: ' + kind);
  };
- const connection = { records: rows, connected: true, retired: false, busy: false, info: { pending: false }, error: '', runtime: { configured: true, piManagement: true, sharedMemory: true }, models: [], agentCatalogue: { models: [{ providerId: 'fixture', modelId: 'fixture-model', name: 'Fixture model' }] }, command, ...flags };
- const connectionB = { ...connection, connected: !offlineB, records: serverNotesB, command: async (kind, id, revision, payload) => { calls.push({ server: 'b', kind, id, revision, payload }); if (kind !== 'memory.save') throw Error('Unexpected B command'); const result = saveNote(payload); setServerNotesB(current => [...current, result]); return result; } };
+ const connection = { environmentId: 'a', records: rows, connected: true, retired: false, busy: false, info: { pending: false }, error: '', runtime: { configured: true, piManagement: true, sharedMemory: true }, models: [], agentCatalogue: { models: [{ providerId: 'fixture', modelId: 'fixture-model', name: 'Fixture model' }] }, command, ...flags };
+ const connectionB = { ...connection, environmentId: 'b', connected: !offlineB, records: serverNotesB, command: async (kind, id, revision, payload) => { calls.push({ server: 'b', kind, id, revision, payload }); if (kind !== 'memory.save') throw Error('Unexpected B command'); const result = saveNote(payload); setServerNotesB(current => [...current, result]); return result; } };
  const groups = [{ id: 'a', label: 'Studio', archived: archivedA, connected: connection.connected, lastSync: new Date(), tasks: rows.filter(row => row.kind === 'task') }, { id: 'b', label: 'Build server', connected: !offlineB, lastSync: new Date(), tasks: [row('task', 'other-uuid', { goal: 'Check deployment evidence', state: 'paused' })] }];
  const memory = { enabled: true, ready: !connection.busy && connection.connected && !connection.info?.pending && !connection.info?.pendingError, replicas: [{ id: 'a', label: 'Studio', connection }], notes, failed: false, retry() {}, save: async (id, text) => { calls.push({ kind: 'memory.shared', id, text }); if (failNote) return false; setNotes(current => [...current.filter(note => note.id !== id), { id, text, updatedAt: new Date().toISOString(), copies: new Map([['a', text]]) }]); return true; } };
  window.fixture = { ...window.fixture, calls, opened, setView, setFlags, setFailNote, setOfflineB, setArchivedA, setCounts,
@@ -66,7 +74,7 @@ function Harness() {
    emptyActions() { setRows(current => current.filter(row => row.kind !== 'action')); }
  };
  const shared = <SharedMemory memory={memory} />;
- return <><nav>{['automations','memory','chats','decisions','replicas'].map(name => <button key={name} onClick={() => setView(name)}>{name}</button>)}</nav>{view === 'replicas' ? <ReplicaHarness /> : view === 'automations' ? <Automations groups={groups} connections={{ a: connection }} /> : view === 'chats' ? <AllChats groups={groups} connections={counts ? { a: connection } : undefined} open={(server, task) => opened.push({ server, task })} /> : <WorkspaceView section={view} groups={groups} connections={{ a: connection, b: connectionB }} sharedMemory={shared} />}</>;
+ return <><nav>{['automations','memory','chats','review','replicas'].map(name => <button key={name} onClick={() => setView(name)}>{name}</button>)}</nav>{view === 'replicas' ? <ReplicaHarness /> : view === 'automations' ? <Automations groups={groups} connections={{ a: connection }} /> : view === 'chats' ? <AllChats groups={groups} connections={counts ? { a: connection } : undefined} open={(server, task) => opened.push({ server, task })} /> : view === 'review' ? <main><button onClick={() => setReview(rows.find(row => row.kind === 'action' && row.id === 'action-a'))}>Review this action</button>{review && <ActionReviewDialog snapshot={review} connection={connection} onClose={() => setReview(null)} />}</main> : <WorkspaceView section={view} groups={groups} connections={{ a: connection, b: connectionB }} sharedMemory={shared} />}</>;
 }
 createRoot(document.getElementById('root')).render(<Harness />);
 `;
@@ -216,36 +224,63 @@ try {
   await page.getByLabel('Search chats').fill('nothing matches'); await waitText('No chats match your search'); await button('Clear search and filters').click();
   await change('setOfflineB', true); await page.getByText('Last known: Paused', { exact: true }).waitFor();
 
-  await button('decisions').click(); await waitText('Run a command in the task’s workspace');
-  await waitText('Synthetic workspace'); await waitText('[\n  "execute workspace command"\n]');
+  await button('review').click();
+  const beforeReview = (await calls()).length;
   assert.equal(await button('Approve').count(), 0); assert.equal(await button('Deny').count(), 0);
   await button('Review this action').click(); await dialog.waitFor(); await dialog.getByText('fixture-only', { exact: false }).waitFor();
+  await waitText('Synthetic workspace');
+  assert.equal(await dialog.locator('.action').getAttribute('data-record-id'), 'action-a');
+  assert.equal(await dialog.locator('footer').getByRole('button', { name: 'Approve', exact: true }).count(), 1);
+  assert.equal(await dialog.locator('footer').getByRole('button', { name: 'Deny', exact: true }).count(), 1);
+  assert.equal(await dialog.locator('.action').getByRole('button').count(), 0, 'decisions appear only in the exact-action footer');
+  assert.equal((await calls()).length, beforeReview, 'opening review never decides or dispatches');
   for (const flags of [{ connected: false }, { retired: true }, { busy: true }, { info: null }, { info: { pending: true } }, { info: { pending: false, pendingError: 'uncertain' } }]) {
     await change('setFlags', flags); assert.equal(await button('Approve').isDisabled(), true); await change('setFlags', {});
   }
   await change('native', false); assert.equal(await button('Approve').isDisabled(), true); await change('native', true);
   await change('preview', true); assert.equal(await button('Approve').isDisabled(), true); await change('preview', false);
-  await change('bumpAction'); await dialog.getByRole('alert').waitFor(); assert.equal(await button('Approve').isDisabled(), true);
+  await change('bumpAction'); await dialog.getByRole('status').filter({ hasText: 'The action has updated' }).waitFor();
+  assert.equal(await button('Approve').count(), 0); assert.equal(await button('Deny').count(), 0);
+  assert.equal(await button('Run approved action').count(), 0, 'a stale snapshot cannot dispatch');
+  assert.equal((await calls()).length, beforeReview, 'blocked and stale reviews never mutate');
   await button('Close review').click(); await dialog.waitFor({ state: 'detached' });
   await button('Review this action').click(); await dialog.waitFor();
   await page.evaluate(() => { window.fixture.hold = true; window.fixture.release = undefined; });
   await button('Deny').click(); await page.waitForFunction(() => !!window.fixture.release);
   assert.equal(await button('Approve').isDisabled(), true); await page.keyboard.press('Escape'); assert.equal(await dialog.count(), 1);
+  assert.equal(await button('Close review').isDisabled(), true); assert.equal(await button('Close').isDisabled(), true);
   await page.evaluate(() => { window.fixture.hold = false; window.fixture.release(); });
-  await dialog.waitFor({ state: 'detached' }); await waitText('Nothing needs your approval');
+  await dialog.getByRole('status').filter({ hasText: 'The action has updated: denied.' }).waitFor();
+  assert.equal(await button('Deny').count(), 0); assert.equal(await button('Approve').count(), 0);
   const approval = (await calls()).find(call => call.kind === 'approval.decide');
-  assert.deepEqual(approval.payload, { nonce: 'new-nonce', actionDigest: 'new-digest', decision: 'deny' }); assert.equal(approval.revision, 2);
+  assert.deepEqual(approval, { server: 'a', kind: 'approval.decide', id: 'action-a', revision: 2, payload: { nonce: 'new-nonce', actionDigest: 'new-digest', decision: 'deny' } });
+  assert.equal((await calls()).length, beforeReview + 1, 'denial sends only the explicit decision');
+  await button('Close review').click(); await dialog.waitFor({ state: 'detached' });
   await change('restoreAction'); await change('authorizeAction'); await button('Review this action').click(); await dialog.waitFor();
-  assert.equal(await button('Approve').count(), 0); await button('Run approved action').click(); await dialog.waitFor({ state: 'detached' });
-  assert.equal((await calls()).filter(call => call.kind === 'action.dispatch').length, 1);
-  await change('restoreAction'); await button('Review this action').click(); await dialog.waitFor(); await button('Approve').click(); await dialog.waitFor({ state: 'detached' });
-  assert.deepEqual((await calls()).filter(call => call.kind === 'approval.decide').at(-1).payload, { nonce: 'fixture-nonce', actionDigest: 'fixture-digest', decision: 'approve' });
+  assert.equal(await button('Approve').count(), 0);
+  assert.equal((await calls()).length, beforeReview + 1, 'opening an authorized review does not dispatch');
+  await button('Run approved action').click();
+  await dialog.getByRole('status').filter({ hasText: 'The action has updated: dispatching.' }).waitFor();
+  assert.equal(await button('Run approved action').count(), 0);
+  assert.deepEqual((await calls()).filter(call => call.kind === 'action.dispatch'), [{ server: 'a', kind: 'action.dispatch', id: 'action-a', revision: 2, payload: {} }]);
+  await button('Close').click(); await dialog.waitFor({ state: 'detached' });
+  await change('restoreAction'); await button('Review this action').click(); await dialog.waitFor(); await button('Approve').click();
+  await dialog.getByRole('status').filter({ hasText: 'The action has updated: authorized.' }).waitFor();
+  assert.deepEqual((await calls()).filter(call => call.kind === 'approval.decide').at(-1), { server: 'a', kind: 'approval.decide', id: 'action-a', revision: 1, payload: { nonce: 'fixture-nonce', actionDigest: 'fixture-digest', decision: 'approve' } });
+  assert.equal(await button('Approve').count(), 0); assert.equal(await button('Run approved action').count(), 0, 'approval never turns the old snapshot into a dispatch control');
+  assert.equal((await calls()).length, beforeReview + 3, 'approval never automatically dispatches');
+  await button('Close review').click(); await dialog.waitFor({ state: 'detached' });
   assert.equal(await button('Show an example').count(), 0);
   await page.setViewportSize({ width: 430, height: 780 });
-  for (const view of ['automations', 'memory', 'chats', 'decisions']) {
+  for (const view of ['automations', 'memory', 'chats']) {
     await button(view).click();
     assert.equal(await page.locator('main').evaluate(element => element.scrollWidth <= element.clientWidth + 1), true, view + ' must not overflow at a narrow width');
   }
+  await button('review').click(); await button('Review this action').click(); await dialog.waitFor();
+  assert.equal(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1), true, 'action review must not overflow at a narrow width');
+  assert.equal(await button('Run approved action').isEnabled(), true, 'reopened authorized snapshot can be explicitly dispatched');
+  assert.equal((await calls()).length, beforeReview + 3, 'reopening the approved action still does not dispatch');
+  await button('Close review').click(); await dialog.waitFor({ state: 'detached' });
   await button('automations').click(); await button('New schedule').click(); await dialog.waitFor();
   assert.equal(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1), true, 'modal fields must fit a narrow viewport');
   await button('Cancel').click();
@@ -257,7 +292,7 @@ try {
   assert.deepEqual(await page.evaluate(() => window.replicaFixture.syncCalls), [{ server: 'a', kind: 'memory.shared', id: 'replica-note', revision: 0, payload: { text: null } }]);
   assert.equal(await page.getByText('Old shared text', { exact: true }).count(), 0);
   assert.deepEqual(errors, []);
-  console.log('Workspace refinement synthetic DOM checks passed (automation create/edit/pause/resume, guards, modal, memory, chats, approvals).');
+  console.log('Workspace refinement synthetic DOM checks passed (automation create/edit/pause/resume, guards, modal, memory, chats, action review).');
 } finally {
   await browser?.close();
   await new Promise(resolve => server.close(resolve));

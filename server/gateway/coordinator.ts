@@ -8,6 +8,7 @@ import type { Action } from '../policy/trust.js';
 import { Tasks } from '../tasks/tasks.js';
 import type { Task } from '../tasks/tasks.js';
 import { Workspace, Artifacts } from '../artifacts/files.js';
+import { WorkspaceReview, WorkspaceFilesInput, WorkspaceReadInput } from '../artifacts/workspace-review.js';
 import { registerCommands } from '../processes/runner.js';
 import { registerInventory } from '../operations/machine.js';
 import { PiRuntime } from '../pi-adapter/runtime.js';
@@ -218,6 +219,12 @@ export class Coordinator {
     });
   }
   query(type: string, payload: Record<string,Json>) {
+    if (type === 'workspace.files' || type === 'workspace.read') {
+      const input = type === 'workspace.files' ? { ...WorkspaceFilesInput.parse(payload), path: undefined } : WorkspaceReadInput.parse(payload);
+      this.db.need('task',input.taskId);
+      const workspace = new WorkspaceReview(join(this.options.workspaceRoot ?? join(this.root,'workspaces'),input.taskId));
+      return (input.path === undefined ? workspace.files() : workspace.read(input.path)).then(wire);
+    }
     if (type === 'recovery.diagnostics') { RecoveryInput.parse(payload); return wire(this.recoveryDiagnostics()); }
     if (type === 'browser.frame') {
       const { taskId } = z.strictObject({ taskId: z.uuid() }).parse(payload);

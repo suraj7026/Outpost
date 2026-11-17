@@ -1,10 +1,10 @@
 import type { EnvironmentId } from "./api";
 import { readStartupPage } from "./appearance";
 
-export type WorkingPage = "home" | "decisions" | "outputs" | "automations" | "memory" | "machines" | "connection" | "history";
+export type WorkingPage = "home" | "outputs" | "automations" | "memory" | "machines" | "connection" | "history";
 export type WorkingLocation = { page: WorkingPage; hash?: string } | { page: "task"; environmentId: EnvironmentId; taskId: string };
 const storageKey = "outpost.last-location.v1";
-const pages: WorkingPage[] = ["home", "decisions", "outputs", "automations", "memory", "machines", "connection", "history"];
+const pages: WorkingPage[] = ["home", "outputs", "automations", "memory", "machines", "connection", "history"];
 const settingsHash = /^#settings(?:\/(?:appearance|servers(?:\/[a-zA-Z0-9_-]+(?:\/(?:general|setup|models|runtime|devices|recovery))?)?))?$/;
 
 export function readStartupLocation(): WorkingLocation {
@@ -17,6 +17,7 @@ export function readStartupLocation(): WorkingLocation {
       typeof value.taskId === "string" && value.taskId.length > 0 && value.taskId.length <= 512) {
       return { page: "task", environmentId: value.environmentId, taskId: value.taskId };
     }
+    if (value.page === "decisions") return { page: "history" };
     if (pages.includes(value.page)) {
       if (value.page === "connection" || value.page === "machines") {
         if (typeof value.hash !== "string" || !(value.hash === "#machines" || settingsHash.test(value.hash))) return { page: "home" };

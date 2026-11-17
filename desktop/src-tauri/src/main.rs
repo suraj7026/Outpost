@@ -110,6 +110,7 @@ fn main() {
             transport::environments::environment_stream_events,
             transport::environments::environment_artifact,
             transport::environments::environment_save_artifact,
+            transport::environments::environment_save_workspace_file,
             transport::connection_info,
             transport::set_endpoint,
             transport::clear_legacy_endpoint,
@@ -127,6 +128,7 @@ fn main() {
             transport::enroll_device,
             transport::artifact,
             transport::save_artifact,
+            transport::save_workspace_file,
             transport::open_url
         ])
         .build(tauri::generate_context!())

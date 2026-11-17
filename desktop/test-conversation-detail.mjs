@@ -199,6 +199,20 @@ const actionRecord = (id, second, state = 'running', data = {}) => row('action',
 const streamRecord = (id, second, data = {}) => row('tool_stream', id, second, {
   name: 'outpost_action', arguments: { tool: 'command.run', arguments: { argv: ['printf', id] } }, state: 'running', streaming: true, output: 'Partial synthetic output', ...data,
 }, 0);
+const interleavedCalls = [
+  { tool: 'command.run', arguments: { argv: ['pwd'] } },
+  { tool: 'web.search', arguments: { query: 'synthetic documentation' } },
+  { tool: 'web.fetch', arguments: { url: 'https://fixture.invalid/documentation' } },
+  { name: 'fetch', arguments: { url: 'https://fixture.invalid/content' } },
+  { tool: 'command.run', arguments: { argv: ['mkdir', 'synthetic-output'] } },
+  { name: 'write', arguments: { path: 'synthetic-output/result.txt', content: 'Synthetic result' } },
+];
+const interleavedRecords = interleavedCalls.flatMap((call, index) => [
+  row('message', `step-placeholder-${index}`, 41 + index * 2, { author: 'assistant', text: '', streaming: false }),
+  row(call.tool ? 'action' : 'tool_stream', `step-call-${index}`, 42 + index * 2, call.tool
+    ? { ...call, state: 'succeeded', result: { stdout: `Retained output ${index}`, exitCode: 0 } }
+    : { ...call, state: index === 5 ? 'preparing' : 'finished', streaming: index === 5, output: `Retained output ${index}` }),
+]);
 const detailGroup = page => page.getByRole('group', { name: 'Conversation detail', exact: true });
 const radio = (page, name) => detailGroup(page).getByRole('radio', { name, exact: true });
 const saved = page => page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
@@ -265,7 +279,7 @@ async function scenario(engine, name, options, run) {
       if (route.request().url().startsWith(origin + '/') || route.request().url().startsWith(`blob:${origin}/`)) return route.continue();
       remote.push(route.request().url()); return route.abort();
     });
-    await page.addInitScript(installTransport, { records: fixture(options), options, storageKey, environmentId });
+    await page.addInitScript(installTransport, { records: [...fixture(options), ...(options.records ?? [])], options, storageKey, environmentId });
     await page.goto(origin);
     await page.waitForFunction(() => window.__detail.ready);
     await openInitialTestChat(page);
@@ -523,10 +537,79 @@ try {
           await openState(entry(page, 'alias-action'), !extended, 'Final completion still preserves the original row choice');
         });
 
+        for (const delivery of ['loaded-history', 'streaming-appends']) for (const inspected of [false, true]) {
+          const owner = row('message', 'interleaved-owner', 40, { author: 'owner', text: 'Run the six synthetic tools.' });
+          await scenario(engine, `${mode}-activity-interleaved-model-steps-${delivery}-${inspected ? 'inspected' : 'uninspected'}`, {
+            ...options, records: delivery === 'loaded-history' ? [owner, ...interleavedRecords].reverse() : [],
+          }, async page => {
+            const run = page.locator('.conversation-run[data-run-id="run:after:interleaved-owner"]');
+            const ids = interleavedCalls.map((_, index) => `step-call-${index}`);
+            if (delivery === 'streaming-appends') {
+              await emit(page, { type: 'settled', record: owner });
+              for (let index = 0; index < interleavedCalls.length; index++) {
+                const placeholder = interleavedRecords[index * 2];
+                const call = interleavedRecords[index * 2 + 1];
+                await emit(page, { type: 'live', record: { ...placeholder, revision: 0, data: { ...placeholder.data, streaming: true } } });
+                for (const id of ids.slice(0, index)) await sameExecution(page, id);
+                await emit(page, { type: call.kind === 'action' ? 'settled' : 'live', record: {
+                  ...call, data: { ...call.data, state: index === 5 ? 'preparing' : 'running', ...(call.kind === 'tool_stream' ? { streaming: true } : {}) },
+                } });
+                await rememberExecution(page, call.id);
+                if (index < 5) await update(page, call.kind, call.id, call.data);
+                await update(page, 'message', placeholder.id, { streaming: false });
+                equal(await run.locator('.activity-group').count(), 1, 'Each interleaved append extends one activity group');
+                equal(await run.locator('.execution-entry').evaluateAll(nodes => nodes.map(node => node.dataset.recordId)), ids.slice(0, index + 1), 'Streaming rows retain execution order');
+                for (const id of ids.slice(0, index + 1)) await sameExecution(page, id);
+              }
+            } else for (const id of ids) await rememberExecution(page, id);
+
+            const group = activity(page, ids[0]);
+            equal(await run.locator('.activity-group').count(), 1, 'Six model steps separated by empty assistant records form one group');
+            equal(await group.locator(':scope > .activity-stack > .execution-entry').evaluateAll(nodes => nodes.map(node => node.dataset.recordId)), ids, 'All six action/stream rows share one ordered stack');
+            equal(await group.locator('.activity-group-title').textContent(), 'Working', 'Preparing write keeps the group working');
+            if (process.env.OUTPOST_TEST_SCREENSHOTS) {
+              mkdirSync(process.env.OUTPOST_TEST_SCREENSHOTS, { recursive: true });
+              await group.screenshot({ path: resolve(process.env.OUTPOST_TEST_SCREENSHOTS, `${engine.name()}-${mode}-${delivery}-six-tools.png`) });
+            }
+            equal(await group.locator('.activity-group-progress').textContent(), '5 of 6 actions complete', 'Only the first five calls count as completed');
+            equal(await entry(page, ids[5]).getAttribute('data-state'), 'preparing', 'Final streaming call is still preparing');
+            await openState(group, true, 'Preparing work keeps the group expanded in both detail modes');
+            for (const id of ids) check(await entry(page, id).locator(':scope > summary').isVisible(), `${id}: row is visible, not an isolated hidden card`);
+            if (inspected) for (const [index, id] of ids.entries()) {
+              if (!extended) await toggle(entry(page, id));
+              await toggle(entry(page, id).locator('.execution-raw'));
+              check(await entry(page, id).locator('.execution-output').isVisible(), `${id}: output can be expanded`);
+              equal(await entry(page, id).locator('.execution-output').textContent(), `Retained output ${index}`, `${id}: exact output is retained`);
+            }
+            // These envelopes have settled; final records intentionally reject late live frames.
+            for (const [index, id] of ids.entries()) {
+              await update(page, 'message', `step-placeholder-${index}`, { text: '' });
+              await sameExecution(page, id);
+              await update(page, 'message', `step-placeholder-${index}`, { text: index % 2 ? ' \n\t ' : '', thinking: `Model step ${index} reasoning.` });
+              for (const rowId of ids) await sameExecution(page, rowId);
+            }
+            equal(await run.locator('.activity-group').count(), 1, 'Whitespace and reasoning-only revisions introduce no boundaries');
+            equal(await run.locator('.run-message').count(), 0, 'Invisible placeholders do not render empty message blocks');
+            equal(await run.locator('.run-reasoning').count(), 1, 'Reasoning survives in the existing run aggregate');
+            equal(await run.locator('.reasoning-segments pre').allTextContents(), ids.map((_, index) => `Model step ${index} reasoning.`), 'Every model-step reasoning segment is retained in order');
+            equal(await group.locator('.activity-group-progress').textContent(), '5 of 6 actions complete', 'Placeholder revisions do not alter execution progress');
+            await update(page, 'tool_stream', ids[5], { state: 'finished', streaming: false, output: 'Final write output' });
+            equal(await group.locator('.activity-group-title').textContent(), '6 actions completed', 'Final write completes exactly six actions');
+            equal(await group.locator('.thinking-indicator[data-active="true"]').count(), 0, 'Completion clears the group activity indicator');
+            await openState(group, inspected || extended, 'Completion respects inspection or the untouched detail default');
+            for (const id of ids) {
+              await sameExecution(page, id);
+              await openState(entry(page, id), inspected || extended, `${id}: completion preserves row expansion`);
+              await openState(entry(page, id).locator('.execution-raw'), inspected, `${id}: raw-output choice survives placeholder revisions and completion`);
+            }
+            if (inspected) check(await entry(page, ids[5]).getByText('Final write output', { exact: true }).isVisible(), 'Inspected final output remains visible after completion');
+          });
+        }
+
         await scenario(engine, `${mode}-activity-text-image-empty-and-owner-boundaries`, options, async page => {
           const run = await freshRun(page, 'boundary-owner');
           const pair = async (prefix, second) => {
-            await emit(page, { type: 'records', records: [actionRecord(`${prefix}-one`, second, 'succeeded', { result: { exitCode: 0 } }), actionRecord(`${prefix}-two`, second + 0.1, 'succeeded', { result: { exitCode: 0 } })] });
+            await emit(page, { type: 'records', records: ['one', 'two'].map(suffix => actionRecord(`${prefix}-${suffix}`, second + (suffix === 'two' ? 0.1 : 0), 'succeeded', { result: { stdout: `Retained ${prefix}-${suffix} output`, exitCode: 0 } })) });
             await rememberExecution(page, `${prefix}-one`);
           };
           await pair('before-text', 41);
@@ -536,10 +619,12 @@ try {
           await pair('after-image', 45);
           await emit(page, { type: 'live', record: row('message', 'boundary-empty', 46, { author: 'assistant', text: '', streaming: true }, 0) });
           await pair('after-empty', 47);
-          const expectedOrder = ['before-text-one', 'boundary-text', 'after-text-one', 'artifact-boundary-image', 'after-image-one', 'boundary-empty', 'after-empty-one'];
+          const mergedOrder = ['before-text-one', 'boundary-text', 'after-text-one', 'artifact-boundary-image', 'after-image-one'];
+          const splitOrder = [...mergedOrder, 'boundary-empty', 'after-empty-one'];
           const order = () => run.locator('.run-content > :not(.run-reasoning)').evaluateAll(nodes => nodes.map(node => node.matches('.activity-group') ? node.querySelector('.execution-entry').dataset.recordId : node.dataset.recordId || node.id));
-          equal(await order(), expectedOrder, 'Text, image and even empty messages divide stacks without reordering content');
-          equal(await run.locator('.activity-group').count(), 4, 'No stack crosses a message or artifact boundary');
+          equal(await order(), mergedOrder, 'Visible text and image divide stacks; the empty assistant record does not');
+          equal(await run.locator('.activity-group').count(), 3, 'Empty assistant messages do not create a fourth stack');
+          equal(await activity(page, 'after-image-one').locator('.execution-entry').evaluateAll(nodes => nodes.map(node => node.dataset.recordId)), ['after-image-one', 'after-image-two', 'after-empty-one', 'after-empty-two'], 'Rows on both sides of an empty message remain ordered together');
           equal(await run.locator('.activity-group .run-message, .activity-group .stream-artifact').count(), 0, 'Messages and artifacts never become collapsible tool rows');
           check(await run.getByText('Text separates tool stacks.', { exact: true }).isVisible(), 'Text stays visible between completed stacks');
           const image = run.locator('#artifact-boundary-image img');
@@ -550,17 +635,82 @@ try {
             return image?.complete && image.naturalWidth > 0;
           });
           check(await image.isVisible(), 'Actual decoded image remains visible outside collapsed activity');
-          await update(page, 'message', 'boundary-empty', { text: 'Previously empty message now has text.', streaming: false });
-          equal(await order(), expectedOrder, 'Filling an empty message keeps the existing boundaries');
+          const allIds = ['before-text', 'after-text', 'after-image', 'after-empty'].flatMap(prefix => [`${prefix}-one`, `${prefix}-two`]);
+          const retainedOutputs = async () => {
+            equal(await run.locator('.execution-entry').evaluateAll(nodes => nodes.map(node => node.dataset.recordId)), allIds, 'Every execution remains in its original order across boundary changes');
+            for (const id of allIds) equal(await entry(page, id).locator('.execution-output').textContent(), `Retained ${id} output`, `${id}: output survives boundary changes`);
+          };
+          const inspect = entry(page, 'after-empty-one');
+          if (!extended) {
+            await toggle(activity(page, 'after-image-one'));
+            await toggle(inspect);
+          }
+          await toggle(inspect.locator('.execution-raw'));
+          // Exercise both explicit choices, including the choice opposite Extended's default.
+          if (extended) await toggle(entry(page, 'after-empty-two'));
+          else {
+            await toggle(entry(page, 'after-empty-two'));
+            await toggle(entry(page, 'after-empty-two'));
+          }
+          const retainedInspection = async () => {
+            await openState(inspect, true, 'Inspected row expansion survives an actual split or merge');
+            await openState(inspect.locator('.execution-raw'), true, 'Raw-output expansion survives an actual split or merge');
+            await openState(entry(page, 'after-empty-two'), false, 'Explicit row collapse survives an actual split or merge');
+            check((await inspect.locator('.execution-raw > pre').textContent()).includes('Retained after-empty-one output'), 'Expanded raw payload is retained after reparenting');
+          };
+          await update(page, 'message', 'boundary-empty', { text: ' \n\t ', thinking: 'Boundary placeholder reasoning.' }, 'live');
+          equal(await order(), mergedOrder, 'Whitespace and reasoning changes leave the stack unchanged');
           for (const prefix of ['before-text', 'after-text', 'after-image', 'after-empty']) await sameExecution(page, `${prefix}-one`);
+          await retainedInspection();
+          equal(await run.locator('.reasoning-segments pre').allTextContents(), ['Boundary placeholder reasoning.'], 'Ignoring an invisible message does not discard its reasoning');
+          await update(page, 'message', 'boundary-empty', { text: 'Previously empty message now has text.', streaming: false });
+          equal(await order(), splitOrder, 'Late visible text splits the activity at its original chronological position');
+          equal(await run.locator('.activity-group').count(), 4, 'Late visible text introduces a real boundary');
+          check(await run.getByText('Previously empty message now has text.', { exact: true }).isVisible(), 'Late assistant text stays visible outside activity');
+          await retainedInspection();
+          await retainedOutputs();
           await update(page, 'message', 'boundary-empty', { text: '' });
-          equal(await order(), expectedOrder, 'Clearing message text does not merge adjacent stacks');
-          await sameExecution(page, 'after-empty-one');
-          const nextRun = await freshRun(page, 'boundary-next-owner', 48);
+          equal(await order(), mergedOrder, 'Clearing visible text merges the adjacent activity stacks again');
+          equal(await run.locator('.activity-group').count(), 3, 'Cleared text removes only its former boundary');
+          await retainedInspection();
+          await retainedOutputs();
+          await rememberExecution(page, 'after-empty-one');
+          await emit(page, { type: 'settled', record: row('message', 'boundary-next-owner', 48, { author: 'owner', text: '' }) });
+          const nextRun = page.locator('.conversation-run[data-run-id="run:after:boundary-next-owner"]');
           await pair('after-owner', 49);
-          equal(await run.locator('.activity-group').count(), 4, 'New owner turn cannot absorb the preceding stack');
-          equal(await nextRun.locator('.activity-group').count(), 1, 'New owner turn starts its own activity group');
+          equal(await run.locator('.activity-group').count(), 3, 'Even an empty owner turn cannot absorb the preceding stack');
+          equal(await nextRun.locator('.activity-group').count(), 1, 'An empty owner message still starts its own activity group');
           await sameExecution(page, 'after-empty-one');
+          await retainedOutputs();
+        });
+
+        for (const [name, patch, warning] of [
+          ['failure', { error: 'Synthetic model failure' }, 'Synthetic model failure'],
+          ['interruption', { interrupted: true }, 'Interrupted · partial output retained'],
+          ['truncation', { outputTruncated: true }, 'Display limited to 128 KiB'],
+          ['stop-reason-error', { stopReason: 'error' }, null],
+          ['stop-reason-aborted', { stopReason: 'aborted' }, null],
+        ]) await scenario(engine, `${mode}-activity-terminal-assistant-placeholder-${name}-remains-boundary`, options, async page => {
+          const second = 60;
+          const run = await freshRun(page, `terminal-owner-${name}`, second);
+          await emit(page, { type: 'records', records: [
+            actionRecord(`terminal-before-${name}`, second + 1, 'succeeded', { result: { stdout: `Before ${name}` } }),
+            row('message', `terminal-message-${name}`, second + 2, { author: 'assistant', text: ' \n\t ', streaming: true, ...patch }),
+            actionRecord(`terminal-after-${name}`, second + 3, 'succeeded', { result: { stdout: `After ${name}` } }),
+          ] });
+          equal(await run.locator('.activity-group').count(), 2, `${name}: terminal placeholder remains an activity boundary`);
+          equal(await run.locator('.run-content > :not(.run-reasoning)').evaluateAll(nodes => nodes.map(node => node.matches('.activity-group') ? node.querySelector('.execution-entry').dataset.recordId : node.dataset.recordId)), [`terminal-before-${name}`, `terminal-message-${name}`, `terminal-after-${name}`], `${name}: warning remains between its execution rows`);
+          const message = run.locator(`.run-message[data-record-id="terminal-message-${name}"]`);
+          check(await message.isVisible(), `${name}: terminal placeholder remains visible outside collapsed activity`);
+          if (warning) check((await message.textContent()).includes(warning), `${name}: terminal warning is retained`);
+          for (const position of ['before', 'after']) {
+            const details = entry(page, `terminal-${position}-${name}`);
+            check(await details.locator(':scope > summary').isVisible(), `${name}: adjacent singleton stays visible`);
+            equal(await details.locator('.execution-output').textContent(), `${position === 'before' ? 'Before' : 'After'} ${name}`, `${name}: adjacent output is retained`);
+          }
+          await update(page, 'message', `terminal-message-${name}`, { text: '' });
+          equal(await run.locator('.activity-group').count(), 2, `${name}: clearing whitespace must not erase a terminal boundary`);
+          check(await message.isVisible(), `${name}: empty terminal warning stays visible`);
         });
 
         for (const [stateName, kind, data, expectedState] of [

@@ -901,6 +901,23 @@ pub async fn environment_save_artifact(
 }
 
 #[tauri::command]
+pub async fn environment_save_workspace_file(
+    app: tauri::AppHandle,
+    registry: tauri::State<'_, Registry>,
+    environment_id: String,
+    task_id: String,
+    path: String,
+    hash: String,
+) -> Result<String, String> {
+    let owner = registry.get(&environment_id)?;
+    let snapshot = workspace_file(&owner, &task_id, &path, &hash).await?;
+    save_workspace_snapshot(
+        &app.path().download_dir().map_err(|e| e.to_string())?,
+        snapshot,
+    )
+}
+
+#[tauri::command]
 pub async fn environment_remove(
     registry: tauri::State<'_, Registry>,
     environment_id: String,

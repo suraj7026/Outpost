@@ -15,7 +15,7 @@ import {
   Shield,
   NotebookPen,
   CalendarClock,
-  ShieldCheck,
+
   FileText,
   Search,
   Pin,
@@ -39,7 +39,7 @@ import { rememberWorkingLocation, type WorkingPage, type WorkingLocation } from 
 import ComposerContext from "./ComposerContext";
 import { ControlMode, ComposerModelSelect } from './ComposerControls';
 import TerminalPane from './server-terminal/TerminalPane';
-import WorkspaceView, { isApproval, isWorkspaceSection } from "./WorkspaceViews";
+import WorkspaceView, { isWorkspaceSection } from "./WorkspaceViews";
 
 const navigation = [
   {
@@ -48,12 +48,7 @@ const navigation = [
     icon: "square.grid.2x2",
     glyph: ClipboardList,
   },
-  {
-    id: "decisions",
-    title: "Approvals",
-    icon: "checkmark.shield",
-    glyph: ShieldCheck,
-  },
+
   { id: "machines", title: "Machines", icon: "server.rack", glyph: Server },
   { id: "outputs", title: "Library", icon: "doc.on.doc", glyph: FileText },
   { id: "automations", title: "Automations", icon: "clock", glyph: CalendarClock },
@@ -275,8 +270,7 @@ export default function App({ connection, initialTask, initialPage = "home", ini
     } else if (selection === "home" || isWorkspaceSection(selection)) location = { page: selection };
     if (location) { rememberWorkingLocation(location); onWorkingLocation(location); }
   }, [selection, showingHistory, locationHash, connection.environmentId, selectedTask?.id, onWorkingLocation]);
-  const pending = groups.filter(group => !group.archived).reduce((count, group) =>
-    count + (connections[group.id ?? "legacy"]?.records.filter(record => isApproval(record) && text(record, "state") === "pending").length ?? 0), 0);
+
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
       if (document.querySelector("dialog[open]")) return;
@@ -351,16 +345,14 @@ export default function App({ connection, initialTask, initialPage = "home", ini
               >
                 <item.glyph size={16} />
                 {item.title}
-                {item.id === "decisions" && pending > 0 && (
-                  <span className="nav-count">{pending}</span>
-                )}
+
               </button>
             ))}
             <button aria-current={history ? "page" : undefined} onClick={showHistory}><MessageSquare size={16} />All chats</button>
           </nav>
           <div className="sidebar-section"><span>Chats by server</span><button className="icon-button" aria-label="Find a task" title="Find a task" onClick={() => setSearchOpen(!searchOpen)}><Search size={14} /></button></div>
           {searchOpen && <input id="task-search" className="task-search" aria-label="Find a task" placeholder="Find a task…" value={taskSearch} onChange={(event) => setTaskSearch(event.target.value)} autoFocus />}
-          <SidebarHistory groups={groups} selectedServer={connection.environmentId} selectedTask={!history ? selectedTask?.id : undefined} search={taskSearch} open={openChat} />
+          <SidebarHistory groups={groups} connections={connections} selectedServer={connection.environmentId} selectedTask={!history ? selectedTask?.id : undefined} search={taskSearch} open={openChat} />
           </div>
           <div className="sidebar-bottom">{sidebar.nativeError && <p role="status">{sidebar.nativeError}</p>}{recordedPreview() && <p>Recorded server preview</p>}
           <button
@@ -424,7 +416,7 @@ export default function App({ connection, initialTask, initialPage = "home", ini
         ) : showingSettings ? (
           renderSettings(appearance)
         ) : isWorkspaceSection(selection) ? (
-          <WorkspaceView section={selection} groups={groups} connections={connections} sharedMemory={sharedMemory} />
+          <WorkspaceView section={selection} groups={groups} connections={connections} sharedMemory={sharedMemory} openChat={openChat} />
         ) : (
           <main className="page"><p role="status">This chat is not available yet.</p></main>
         )}

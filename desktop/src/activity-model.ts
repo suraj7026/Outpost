@@ -5,7 +5,10 @@ export const isExecutionRecord = (record: ServerRecord) => record.kind === 'acti
 export function activityChunks(records: ServerRecord[]): ServerRecord[][] {
   const chunks: ServerRecord[][] = [];
   for (const record of records) {
-
+    // Pi emits an assistant envelope for tool-only steps; it is not a visible divider.
+    if (record.kind === 'message' && text(record, 'author') === 'assistant' &&
+      !text(record, 'text').trim() && !text(record, 'error') && record.data.interrupted !== true &&
+      record.data.outputTruncated !== true && !['error', 'aborted'].includes(text(record, 'stopReason'))) continue;
     const previous = chunks.at(-1);
     if (isExecutionRecord(record) && previous && isExecutionRecord(previous[0])) previous.push(record);
     else chunks.push([record]);

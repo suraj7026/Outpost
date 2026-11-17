@@ -7,6 +7,9 @@ import "./composer.css";
 import "./focus.css";
 import "./composer-refinement.css";
 import "./icon-refinement.css";
+import "./neutral-theme.css";
+import "./page-consistency.css";
+import "./dialog-consistency.css";
 
 initializeAppearance();
 createRoot(document.getElementById("root")!).render(<App />);

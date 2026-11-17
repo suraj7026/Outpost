@@ -1,9 +1,9 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useId, useReducer, useRef, useState } from "react";
 import { nativeApp, recordedPreview } from "./api";
 import type { ChatGroup } from "./ChatHistory";
 import type { Connection } from "./useConnection";
 import { text } from "./types";
-import { NotebookPen, Plus } from "lucide-react";
+import { NotebookPen, Plus, X } from "lucide-react";
 import { Button, Dialog } from "./Interface";
 import { relativeTime, saveServerNote, serverNotePayload, workspaceBlocker } from "./workspace-presentation";
 import "./workspace-refinement.css";
@@ -101,10 +101,11 @@ export function useSharedMemory(groups: ChatGroup[], connections: Record<string,
 export default function SharedMemory({ memory }: { memory: ReturnType<typeof useSharedMemory> }) {
   const [draft, setDraft] = useState("");
   const [creating, setCreating] = useState(false);
-  const dialog = useRef<HTMLDialogElement>(null), trigger = useRef<HTMLButtonElement>(null);
+  const dialog = useRef<HTMLDialogElement>(null), trigger = useRef<HTMLButtonElement>(null), noteInput = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (!creating) return;
     dialog.current?.showModal();
+    noteInput.current?.focus({ preventScroll: true });
     return () => { dialog.current?.close(); trigger.current?.focus(); };
   }, [creating]);
   const [busy, setBusy] = useState(false);
@@ -113,6 +114,7 @@ export default function SharedMemory({ memory }: { memory: ReturnType<typeof use
   const [error, setError] = useState("");
   const draftId = useRef<string | null>(null);
   const writing = useRef(false);
+  const dismiss = () => { if (!writing.current) setCreating(false); };
   const save = async (id: string, value: string | null) => {
     if (writing.current) return;
     writing.current = true;
@@ -137,20 +139,22 @@ export default function SharedMemory({ memory }: { memory: ReturnType<typeof use
     <p className="small">Shared notes sync to all verified servers as they connect to this Mac. Notes cannot be edited; forget a shared note and create a replacement.</p>
     {memory.enabled && <>
       {memory.replicas.length === 0 && <p><a href="#settings/servers">Add a verified server</a> to share notes.</p>}
-      {creating && <dialog className="workspace-dialog" ref={dialog} aria-labelledby="memory-dialog-title" onCancel={event => { event.preventDefault(); if (!busy) setCreating(false); }}>
+      {creating && <dialog className="workspace-dialog workspace-form-dialog" ref={dialog} aria-labelledby="memory-dialog-title" onCancel={event => { event.preventDefault(); dismiss(); }}>
         <form onSubmit={event => {
           event.preventDefault();
           if (!memory.ready || busy || !draft.trim()) return;
           draftId.current ??= crypto.randomUUID();
           void save(draftId.current, draft.trim());
         }}>
-          <h2 id="memory-dialog-title">New shared note</h2>
+          <header className="ui-dialog-heading"><h2 id="memory-dialog-title">New shared note</h2><Button className="ui-close" variant="ghost" aria-label="Close dialog" title="Close dialog" disabled={busy} onClick={dismiss}><X size={18} aria-hidden="true" /></Button></header>
+          <div className="dialog-form-body">
           <p className="small">Saved to a reachable verified server first, then replicated as your other servers connect to this Mac. This is not an edit to an existing note.</p>
-          <label className="workspace-note-field" htmlFor="shared-memory-note">Note<textarea autoFocus id="shared-memory-note" value={draft} required maxLength={20000} rows={7} disabled={busy}
+          <label className="workspace-note-field" htmlFor="shared-memory-note">Note<textarea ref={noteInput} autoFocus id="shared-memory-note" value={draft} required maxLength={20000} rows={7} disabled={busy}
             onChange={event => { draftId.current = null; setDraft(event.target.value); }} /></label>
           {!memory.ready && <p role="status" className="small">A connected, writable server with Shared Memory enabled is required.</p>}
           {error && <p className="error-text" role="alert">{error}</p>}
-          <div className="workspace-dialog-actions"><button type="button" disabled={busy} onClick={() => setCreating(false)}>Cancel</button><button className="primary" disabled={!memory.ready || busy || !draft.trim()}>{busy ? "Saving…" : "Save shared note"}</button></div>
+          </div>
+          <footer className="workspace-dialog-actions"><button type="button" disabled={busy} onClick={dismiss}>Cancel</button><button className="primary" disabled={!memory.ready || busy || !draft.trim()}>{busy ? "Saving…" : "Save shared note"}</button></footer>
         </form>
       </dialog>}
       {!!memory.replicas.length && !memory.ready && !busy && <p className="small">A connected server with Shared Memory enabled is needed to save or forget notes.</p>}
@@ -177,6 +181,7 @@ export default function SharedMemory({ memory }: { memory: ReturnType<typeof use
 }
 
 export function ServerNotes({ server, groups, connections }: { server: string; groups: ChatGroup[]; connections: Record<string, Connection> }) {
+  const formId = useId();
   const [creating, setCreating] = useState(false), [draft, setDraft] = useState(""), [project, setProject] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState(""), [uncertain, setUncertain] = useState(false);
   const writing = useRef(false), latest = useRef({ groups, connections }); latest.current = { groups, connections };
@@ -215,8 +220,10 @@ export function ServerNotes({ server, groups, connections }: { server: string; g
       <details className="workspace-sync"><summary>Source and scope</summary><p className="small">Project: {text(note, "project") || "Not supplied"} · Identity: {text(note, "identityId") || "Not supplied"}</p><p className="small">Source: {text(note, "source") || "Not supplied"} · Provenance: {text(note, "provenance") || "Not supplied"}</p></details>
     </article>)}</div>
     {!notes.length && <div className="workspace-empty"><NotebookPen size={24} aria-hidden="true" /><h2>No server notes loaded</h2><p>{owner?.connected ? "Save local paths, downtime windows or other details for this server." : "Connect this server to load its notes."}</p></div>}
-    {creating && <Dialog title="New server note" busy={busy} onClose={() => { if (!writing.current) setCreating(false); }} className="workspace-dialog">
-      <form onSubmit={event => { event.preventDefault(); void submit(); }}>
+    {creating && <Dialog title="New server note" busy={busy} onClose={() => { if (!writing.current) setCreating(false); }} className="workspace-dialog" footer={<>
+      <Button disabled={busy} onClick={() => { if (!writing.current) setCreating(false); }}>Cancel</Button><Button type="submit" form={formId} variant="primary" disabled={!!blocker || busy || uncertain || !draft.trim() || !project.trim()}>{busy ? "Saving…" : "Save server note"}</Button>
+    </>}>
+      <form id={formId} onSubmit={event => { event.preventDefault(); void submit(); }}>
         <fieldset className="workspace-fields" disabled={busy || uncertain}>
           <label>Note<textarea autoFocus required maxLength={20000} rows={6} value={draft} onChange={event => setDraft(event.target.value)} /></label>
           <label>Project<input required value={project} onChange={event => setProject(event.target.value)} placeholder="Exact project name" /></label>
@@ -224,7 +231,6 @@ export function ServerNotes({ server, groups, connections }: { server: string; g
         </fieldset>
         {blocker && <p role="status" className="small">{blocker}</p>}
         {error && <p role="alert" className="error-text">{error}</p>}
-        <div className="workspace-dialog-actions"><Button disabled={busy} onClick={() => setCreating(false)}>Cancel</Button><Button type="submit" variant="primary" disabled={!!blocker || busy || uncertain || !draft.trim() || !project.trim()}>{busy ? "Saving…" : "Save server note"}</Button></div>
       </form>
     </Dialog>}
   </section>;

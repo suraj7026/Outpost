@@ -295,6 +295,31 @@ async function exercise(page, route, scheme) {
 
 try {
   browser = await ({ chromium, webkit })[engineName].launch();
+  for (const width of [1440, 390]) await scenario(`hidden scrollbar preserves scrolling at ${width}px`, { width }, async page => {
+    await page.setViewportSize({ width, height: 600 });
+    const settings = page.locator('.page.settings-workspace');
+    const style = await settings.evaluate(node => ({
+      scrollbar: getComputedStyle(node).scrollbarWidth,
+      webkit: getComputedStyle(node, '::-webkit-scrollbar').display,
+      overflow: getComputedStyle(node).overflowY,
+      scrollable: node.scrollHeight > node.clientHeight,
+    }));
+    equal(style.scrollbar, 'none', 'Settings scrollbar is visually hidden');
+    equal(style.webkit, 'none', 'WebKit scrollbar is visually hidden');
+    check(['auto', 'scroll'].includes(style.overflow) && style.scrollable, 'Settings still has a scrollable viewport');
+    await settings.evaluate(node => node.scrollTo(0, 0));
+    const bounds = await settings.boundingBox();
+    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + 100);
+    await page.mouse.wheel(0, 400);
+    await page.waitForFunction(() => document.querySelector('.settings-workspace').scrollTop > 0);
+    checks++;
+    await settings.evaluate(node => node.scrollTo(0, 0));
+    await settings.getByRole('heading', { level: 1 }).focus();
+    await page.keyboard.press('PageDown');
+    await page.waitForFunction(() => document.querySelector('.settings-workspace').scrollTop > 0);
+    checks++;
+    equal(await page.evaluate(() => window.scrollY), 0, 'Only Settings scrolls, not the window');
+  });
   for (const width of [1440, 390]) for (const scheme of ['dark', 'light']) for (const route of ['#settings', '#settings/appearance']) {
     await scenario(`${width}px ${scheme} ${route}`, { width, scheme, route }, page => exercise(page, route, scheme));
   }
