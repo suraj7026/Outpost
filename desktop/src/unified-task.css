@@ -32,11 +32,7 @@
 .task-unified .disclosure { flex: none; transition: transform 300ms var(--disclosure-spring); }
 .task-unified details[open] > summary > .disclosure { transform: rotate(90deg); }
 .task-unified details:not([open]) > summary > .disclosure { transform: rotate(0deg); }
-.task-unified .completed-action-group { margin: 0 0 20px; padding: 4px 0; border-block: 1px solid var(--line); }
-.task-unified .completed-action-group > summary { display: flex; align-items: center; list-style: none; gap: 10px; min-height: 44px; cursor: pointer; font-size: 13px; }
-.task-unified .completed-action-group > summary > svg:nth-child(2) { color: var(--positive); }
-.task-unified .completed-action-group > summary .small { margin-left: auto; }
-.task-unified .completed-action-group > div { padding-top: 8px; }
+
 .task-unified .execution-entry { margin: 0 0 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--raised); min-width: 0; }
 .task-unified .execution-entry[data-state=succeeded]:not(.action-failed), .task-unified .execution-entry[data-state=finished]:not(.action-failed) { background: transparent; }
 .task-unified .execution-entry > summary { padding: 12px 14px; min-height: 48px; gap: 10px; font-size: 13px; }

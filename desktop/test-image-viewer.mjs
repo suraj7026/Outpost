@@ -132,6 +132,15 @@ const ready = page => page.waitForFunction(() => {
   const fit = Math.max(.01, Math.min(1, (stage.clientWidth - 32) / img.naturalWidth, (stage.clientHeight - 32) / img.naturalHeight));
   return Math.abs(Number(stage.dataset.zoom) - fit) < .002;
 });
+async function assertChatCentered(card, label) {
+  const geometry = await card.evaluate(element => {
+    const content = element.closest('.conversation .conversation-content');
+    const center = node => { const { x, width } = node.getBoundingClientRect(); return x + width / 2; };
+    return { card: center(element), content: content ? center(content) : null };
+  });
+  check(geometry.content !== null, `${label}: card belongs to the chat content container`);
+  check(Math.abs(geometry.card - geometry.content) < 1, `${label}: whole card is centered within chat content (${geometry.card} vs ${geometry.content})`);
+}
 async function assertPreview(card, label, { small = false, portrait = false } = {}) {
   await card.scrollIntoViewIfNeeded();
   await card.locator('.artifact-preview img').waitFor({ state: 'visible' });
@@ -145,6 +154,7 @@ async function assertPreview(card, label, { small = false, portrait = false } = 
     return { card: rect(element), preview: rect(preview), image: rect(img), naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, viewport: innerWidth };
   });
   const { card: box, preview, image, naturalWidth, naturalHeight } = geometry;
+  if (await card.evaluate(element => Boolean(element.closest('.conversation')))) await assertChatCentered(card, label);
   check(box.width >= 159 && box.width <= 561, `${label}: card width stays between 160 and 560px`);
   check(box.x >= 0 && box.x + box.width <= geometry.viewport + 1, `${label}: card fits viewport`);
   check(image.width > 0 && image.width <= 560 && image.height > 0 && image.height <= 360, `${label}: image respects 560 × 360 bounds`);
@@ -170,6 +180,7 @@ try {
     const consent = page.locator('.markdown-image-consent');
     check(await consent.getByRole('button', { name: 'Load image', exact: true }).isEnabled(), `HTTPS image requires consent at ${width}`);
     check(await consent.locator('img').count() === 0, 'Consent placeholder has no remote img');
+    await assertChatCentered(consent, `consent-${width}`);
     for (const format of ['png', 'jpeg', 'webp']) {
       await assertPreview(page.locator('.stream-artifact .chat-image').filter({ has: page.getByRole('button', { name: `View capture.${format}`, exact: true }) }), `${format}-${width}`);
     }
@@ -268,12 +279,18 @@ try {
   checks += await assertIconControls(light, '.image-viewer');
   await light.screenshot({ path: `${out}/viewer-light.png` }); await light.close();
   for (const width of [1440, 768, 390]) {
-    for (const shape of ['portrait', 'small']) {
-      const shapeFixture = withMarkdown(`Inspect the ${shape} attachment.`);
+    for (const shape of ['landscape', 'portrait', 'small']) {
+      const shapeFixture = withMarkdown(`![First ${shape} image](capture.png)\n\nInspect the ${shape} attachment.\n\n![Later ${shape} image](#artifact-image-0)`);
+      const image = images[shape === 'landscape' ? 'png' : shape];
       const record = shapeFixture.snapshot.records.find(record => record.id === 'image-0');
-      record.data.hash = createHash('sha256').update(Buffer.from(images[shape], 'base64')).digest('hex');
-      const page = await open({ width, testFixture: shapeFixture, imageData: { ...images, png: images[shape] } });
-      await assertPreview(page.locator('#artifact-image-0 .chat-image'), `${shape}-${width}`, { [shape]: true });
+      record.data.hash = createHash('sha256').update(Buffer.from(image, 'base64')).digest('hex');
+      const page = await open({ width, testFixture: shapeFixture, imageData: { ...images, png: image } });
+      await assertPreview(page.locator('.conversation .stream-artifact#artifact-image-0 .chat-image'), `attachment-${shape}-${width}`, { [shape]: true });
+      const inlineCards = page.locator('.conversation .message-markdown .chat-image');
+      check(await inlineCards.count() === 2, `${shape}-${width}: both Markdown images render`);
+      for (const [index, position] of ['first', 'later'].entries()) {
+        await assertPreview(inlineCards.nth(index), `inline-${position}-${shape}-${width}`, { [shape]: true });
+      }
       await page.close();
     }
   }

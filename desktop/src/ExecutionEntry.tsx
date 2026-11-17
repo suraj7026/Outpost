@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronRight, Globe, Shield, SquareTerminal as Terminal } from 'lucide-react';
+import { ChevronRight, FileText, Globe, Image, Shield, SquareTerminal as Terminal } from 'lucide-react';
 import { actionLabel } from './conversation-model';
 import { useConversationDisclosure } from './conversation-detail';
 import { EvidenceTime } from './LiveContent';
@@ -38,7 +38,9 @@ export default function ExecutionEntry({ record, streams = [], onReview }: {
   const error = typeof result.error === 'string' ? result.error : '';
   const detail = typeof result.detail === 'string' ? result.detail : '';
   const target = typeof args.path === 'string' ? args.path : typeof args.url === 'string' ? args.url : text(record, 'target');
-  const Icon = name.startsWith('browser.') ? Globe : name === 'host.execute' ? Shield : Terminal;
+  const Icon = name === 'browser.capture' ? Image : name.startsWith('browser.') ? Globe : name.startsWith('file.') ? FileText : name === 'host.execute' ? Shield : Terminal;
+  const label = actionLabel(record);
+  const labelParts = /^(Run|Read|Write|Open) (.+)$/.exec(label);
   const outcome = failed ? stream ? 'Failed attempt' : 'Needs review' : succeeded ? 'Succeeded' : labelState(state);
   const rawPayload = useMemo(() => rawOpen ? JSON.stringify({
     arguments: args, ...(Object.keys(result).length ? { result } : {}), ...(stream ? { output: text(record, 'output') } : {}),
@@ -50,7 +52,7 @@ export default function ExecutionEntry({ record, streams = [], onReview }: {
     <summary>
       <ChevronRight size={13} className="disclosure" aria-hidden="true" />
       <Icon size={15} aria-hidden="true" />
-      <span className="execution-label" title={actionLabel(record)}>{actionLabel(record)}</span>
+      <span className="execution-label" title={label}>{labelParts ? <><span className="execution-verb">{labelParts[1]} </span>{labelParts[2]}</> : label}</span>
       <span className="action-state">{failed || succeeded ? <OutcomeDot failed={failed} label={outcome} /> : labelState(state === 'dispatching' ? 'running' : state)}</span>
       {review && <button type="button" className="execution-review" onClick={event => {
         event.preventDefault(); event.stopPropagation(); onReview(record);

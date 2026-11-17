@@ -259,15 +259,16 @@ async function picker(page, label) {
   keyboardState(await inspect(trigger), `${label}: Escape restores keyboard focus`);
 }
 async function settings(page, label) {
+  await openSettings(page, { page: 'servers' });
+  const addServer = page.getByRole('link', { name: 'Add server', exact: true });
+  const manageServer = page.locator('.server-settings-list a[data-server-id="legacy"]');
+  await manageServer.waitFor();
+  await control(page, addServer, `${label}/add server link`, 4.5, true);
+  const before = await inspect(manageServer);
+  const after = await nextFocus(page, manageServer, `${label}/manage server link`);
+  stableEdges(before, after, `${label}/manage server link`); filled(before, after, `${label}/manage server link`);
+  await screenshot(page, label, 'machine-link-keyboard');
   await openSettings(page, { page: 'home' });
-  const links = page.locator('.settings-link-list a');
-  check(await links.count() >= 2, `${label}: real settings navigation links exist`);
-  await control(page, links.nth(0), `${label}/settings link`, 4.5, true);
-  const before = await inspect(links.nth(1));
-  const after = await nextFocus(page, links.nth(1), `${label}/next settings link`);
-  stableEdges(before, after, `${label}/next settings link`); filled(before, after, `${label}/next settings link`);
-  await screenshot(page, label, 'settings-link-keyboard');
-  await page.locator('.settings-link-list a[href="#settings/appearance"]').click();
   const toggle = page.getByRole('switch', { name: 'Collapse sidebar', exact: true });
   await toggle.waitFor(); await rest(page);
   check(!await toggle.isChecked(), `${label}: sidebar switch starts off`);

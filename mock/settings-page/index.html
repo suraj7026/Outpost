@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Outpost — Settings redesign mock</title>
+<link rel="stylesheet" href="prototype.css">
+</head>
+<body>
+<div class="settings-canvas appearance-settings">
+<main class="page settings-page settings-parity">
+  <div class="page-heading">
+    <span class="settings-header-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M4 7h9"/><circle cx="17" cy="7" r="2.5"/><path d="M20 17h-9"/><circle cx="7" cy="17" r="2.5"/></svg>
+    </span>
+    <div class="settings-header-copy"><h1 tabindex="-1">Settings</h1><p>Preferences for this Mac, independent of your servers.</p></div>
+  </div>
+
+  <div class="ui-stack">
+    <section class="ui-section" aria-label="Startup">
+      <div class="ui-section-heading"><div><h2>Startup</h2><p>What Outpost opens when it starts.</p></div></div>
+      <div class="ui-row">
+        <span class="ui-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6.5 9.5V20h11V9.5"/></svg></span>
+        <div class="ui-row-content"><strong>On startup</strong><div class="ui-row-description">Applies next launch. New task home page is the default.</div></div>
+        <div class="ui-row-actions">
+          <div class="appearance-width-options appearance-detail-options" style="--options-width: 360px">
+            <label><input type="radio" name="startup" value="home" checked><span>New task home page</span></label>
+            <label><input type="radio" name="startup" value="last"><span>Last working page</span></label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="ui-section" aria-label="Theme">
+      <div class="ui-section-heading"><div><h2>Theme</h2><p>Auto follows your Mac’s appearance.</p></div></div>
+      <div class="ui-row">
+        <span class="ui-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path class="fill" d="M12 4a8 8 0 0 0 0 16z"/></svg></span>
+        <div class="ui-row-content"><strong>Appearance</strong><div class="ui-row-description">Light and Dark stay as selected.</div></div>
+        <div class="ui-row-actions">
+          <div class="appearance-width-options" style="--options-width: 300px">
+            <label><input type="radio" name="theme" value="auto" checked data-theme-value><span>Auto</span></label>
+            <label><input type="radio" name="theme" value="light" data-theme-value><span>Light</span></label>
+            <label><input type="radio" name="theme" value="dark" data-theme-value><span>Dark</span></label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="ui-section" aria-label="Conversation">
+      <div class="ui-section-heading"><div><h2>Conversation</h2><p>Text measure and how much execution detail is expanded.</p></div></div>
+      <div class="ui-row">
+        <span class="ui-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 12h17"/><path d="M6.5 9l-3 3 3 3"/><path d="M17.5 9l3 3-3 3"/></svg></span>
+        <div class="ui-row-content"><strong>Conversation width</strong><div class="ui-row-description">Avatars sit outside the text column; smaller windows adapt automatically.</div></div>
+        <div class="ui-row-actions">
+          <div class="appearance-width-options" style="--options-width: 300px">
+            <label><input type="radio" name="width" value="narrow" checked><span>Narrow</span></label>
+            <label><input type="radio" name="width" value="wide"><span>Wide</span></label>
+            <label><input type="radio" name="width" value="large"><span>Large</span></label>
+          </div>
+        </div>
+      </div>
+      <div class="ui-row">
+        <span class="ui-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h16"/></svg></span>
+        <div class="ui-row-content"><strong>Conversation detail</strong><div class="ui-row-description">Compact collapses tool calls and thinking by default. Extended expands them.</div></div>
+        <div class="ui-row-actions">
+          <div class="appearance-width-options appearance-detail-options" style="--options-width: 240px">
+            <label><input type="radio" name="detail" value="compact" checked><span>Compact</span></label>
+            <label><input type="radio" name="detail" value="extended"><span>Extended</span></label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="ui-section" aria-label="Window">
+      <div class="ui-section-heading"><div><h2>Window</h2><p>Sidebar behavior and the window material.</p></div></div>
+
+      <div class="window-preview" data-preview data-frost="on" aria-hidden="true">
+        <span class="preview-wall"></span>
+        <div class="preview-sidebar" data-preview-sidebar>
+          <div class="preview-lights"><span></span><span></span><span></span></div>
+          <span class="preview-bar strong"></span>
+          <span class="preview-bar"></span>
+          <span class="preview-bar"></span>
+          <span class="preview-bar"></span>
+        </div>
+        <div class="preview-main" data-preview-main>
+          <div class="preview-content">
+            <span class="preview-line"></span>
+            <span class="preview-line short"></span>
+            <span class="preview-line"></span>
+          </div>
+        </div>
+      </div>
+
+      <label class="ui-row appearance-toggle">
+        <span class="ui-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path class="fill" d="M12 3.5l1.7 5 5 1.7-5 1.7-1.7 5-1.7-5-5-1.7 5-1.7z"/></svg></span>
+        <span class="ui-row-content"><strong>Frosted glass</strong><span class="ui-row-description">Blur the desktop behind the sidebar and window frame.</span></span>
+        <span class="ui-row-actions"><input type="checkbox" role="switch" aria-label="Frosted glass" data-frost-toggle checked></span>
+      </label>
+      <div class="ui-row">
+        <span class="ui-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5c3 4 5.5 6.7 5.5 9.7a5.5 5.5 0 0 1-11 0c0-3 2.5-5.7 5.5-9.7z"/></svg></span>
+        <div class="ui-row-content"><strong>Glass opacity</strong><div class="ui-row-description">0% is clear, 100% is solid. Frost is strongest in the middle.</div></div>
+        <div class="ui-row-actions appearance-opacity">
+          <input id="glass-opacity" type="range" min="10" max="90" step="1" value="64" aria-label="Glass opacity">
+          <output for="glass-opacity" id="glass-opacity-value">64%</output>
+        </div>
+      </div>
+      <label class="ui-row appearance-toggle">
+        <span class="ui-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9 4.5v15"/></svg></span>
+        <span class="ui-row-content"><strong>Collapse sidebar</strong><span class="ui-row-description">Hover the left edge to reveal it. Pin it inside the sidebar, or use ⌘B.</span></span>
+        <span class="ui-row-actions"><input type="checkbox" role="switch" aria-label="Collapse sidebar" data-collapse-toggle></span>
+      </label>
+    </section>
+  </div>
+</main>
+</div>
+<script src="prototype.js"></script>
+</body>
+</html>

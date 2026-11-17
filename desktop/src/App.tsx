@@ -317,6 +317,7 @@ export default function App({ connection, initialTask, initialPage = "home", ini
   const composerConnection = selectedTask ? connection : draftConnection;
   const composerContext = <ComposerContext environmentNavigation={selectedTask ? environmentNavigation : newTaskNavigation}
     connected={!!composerConnection?.connected}
+    reconnecting={!!composerConnection?.reconnecting}
     terminalToggle={!selectedTask && draftConnection && <button ref={draftTerminalButton} type="button" className="composer-terminal" aria-label="Terminal" title="Terminal" aria-expanded={draftTerminalOpen} aria-controls="draft-server-terminal" onClick={() => setDraftTerminalOpen(open => !open)}><SquareTerminal size={18} aria-hidden="true" /></button>}
     onReconnect={composerConnection ? () => void composerConnection.connect() : undefined}
     onSettings={() => select("servers", `settings/servers/${composerConnection?.environmentId ?? "legacy"}/models`)} />;
@@ -373,7 +374,6 @@ export default function App({ connection, initialTask, initialPage = "home", ini
         </aside>
       <div data-owner-id={connection.environmentId ?? "legacy"} className={`main-shell ${selectedTask && !history ? "task-active" : ""}`} tabIndex={-1} onPointerDown={() => { if (!sidebar.docked) sidebar.dismiss(); }}>
 
-        {status?.reconnecting && <div className="inline-notice" role="status">Reconnecting securely… Your saved server access is being restored automatically.</div>}
         {status?.error && (
           <div className="connection-error" role="alert">
             <span>{status.error}</span>

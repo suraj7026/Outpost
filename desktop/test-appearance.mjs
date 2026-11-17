@@ -4,6 +4,7 @@ import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { chromium, webkit } from 'playwright';
 import { openInitialTestChat } from './chat-test-navigation.mjs';
+import { openSettings } from './settings-test-navigation.mjs';
 const root = resolve('desktop/dist');
 const server = createServer((request, response) => {
   const file = resolve(root, new URL(request.url, 'http://local').pathname.slice(1) || 'index.html');
@@ -96,10 +97,10 @@ async function open({ width = 1320, scheme = 'dark', scenario = 'native', stored
   return page;
 }
 async function settings(page) {
-  if (await page.locator('.web-sidebar').getAttribute('aria-hidden') === 'true') await page.keyboard.press('Meta+b');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.locator('.settings-link-list a[href="#settings/appearance"]').click();
-  await page.getByRole('heading', { name: 'Appearance', exact: true, level: 1 }).waitFor();
+  await openSettings(page, { page: 'appearance' });
+  check(new URL(page.url()).hash === '#settings', 'Settings opens preferences directly at the root');
+  check(await page.getByRole('group', { name: 'Theme', exact: true }).isVisible(), 'Settings root shows appearance preferences');
+  check(await page.locator('.settings-workspace .settings-link-list a').count() === 0, 'Settings root has no Machines or Appearance menu links');
 }
 const glass = (page, enabled) => page.waitForFunction(value => document.documentElement.dataset.glass === String(value), enabled);
 const blur = (page, radius) => page.waitForFunction(value => window.__effects.at(-1) === value, radius);
@@ -228,8 +229,7 @@ async function checkContextTheme(page, theme) {
   }
 }
 async function checkSetupTheme(page, theme) {
-  await page.getByRole('link', { name: 'Settings', exact: true }).click();
-  await page.locator('.settings-link-list a[href="#machines"]').click();
+  await openSettings(page, { page: 'servers' });
   await page.getByRole('link', { name: 'Add server', exact: true }).click();
   const dialog = page.locator('dialog.server-setup-dialog[open]');
   await dialog.waitFor();
@@ -278,7 +278,7 @@ async function checkThemePreferences() {
     await checkSetupTheme(page, manual);
     await settings(page);
     await page.reload();
-    await page.getByRole('heading', { name: 'Appearance', exact: true, level: 1 }).waitFor();
+    await page.getByRole('heading', { name: 'Settings', exact: true, level: 1 }).waitFor();
     await checkTheme(page, manual, manual);
     await nativeTheme(page, manual);
     check(await page.evaluate(theme => window.__themeRequests.every(value => value === theme), manual),
@@ -296,7 +296,7 @@ async function checkThemePreferences() {
     await checkTheme(page, 'auto', scheme);
     await nativeTheme(page, null);
     await page.reload();
-    await page.getByRole('heading', { name: 'Appearance', exact: true, level: 1 }).waitFor();
+    await page.getByRole('heading', { name: 'Settings', exact: true, level: 1 }).waitFor();
     await checkTheme(page, 'auto', scheme);
     await nativeTheme(page, null);
     await page.emulateMedia({ colorScheme: manual });
@@ -325,7 +325,7 @@ async function checkThemePreferences() {
     await nativeTheme(page, 'light');
     assert.deepEqual(await savedAppearance(page), { ...preferences, theme: 'light', conversationDetail: 'compact', startupPage: 'home' }, 'Theme validation and selection preserve every other appearance preference and initialize conversation detail'); checks++;
     await page.reload();
-    await page.getByRole('heading', { name: 'Appearance', exact: true, level: 1 }).waitFor();
+    await page.getByRole('heading', { name: 'Settings', exact: true, level: 1 }).waitFor();
     await checkTheme(page, 'light', 'light');
     check(await page.getByRole('switch', { name: 'Frosted glass', exact: true }).isChecked()
       && await page.locator('#glass-opacity').inputValue() === '64'
@@ -465,7 +465,7 @@ try {
     await page.locator('.web-sidebar').waitFor({ state: 'hidden' });
     check(!await page.locator('.web-sidebar').isVisible(), 'Settings collapse control updates layout');
     await page.reload();
-    await page.getByRole('heading', { name: 'Appearance', exact: true, level: 1 }).waitFor();
+    await page.getByRole('heading', { name: 'Settings', exact: true, level: 1 }).waitFor();
     await glass(page, true);
     check(!await page.locator('.web-sidebar').isVisible(), 'Collapsed preference persists across reload');
     check(await page.locator('#glass-opacity').inputValue() === '0', 'Zero opacity persists across reload');

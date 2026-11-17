@@ -1,0 +1,26 @@
+.task-unified .activity-group { margin: 0 0 24px; min-width: 0; }
+.task-unified .activity-group > .activity-group-summary { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 0 8px; font-size: 13px; color: var(--muted); list-style: none; cursor: pointer; }
+.task-unified .activity-group > .activity-group-summary[aria-disabled=true] { cursor: default; }
+.task-unified .activity-group[data-single=true] > .activity-group-summary { display: none; }
+.activity-group-title { color: var(--text); font-weight: 500; }
+.activity-group-progress { font-size: 12px; }
+.activity-group .activity-complete { color: var(--positive); }
+.activity-group .activity-attention { color: var(--warning); }
+.task-unified .activity-stack { border: 1px solid var(--line); border-radius: 11px; overflow: hidden; min-width: 0; }
+.task-unified .activity-stack > .execution-entry { margin: 0; border: 0; border-radius: 0; background: transparent; }
+.task-unified .activity-stack > .execution-entry + .execution-entry { border-top: 1px solid var(--line); }
+.task-unified .activity-stack > .execution-entry:is([data-state=running], [data-state=dispatching], [data-state=preparing]) { background: var(--raised); }
+.task-unified .activity-stack > .execution-entry > summary { min-height: 46px; padding: 11px 14px; gap: 10px; }
+.task-unified .activity-stack > .execution-entry > summary > .disclosure { order: 5; margin-left: 2px; }
+.task-unified .activity-stack > .execution-entry .execution-label { color: var(--text); font-size: 13px; font-weight: 500; }
+.task-unified .activity-stack > .execution-entry .execution-verb { color: var(--muted); font-weight: 400; }
+.task-unified .activity-stack > .execution-entry .action-state { font-size: 11px; }
+.task-unified .activity-stack > .execution-entry .action-body { padding: 3px 16px 0 39px; }
+.task-unified .activity-stack > .execution-entry .execution-meta { font-size: 11px; }
+.task-unified .activity-stack > .execution-entry .execution-command { font-size: 12px; }
+@media (max-width: 620px) {
+  .task-unified .activity-group > .activity-group-summary { flex-wrap: wrap; column-gap: 8px; row-gap: 4px; }
+  .task-unified .activity-stack > .execution-entry > summary { padding-inline: 10px; gap: 7px; }
+  .task-unified .activity-stack > .execution-entry .execution-label { font-size: 12px; }
+  .task-unified .activity-stack > .execution-entry .action-body { padding-inline: 14px; }
+}

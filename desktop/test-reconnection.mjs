@@ -80,7 +80,8 @@ try {
     function assertOwner(id) { if (id !== A) throw new Error('Wrong owner lifecycle operation'); }
   }, { A, B });
   await page.goto(`http://127.0.0.1:${server.address().port}`);
-  await page.getByText('Reconnecting securely… Your saved server access is being restored automatically.', { exact: true }).waitFor();
+  await page.locator('.composer-context').getByRole('status').filter({ hasText: 'Reconnecting…' }).waitFor();
+  check(await page.locator('.main-shell > .inline-notice[role="status"]').count() === 0, 'Reconnection stays in the composer bar without a top banner');
   check(await page.getByRole('button', { name: 'Retry connection', exact: true }).count() === 0, 'Ordinary restoration is a status, not a manual-retry error');
   check(await page.evaluate(A => !window.__requests.some(request => request.command === 'environment_query' && request.args.environmentId === A), A), 'No reads are sent to the stale loopback endpoint during restoration');
   await page.evaluate(() => window.__transition('connected', 58001));
@@ -90,13 +91,14 @@ try {
   check(await page.getByRole('button', { name: 'Retry same command', exact: true }).count() === 1, 'Unknown command outcome is retained, never replayed by reconnection');
   await page.getByRole('textbox', { name: 'Message Outpost' }).fill('Keep my unsent draft');
   await page.evaluate(() => window.__transition('retrying', undefined, 'error decoding response body'));
-  await page.getByText('Reconnecting securely… Your saved server access is being restored automatically.', { exact: true }).waitFor();
+  await page.locator('.composer-context-run').getByRole('status').filter({ hasText: 'Reconnecting…' }).waitFor();
+  check(await page.locator('.main-shell > .inline-notice[role="status"]').count() === 0, 'A dropped connection does not add a top banner');
   check(await page.getByRole('button', { name: 'Retry connection', exact: true }).count() === 0, 'A dropped stream does not show a routine manual-retry error');
   mkdirSync('/tmp/outpost-reconnect', { recursive: true });
   await page.screenshot({ path: `/tmp/outpost-reconnect/recovering-${engine.name()}.png` });
   check(await page.getByText('Alpha private history', { exact: true }).isVisible(), 'Cached history remains visible while the tunnel is down');
   await page.evaluate(() => window.__transition('connected', 58002));
-  await page.waitForFunction(() => !document.body.textContent.includes('Reconnecting securely…'));
+  await page.locator('.composer-context').getByRole('status').filter({ hasText: 'Reconnecting…' }).waitFor({ state: 'hidden' });
   check(await page.getByRole('textbox', { name: 'Message Outpost' }).inputValue() === 'Keep my unsent draft', 'A replacement ephemeral route does not remount the conversation or discard its draft');
   check(await page.getByRole('button', { name: 'Retry same command', exact: true }).count() === 1, 'Pending command survives a tunnel replacement');
   await page.locator(`.chat-server-group[data-server-id="${B}"] button[data-task-id="same-task"]`).click();

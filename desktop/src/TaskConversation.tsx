@@ -1,13 +1,15 @@
-import { memo, useMemo, useRef, type ReactNode } from 'react';
+import { memo, useMemo, useRef } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Check, ChevronRight, UserRound } from 'lucide-react';
+import { ChevronRight, UserRound } from 'lucide-react';
 import { call } from './api';
 
-import { actionNeedsReview, text, type ServerRecord } from './types';
+import { text, type ServerRecord } from './types';
 import type { Connection } from './useConnection';
 import { groupConversation, linkedToolStreams, type ConversationGroup } from './conversation-model';
 import ExecutionEntry from './ExecutionEntry';
+import ActivityGroup from './ActivityGroup';
+import { activityChunks, isExecutionRecord } from './activity-model';
 import { ThinkingIndicator, useConversationDisclosure } from './conversation-detail';
 import OutpostMark from './OutpostMark';
 
@@ -47,16 +49,6 @@ function RunReasoning({ records }: { records: ServerRecord[] }) {
   </details>;
 }
 
-function CompletedActions({ count, children }: { count: number; children: ReactNode }) {
-  const { open, setOpen } = useConversationDisclosure();
-  return <details className="completed-action-group" open={open} onToggle={event => {
-    if (event.currentTarget.open !== open) setOpen(event.currentTarget.open);
-  }}><summary><ChevronRight size={13} className="disclosure" aria-hidden="true" /><Check size={15} aria-hidden="true" /><span>Completed actions</span><span className="small">{count} actions</span></summary><div>{children}</div></details>;
-}
-
-function completedAction(record: ServerRecord) {
-  return record.kind === 'action' && text(record, 'state') === 'succeeded' && !actionNeedsReview(record);
-}
 
 function Run({ group, connection, streams, onReview }: {
   group: Extract<ConversationGroup, { kind: 'run' }>;
@@ -64,28 +56,25 @@ function Run({ group, connection, streams, onReview }: {
   streams: Map<string, ServerRecord[]>;
   onReview: (record: ServerRecord) => void;
 }) {
-  // Only compact already-settled history. Live rows never move into a new group
-  // when they finish: doing that would destroy an inspected disclosure's state.
-  const historical = useRef(new Set(group.records.filter(completedAction).map(record => record.id)));
   const executionKeys = useRef(new Map<string, string>());
-
-  const chunks: ServerRecord[][] = [];
-  for (const record of group.records) {
-    const previous = chunks.at(-1);
-    if (completedAction(record) && historical.current.has(record.id) && previous?.every(item => completedAction(item) && historical.current.has(item.id))) previous.push(record);
-    else chunks.push([record]);
-  }
+  const executionOrder = useRef(new Map<string, number>());
+  const executionKey = (record: ServerRecord) => {
+    const linked = streams.get(record.id) ?? [];
+    // Keep both the row and its group mounted when a stream acquires an action record.
+    const aliases = [`${record.kind}:${record.id}`, ...linked.map(item => `tool_stream:${item.id}`)];
+    if (record.kind === 'tool_stream' && text(record, 'actionId')) aliases.push(`action:${text(record, 'actionId')}`);
+    const known = aliases.map(alias => executionKeys.current.get(alias)).filter((key): key is string => key !== undefined);
+    // Both projections may already exist when their link arrives; retain the earlier row.
+    const key = known.sort((a, b) => executionOrder.current.get(a)! - executionOrder.current.get(b)!)[0] ?? aliases[0];
+    if (!executionOrder.current.has(key)) executionOrder.current.set(key, executionOrder.current.size);
+    for (const alias of aliases) executionKeys.current.set(alias, key);
+    return key;
+  };
+  const chunks = activityChunks(group.records);
   const render = (record: ServerRecord) => {
     if (record.kind === 'artifact') return <div className="stream-artifact" id={`artifact-${record.id}`} key={record.id}><Artifact record={record} /></div>;
     if (record.kind !== 'message') {
-      const linked = streams.get(record.id) ?? [];
-      // Either projection can arrive first. Reuse its mounted identity when the
-      // other arrives, rather than remounting and discarding the user's choice.
-      const aliases = [`${record.kind}:${record.id}`, ...linked.map(item => `tool_stream:${item.id}`)];
-      if (record.kind === 'tool_stream' && text(record, 'actionId')) aliases.push(`action:${text(record, 'actionId')}`);
-      const key = aliases.map(alias => executionKeys.current.get(alias)).find(Boolean) ?? aliases[0];
-      for (const alias of aliases) executionKeys.current.set(alias, key);
-      return <ExecutionEntry key={key} record={record} streams={linked} onReview={onReview} />;
+      return <ExecutionEntry key={executionKey(record)} record={record} streams={streams.get(record.id) ?? []} onReview={onReview} />;
     }
     return <div className="run-message" data-record-id={record.id} key={record.id}>
       {text(record, 'text') && <MessageText record={record} onError={connection.setError} />}
@@ -103,8 +92,8 @@ function Run({ group, connection, streams, onReview }: {
     </div>
     <div className="run-content">
       <RunReasoning records={group.records} />
-      {chunks.map(chunk => chunk.length > 1
-        ? <CompletedActions key={`completed:${chunk[0].id}`} count={chunk.length}>{chunk.map(render)}</CompletedActions>
+      {chunks.map(chunk => isExecutionRecord(chunk[0])
+        ? <ActivityGroup key={`activity:${executionKey(chunk[0])}`} records={chunk}>{chunk.map(render)}</ActivityGroup>
         : render(chunk[0]))}
     </div>
   </article>;

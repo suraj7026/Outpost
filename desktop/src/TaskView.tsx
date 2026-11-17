@@ -80,7 +80,9 @@ export default function TaskView({ task, ownerLabel, connection, contextBar }: {
   const contentVersion = String(contentRevision.current.value);
   const scroll = useConversationScroll(`${connection.environmentId ?? 'legacy'}:${task.id}`, contentVersion);
   const currentStatus = taskRunStatus(task, related);
-  const runStatus: TaskRunStatus = !connection.connected
+  const runStatus: TaskRunStatus = connection.reconnecting
+    ? { label: 'Reconnecting…', kind: 'review', active: false, transient: false }
+    : !connection.connected
     ? { label: 'Offline · read-only', kind: 'error', active: false, transient: false }
     : connection.retired ? { label: 'Legacy read-only', kind: 'idle', active: false, transient: false }
     : connection.info?.pendingError || connection.info?.pending ? { label: 'Connection needs attention', kind: 'review', active: false, transient: false }

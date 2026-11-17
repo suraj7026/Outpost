@@ -1,0 +1,137 @@
+/* Settings mock, rebuilt on the app's own component idioms.
+   Values are copied from desktop/src/styles.css, interface.css,
+   appearance-width.css, focus.css and studio.css — no new control idioms. */
+
+@font-face { font-family: 'Google Sans Flex'; src: url('GoogleSansFlex.woff2') format('woff2'); font-weight: 100 1000; font-display: swap; }
+
+:root {
+  color-scheme: dark;
+  --bg: #0f1011;
+  --surface: #16171a;
+  --raised: #1c1d21;
+  --line: #26282c;
+  --control: #44464b;
+  --text: #ededef;
+  --muted: #a1a3a8;
+  --active: #26282c;
+  --positive: #a3bda9;
+  --warning: #d6b78b;
+  --danger: #f3a49e;
+  --focus-surface: color-mix(in srgb, var(--active) 94%, var(--text));
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --frost: 64%;
+  font-family: 'Google Sans Flex', system-ui, sans-serif;
+  font-optical-sizing: auto;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f1f2f4;
+  --surface: #ffffff;
+  --raised: #f1f2f4;
+  --line: #dde0e5;
+  --control: #b9bec7;
+  --text: #24272d;
+  --muted: #5c626d;
+  --active: #e4e6ea;
+  --positive: #37694b;
+  --warning: #805a1c;
+  --danger: #ad3c36;
+  --focus-surface: color-mix(in srgb, var(--surface) 70%, var(--raised));
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; }
+button, input, select { font: inherit; color: inherit; }
+h1, h2, p { margin: 0; }
+svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg .fill { fill: currentColor; stroke: none; }
+
+.settings-canvas { max-width: 900px; margin: 0 auto; }
+
+/* Page chrome — styles.css + interface.css settings-parity. */
+.page { padding: 40px 40px 60px; }
+.page-heading { display: flex; gap: 12px; align-items: center; margin-bottom: 26px; }
+.page-heading h1 { font-size: 25px; letter-spacing: -.65px; font-weight: 550; line-height: 1.35; }
+.page-heading p { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.settings-header-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; color: var(--muted); background: var(--raised); flex: none; }
+
+/* Sections and rows — interface.css, verbatim. */
+.ui-stack { display: grid; gap: 24px; }
+.ui-section { padding: 0 0 24px; border-bottom: 1px solid var(--line); }
+.ui-section:last-child { border-bottom: 0; }
+.ui-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.ui-section-heading h2 { font-size: 16px; font-weight: 550; line-height: 1.5; }
+.ui-section-heading p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.ui-row { display: flex; align-items: center; gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.ui-row:last-child { border-bottom: 0; }
+.ui-row-icon { display: grid; place-items: center; width: 34px; height: 34px; flex: none; color: var(--muted); }
+.ui-row-content { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ui-row-content > strong { display: block; font-size: 14px; font-weight: 550; }
+.ui-row-description { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.6; }
+.ui-row-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+
+/* Option clusters — appearance-width.css, verbatim; width adapts to the row. */
+.appearance-width-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: var(--options-width, 100%); max-width: 100%; padding: 4px; gap: 4px; background: var(--raised); border-radius: 10px; }
+.appearance-width-options.appearance-detail-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.appearance-settings .appearance-width-options label { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; min-height: 40px; margin: 0; border-radius: 7px; color: var(--muted); cursor: pointer; font-size: 13px; transition: background 140ms var(--ease), color 140ms var(--ease); }
+.appearance-settings .appearance-width-options label:hover { background: var(--active); }
+.appearance-settings .appearance-width-options label:has(input:checked) { background: var(--active); color: var(--text); }
+.appearance-settings .appearance-width-options label:has(input:focus-visible) { background: var(--focus-surface); }
+.appearance-settings .appearance-width-options input[type=radio] { appearance: auto; width: 14px; height: 14px; min-height: 14px; min-width: 14px; margin: 0; padding: 0; flex: none; accent-color: var(--text); }
+
+/* Switch — studio.css, verbatim; motion uses the app's 140ms control timing. */
+.appearance-toggle { cursor: pointer; }
+.appearance-settings input[type="checkbox"] { appearance: none; position: relative; width: 44px; height: 28px; min-height: 28px; max-height: 28px; flex: none; margin: 0; padding: 0; border: 1px solid var(--control); border-radius: 999px; background: var(--raised); cursor: pointer; transition: background 140ms var(--ease), border-color 140ms var(--ease); }
+.appearance-settings input[type="checkbox"]::before { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--muted); transition: transform 140ms var(--ease), background 140ms var(--ease); }
+.appearance-settings input[type="checkbox"]:checked { background: var(--text); border-color: var(--text); }
+.appearance-settings input[type="checkbox"]:checked::before { background: var(--bg); transform: translateX(16px); }
+.appearance-settings input[type="checkbox"]:disabled { cursor: not-allowed; opacity: .5; }
+
+/* Slider — studio.css native idiom: accent-color, no custom track. */
+.appearance-opacity input { padding: 0; height: 28px; margin: 0; accent-color: var(--muted); width: 160px; }
+.appearance-opacity output { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; min-width: 3ch; text-align: right; }
+.appearance-opacity input:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Focus is a surface change, never a perimeter highlight — focus.css. */
+:root :focus-visible:not([tabindex="-1"]) { background-color: var(--keyboard-focus-bg, var(--focus-surface)); }
+.appearance-settings input[type="checkbox"] { --keyboard-focus-bg: var(--raised); }
+.appearance-settings .ui-row:has(input:focus-visible) { background-color: var(--focus-surface); }
+
+/* Live window preview. The wallpaper is imagery; all chrome uses app tokens. */
+.window-preview { position: relative; height: 160px; margin: 4px 0 8px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--bg); }
+.preview-wall { position: absolute; inset: 0; background: linear-gradient(120deg, #31456e 0%, #5b4a8a 45%, #8a4a5e 100%); }
+.preview-sidebar { position: absolute; inset: 0 auto 0 0; width: 96px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: color-mix(in srgb, var(--surface) var(--frost), transparent); -webkit-backdrop-filter: blur(10px) saturate(150%); backdrop-filter: blur(10px) saturate(150%); border-right: 1px solid color-mix(in srgb, var(--text) 10%, transparent); transition: background 240ms var(--ease); }
+.preview-lights { display: flex; gap: 5px; margin-bottom: 4px; }
+.preview-lights span { width: 8px; height: 8px; border-radius: 50%; }
+.preview-lights span:nth-child(1) { background: #ff5f57; }
+.preview-lights span:nth-child(2) { background: #febc2e; }
+.preview-lights span:nth-child(3) { background: #28c840; }
+.preview-bar { height: 7px; border-radius: 4px; background: color-mix(in srgb, var(--text) 14%, transparent); }
+.preview-bar.strong { width: 80%; background: color-mix(in srgb, var(--text) 34%, transparent); }
+.preview-main { position: absolute; top: 8px; right: 8px; bottom: 8px; left: 104px; }
+.preview-content { height: 100%; border-radius: 7px; background: color-mix(in srgb, var(--surface) 88%, transparent); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.preview-line { height: 6px; border-radius: 3px; background: var(--line); }
+.preview-line.short { width: 55%; }
+.window-preview[data-frost="off"] .preview-sidebar { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .appearance-settings input[type="checkbox"], .appearance-settings input[type="checkbox"]::before { transition: none; }
+  .preview-sidebar { transition: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .preview-sidebar { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+/* Narrow layouts wrap exactly like interface.css's ui-row rule. */
+@media (max-width: 780px) {
+  .page { padding: 28px 20px; }
+  .ui-row { flex-wrap: wrap; }
+  .ui-row-content { flex-basis: calc(100% - 48px); }
+  .ui-row-actions { margin-left: 48px; flex-wrap: wrap; }
+  .appearance-width-options { --options-width: 100% !important; width: 100%; }
+  .preview-main { left: 104px; }
+}

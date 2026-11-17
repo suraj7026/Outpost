@@ -1,0 +1,99 @@
+/* Wallpaper is imagery; the miniature window inherits the application's theme tokens. */
+.appearance-preview {
+  position: relative;
+  isolation: isolate;
+  height: 160px;
+  min-width: 0;
+  margin: 4px 0 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  pointer-events: none;
+}
+
+.appearance-preview,
+.appearance-preview * {
+  box-sizing: border-box;
+}
+
+.appearance-preview-wall {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, #31456e 0%, #5b4a8a 45%, #8a4a5e 100%);
+}
+
+.appearance-preview-sidebar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 96px;
+  padding: 10px;
+  border-right: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  background: color-mix(in srgb, var(--surface) var(--appearance-preview-opacity), transparent);
+  -webkit-backdrop-filter: var(--appearance-preview-filter);
+  backdrop-filter: var(--appearance-preview-filter);
+}
+
+.appearance-preview-lights {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 4px;
+}
+
+.appearance-preview-lights span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.appearance-preview-lights span:nth-child(1) { background: #ff5f57; }
+.appearance-preview-lights span:nth-child(2) { background: #febc2e; }
+.appearance-preview-lights span:nth-child(3) { background: #28c840; }
+
+.appearance-preview-bar {
+  height: 7px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+}
+
+.appearance-preview-bar-strong {
+  width: 80%;
+  background: color-mix(in srgb, var(--text) 34%, transparent);
+}
+
+.appearance-preview-main {
+  position: absolute;
+  inset: 8px 8px 8px 104px;
+}
+
+.appearance-preview-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  padding: 12px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+.appearance-preview-line {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+}
+
+.appearance-preview-line-short { width: 55%; }
+
+.appearance-preview[data-frost="off"] .appearance-preview-wall {
+  background: var(--bg);
+}
+
+.appearance-preview[data-frost="off"] .appearance-preview-sidebar,
+.appearance-preview[data-frost="off"] .appearance-preview-content {
+  background: var(--surface);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}

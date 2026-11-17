@@ -474,8 +474,7 @@ async function run(name, test, { width = 1440, colorScheme = 'dark' } = {}) {
     await Promise.race([
       (async () => {
         await page.goto(origin);
-        await page.getByRole('button', { name: 'Settings', exact: true }).click();
-        await page.locator('.settings-link-list a[href="#machines"]').click();
+        await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: 'Machines', exact: true }).click();
         await page.getByRole('link', { name: 'Add server', exact: true }).click();
         await visible(dialogFor(page));
         check(await dialogFor(page).evaluate(element => element instanceof HTMLDialogElement && element.open && element.matches(':modal')), 'Add server auto-opens a real modal dialog');

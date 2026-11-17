@@ -287,7 +287,11 @@ async function grids(page, pane) {
       general: general ? { outer: box(general), state: box(general.querySelector(':scope > .environment-connection-state')),
         fields: box(fields), rename: box(fields?.querySelector(':scope > form:first-child')),
         routes: box(fields?.querySelector(':scope > .environment-route-settings:last-child')) } : null,
-      appearance: appearance ? { section: box(appearance.parentElement), controls: box(appearance) } : null,
+      appearance: appearance ? { section: box(appearance.parentElement), controls: box(appearance),
+        stack: appearance.classList.contains('ui-stack'), groups: [...appearance.querySelectorAll(':scope > .ui-section')].map(group => ({
+          ...box(group), title: group.querySelector('h2')?.textContent,
+          rows: [...group.querySelectorAll('.ui-row')].map(box),
+        })) } : null,
     };
   });
   current.settingsControlMeasurements = controls;
@@ -319,18 +323,28 @@ async function grids(page, pane) {
     }
   }
   if (await page.locator('.appearance-settings').count()) {
-    verify(!!controls.appearance, 'Appearance retains its controls column');
+    verify(!!controls.appearance, 'Appearance retains its full-width grouped controls');
     if (controls.appearance) {
-      const { section, controls: appearance } = controls.appearance;
-      const columnWidth = section.columns.at(-1);
-      verify(Number.isFinite(columnWidth), 'Appearance settings has a measurable control-column width');
-      if (Number.isFinite(columnWidth)) {
-        near(appearance.width, columnWidth, '.appearance-controls fills the settings control column');
-        near(appearance.left, section.contentRight - columnWidth, '.appearance-controls starts at the control-column left edge');
-      }
+      const { section, controls: appearance, stack, groups } = controls.appearance;
+      verify(stack, 'Appearance groups use the shared ui-stack');
+      near(section.contentLeft, pane.contentLeft, 'Appearance starts at the page padded left edge');
+      near(appearance.width, section.contentWidth, '.appearance-controls fills the entire settings section, not a separate column');
+      near(appearance.left, section.contentLeft, '.appearance-controls starts at the settings section left edge');
       near(appearance.right, section.contentRight, '.appearance-controls reaches the settings section right edge');
       near(appearance.right, pane.contentRight, '.appearance-controls reaches the page padded right edge');
       verify(appearance.scrollWidth <= appearance.clientWidth + 1, '.appearance-controls does not overflow horizontally');
+      verify(JSON.stringify(groups.map(group => group.title)) === JSON.stringify(['Startup', 'Theme', 'Conversation', 'Window']), 'Appearance has the four ordered preference sections');
+      for (const [index, group] of groups.entries()) {
+        near(group.left, appearance.contentLeft, `${group.title} starts at the controls left edge`);
+        near(group.right, appearance.contentRight, `${group.title} fills the controls width`);
+        verify(group.scrollWidth <= group.clientWidth + 1, `${group.title} does not overflow horizontally`);
+        if (index) verify(group.top >= groups[index - 1].bottom - 1, 'Appearance sections stack without overlap');
+        verify(group.rows.length > 0, `${group.title} contains grouped setting rows`);
+        for (const row of group.rows) {
+          verify(row.left >= group.contentLeft - 1 && row.right <= group.contentRight + 1, `${group.title} row stays inside its section`);
+          verify(row.scrollWidth <= row.clientWidth + 1, `${group.title} row does not overflow horizontally`);
+        }
+      }
     }
   }
 }

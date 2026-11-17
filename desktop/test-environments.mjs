@@ -343,8 +343,10 @@ try {
   check(await picker.inputValue() === A, 'Machines preserves the active chat owner');
   const machineRows = await page.locator('.machines-server-card h2').allTextContents();
   await openSettings(page, { page: 'home' });
-  check(await page.getByRole('heading', { name: 'Settings', exact: true }).isVisible(), 'One Settings landing page');
-  await page.locator('.settings-link-list a[href="#machines"]').click();
+  check(await page.getByRole('heading', { name: 'Settings', exact: true, level: 1 }).isVisible(), 'One Settings landing page');
+  check(await page.getByRole('group', { name: 'Theme', exact: true }).isVisible(), 'Settings root shows appearance preferences');
+  check(await page.locator('.settings-workspace .settings-link-list a').count() === 0, 'Settings root has no Machines or Appearance menu links');
+  await openSettings(page, { page: 'servers' });
   await page.locator('.server-settings-list a[data-server-id]').nth(2).waitFor();
   check(await page.locator('.server-settings-list a[data-server-id]').count() === 3, 'Each machine has a server settings entry');
   assert.equal(new URL(page.url()).hash, '#machines');

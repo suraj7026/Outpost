@@ -37,11 +37,8 @@ export async function openSettings(page, { server = 'legacy', tab = 'general', p
   await page.locator('#app-sidebar[data-motion="open"]').waitFor();
   if (destination === 'home' || destination === 'appearance') {
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.locator('.settings-link-list a[href="#machines"]').waitFor();
-    if (destination === 'appearance') {
-      await page.locator('.settings-link-list a[href="#settings/appearance"]').click();
-      await page.getByRole('heading', { name: 'Appearance', level: 1, exact: true }).waitFor();
-    }
+    await page.getByRole('heading', { name: 'Settings', level: 1, exact: true }).waitFor();
+    await page.locator('.appearance-controls').waitFor();
     return;
   }
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: 'Machines', exact: true }).click();

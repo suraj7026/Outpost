@@ -320,6 +320,8 @@ button { min-height: 34px; }
 .web-shell.sidebar-push { grid-template-columns: 0px minmax(0, 1fr); }
 .web-shell.sidebar-push.sidebar-visible { grid-template-columns: var(--sidebar-width) minmax(0, 1fr); }
 .sidebar-push .web-sidebar { position: relative; inset: auto; width: var(--sidebar-width); padding: 15px 16px 12px calc(16px - var(--shell-inset)); grid-column: 1; grid-row: 1; border: 0; border-radius: 0; box-shadow: none; }
+/* Share the native traffic lights' midpoint from the window top to New task. */
+.sidebar-push .sidebar-chrome { height: calc(32px + 15px + var(--shell-inset)); margin: calc(-15px - var(--shell-inset)) 0 0; }
 .sidebar-push .main-shell { grid-column: 2; grid-row: 1; }
 .sidebar-present .web-sidebar { display: flex; }
 .app-shell:not(.sidebar-present) .web-sidebar { display: none; }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ChevronRight, Monitor, Plus, Server, RefreshCw } from "lucide-react";
+import { ArrowLeft, ChevronRight, Plus, Server, RefreshCw, SlidersHorizontal } from "lucide-react";
 import type { Connection } from "./useConnection";
 import { EnvironmentContext } from "./EnvironmentContext";
 import { ownerKey, type Metadata, type MutateRegistry } from "./Environments";
@@ -42,15 +42,11 @@ export default function SettingsWorkspace({ registry, connections, groups, appea
   const title = adding ? "Add server" : id ? owner?.label ?? "Server unavailable" : section === "servers" ? "Servers" : section === "appearance" ? "Appearance" : "Settings";
   return <main className="page settings-page settings-workspace settings-parity">
     {section && <a className="settings-back-link" href={section === "servers" ? "#machines" : "#settings"}><ArrowLeft size={14} />{section === "servers" ? "Machines" : "Settings"}</a>}
-    <div className="page-heading">{id && !adding && <span className="settings-header-icon"><Server size={20} /></span>}<div className="settings-header-copy"><h1 ref={heading} tabIndex={-1}>{title}</h1><p>{id && !adding ? "Server settings" : adding ? "Connect an installation or inspect a host over SSH." : section === "servers" ? "Open a server to manage its connection, models and access." : section === "appearance" ? "Preferences for this Mac, independent of your servers." : "Your servers and this Mac, in one place."}</p></div>
+    <div className="page-heading">{(!section || section === "appearance") && <span className="settings-header-icon" aria-hidden="true"><SlidersHorizontal size={20} /></span>}{id && !adding && <span className="settings-header-icon"><Server size={20} /></span>}<div className="settings-header-copy"><h1 ref={heading} tabIndex={-1}>{title}</h1><p>{id && !adding ? "Server settings" : adding ? "Connect an installation or inspect a host over SSH." : section === "servers" ? "Open a server to manage its connection, models and access." : "Preferences for this Mac, independent of your servers."}</p></div>
       {id && !adding && connection && <div className="settings-header-actions"><Badge tone={connection.connected ? 'success' : 'neutral'}>{connection.busy ? 'Working…' : connection.connected ? 'Connected' : connection.info?.lifecycle?.state === 'paused' ? 'Paused' : connection.reconnecting ? 'Reconnecting' : connection.connecting ? 'Connecting' : 'Offline'}</Badge><Button variant="ghost" className="ui-close" aria-label="Reconnect" title="Refresh connection" disabled={connection.busy || connection.connecting || !nativeApp() || recordedPreview()} onClick={() => void connection.connect()}><RefreshCw size={18} /></Button></div>}
       {section === "servers" && !id && <a className="settings-add" href="#settings/servers/new"><Plus size={16} />Add server</a>}
     </div>
-    {!section && <div className="settings-link-list">
-      <a href="#machines"><Server size={20} /><span><strong>Machines</strong><small>Connections, models, Pi, devices and recovery</small></span><ChevronRight size={16} /></a>
-      <a href="#settings/appearance"><Monitor size={20} /><span><strong>Appearance</strong><small>Auto, Light or Dark theme, window and sidebar</small></span><ChevronRight size={16} /></a>
-    </div>}
-    {section === "appearance" && <AppearanceSettings appearance={appearance} />}
+    {(!section || section === "appearance") && <AppearanceSettings appearance={appearance} />}
     {section === "servers" && !id && <div className="settings-link-list server-settings-list">
       {groups.filter(group => !group.archived).map(group => <a key={ownerKey(group.id)} href={`#settings/servers/${ownerKey(group.id)}`} data-server-id={ownerKey(group.id)}>
         <Server size={19} /><span><strong>{group.label}</strong><small>{connections[ownerKey(group.id)]?.info?.endpoint || "Connection not configured"}</small></span>

@@ -45,6 +45,7 @@
 .composer-connection-label { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); white-space: nowrap; }
 .composer-connection-label > span { width: 6px; height: 6px; border-radius: 50%; background: var(--subtle); }
 .composer-connection-label.online > span { background: var(--positive); }
+.composer-connection-label.reconnecting > span { background: var(--warning); }
 .composer-context .new-task-server > summary { min-height: 36px; border-radius: 8px; padding: 6px 10px; }
 .composer-context .new-task-server > summary:hover { background: var(--composer-context-active, #27292c); }
 .server-terminal-identity > svg { width: 18px; height: 18px; stroke-width: 1.7; }
@@ -60,7 +61,7 @@
 @container (max-width: 420px) {
   .composer-stack > :is(.composer, .reply-composer) { padding: 14px 14px 10px; border-radius: 24px; }
   .composer-context { margin-inline: 8px; padding-inline: 10px; }
-  .composer-context:not(.composer-context-run) .composer-connection-label { display: none; }
+  .composer-context:not(.composer-context-run) .composer-connection-label:not(.reconnecting) { display: none; }
 }
 @media (forced-colors: active) {
   .composer-stack .composer-select-field { border: 1px solid ButtonText; }

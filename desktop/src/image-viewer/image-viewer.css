@@ -23,6 +23,9 @@
 .image-zoom-controls button[aria-pressed=true] { background: var(--active); }
 .image-download-status { margin: 0; padding: 0 20px 12px; font-size: 11px; overflow-wrap: anywhere; max-height: 80px; overflow: auto; }
 .chat-image { display: block; width: min(100%, var(--image-width, 360px)); min-width: 0; max-width: 100%; text-align: left; }
+/* Keep whole chat cards centered even when Markdown child rules reset margins. */
+.conversation .chat-image, .conversation .markdown-image-consent,
+.conversation .message .message-markdown > :is(.chat-image, .markdown-image-consent) { margin-inline: auto; }
 .chat-image .artifact-preview { display: block; width: 100%; min-height: 0; padding: 0; margin: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); cursor: zoom-in; }
 .chat-image .artifact-preview:disabled { cursor: default; }
 .chat-image .artifact-preview img { display: block; width: auto; max-width: 100%; height: auto; max-height: 360px; object-fit: contain; border: 0; border-radius: 0; margin: 0 auto; }

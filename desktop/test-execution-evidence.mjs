@@ -40,6 +40,7 @@ try {
       window.__TAURI_INTERNALS__ = { metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } }, transformCallback: () => 1, unregisterCallback() {}, async invoke(command, args) {
         if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: null, environments: {} }, legacy: { endpoint: null, pending: false } };
         if (command === 'disconnect') return;
+        if (command === 'automatic_updates_status' || command === 'automatic_updates_tick') return { enabled: false, targets: [], activeEnvironmentId: null, servers: [] };
         if (command === 'set_sidebar_window_controls') return;
         if (command === 'sidebar_pointer_inside') return false;
         if (command === 'connection_info') return { endpoint: 'Synthetic transport', deviceId: 'fixture', pending: false, nativeSidebar: false };
@@ -86,11 +87,12 @@ try {
     check(await reasoning.getByText('Keep the failure evidence.', { exact: true }).isVisible(), 'Keyboard expansion reveals every reasoning segment');
     await reasoning.locator(':scope > summary').click();
 
-    const completed = conversation.locator('.completed-action-group');
-    check(await completed.count() === 1 && !await completed.evaluate(node => node.open), 'Consecutive successful history is compacted, initially collapsed');
-    assert.deepEqual(await completed.locator('.execution-entry').evaluateAll(nodes => nodes.map(node => node.dataset.recordId)), ['write-success', 'read-success']); checks++;
-    check(!await conversation.locator('[data-record-id="write-success"] > summary').isVisible(), 'Completed group hides its rows until expanded');
-    await completed.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
+    const activity = conversation.locator('.activity-group');
+    check(await activity.count() === 1 && await activity.evaluate(node => node.open), 'Consecutive actions and streams share one expanded stack when failures need attention');
+    assert.deepEqual(await activity.locator('.execution-entry').evaluateAll(nodes => nodes.map(node => node.dataset.recordId)), expectedOrder); checks++;
+    check(await activity.locator('.activity-group-title').textContent() === 'Needs attention', 'Later successes do not hide failure evidence');
+    await activity.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
+    check(await activity.evaluate(node => node.open), 'Keyboard collapse cannot hide a group requiring attention');
     await conversation.locator('[data-record-id="write-success"] > summary').waitFor();
     check(await conversation.getByRole('img', { name: 'Succeeded', exact: true }).count() === 3, 'Successful outcomes retain accessible success dots');
     check(await conversation.getByRole('img', { name: 'Needs review', exact: true }).count() === 1, 'Nonzero exit remains a review outcome');
@@ -149,8 +151,8 @@ try {
     assert.deepEqual(await entries.evaluateAll(nodes => nodes.map(node => node.dataset.recordId)), expectedOrder); checks++;
     await page.getByRole('button', { name: 'Close files and changes', exact: true }).click();
     check(await resourcesButton.getAttribute('aria-expanded') === 'false', 'Resource panel closes without altering the timeline');
-    await completed.locator(':scope > summary').click();
-    check(!await completed.evaluate(node => node.open), 'Completed history can be collapsed again');
+    await activity.locator(':scope > summary').click();
+    check(await activity.evaluate(node => node.open), 'Failure evidence remains visible after resource-panel interactions');
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No horizontal overflow');
     check(await page.evaluate(() => __mutations.length) === 0, 'Viewing history never retries commands');
     check(errors.length === 0, errors.join('\n'));

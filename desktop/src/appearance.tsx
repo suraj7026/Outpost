@@ -1,8 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { call, nativeApp, recordedPreview } from "./api";
 import type { ConversationDetail } from './conversation-detail';
+import { ArrowLeftRight, Contrast, Droplet, House, PanelLeft, Sparkles, TextAlignStart } from 'lucide-react';
+import { Section, SettingRow } from './Interface';
+import AppearancePreview from './AppearancePreview';
 import './appearance-width.css';
+import './appearance-settings.css';
 
 const storageKey = "outpost.appearance.v1";
 const minGlassOpacity = 0;
@@ -139,35 +143,76 @@ export function useAppearance() {
 }
 export type Appearance = ReturnType<typeof useAppearance>;
 
+function AppearanceChoiceRow({ title, description, icon, className = '', children }: {
+  title: string; description: string; icon: ReactNode; className?: string; children: ReactNode;
+}) {
+  const descriptionId = useId();
+  return <SettingRow className={`appearance-choice-row ${className}`} title={title} icon={icon}
+    description={<span id={descriptionId}>{description}</span>}>
+    <fieldset className="appearance-width" aria-describedby={descriptionId}>
+      <legend className="sr-only">{title}</legend>
+      {children}
+    </fieldset>
+  </SettingRow>;
+}
+
+function AppearanceToggleRow({ title, description, icon, checked, disabled, onChange }: {
+  title: string; description: ReactNode; icon: ReactNode; checked: boolean; disabled?: boolean; onChange: (checked: boolean) => void;
+}) {
+  const descriptionId = useId();
+  return <label className="ui-row appearance-toggle">
+    <span className="ui-row-icon" aria-hidden="true">{icon}</span>
+    <span className="ui-row-content"><strong>{title}</strong><span className="ui-row-description" id={descriptionId}>{description}</span></span>
+    <span className="ui-row-actions"><input type="checkbox" role="switch" aria-label={title} aria-describedby={descriptionId}
+      checked={checked} disabled={disabled} onChange={event => onChange(event.target.checked)} /></span>
+  </label>;
+}
+
 export function AppearanceSettings({ appearance }: { appearance: Appearance }) {
-  return <section className="settings-section appearance-settings" aria-labelledby="appearance-heading">
-    <div><h2 id="appearance-heading">Appearance</h2><p>Theme, window and navigation preferences saved on this Mac.</p></div>
-    <div className="appearance-controls">
-      <fieldset className="appearance-width" aria-describedby="startup-page-description">
-        <legend>On startup</legend>
-        <p className="small" id="startup-page-description">Applies next launch. New task home page is the default.</p>
-        <div className="appearance-width-options appearance-detail-options">{(['home', 'last'] as const).map(startupPage => <label key={startupPage}><input type="radio" name="startup-page" value={startupPage} checked={appearance.startupPage === startupPage} onChange={() => appearance.setStartupPage(startupPage)} /><span>{startupPage === 'home' ? 'New task home page' : 'Last working page'}</span></label>)}</div>
-      </fieldset>
-      <fieldset className="appearance-width"><legend>Theme</legend><p className="small">Auto follows your Mac’s appearance. Light and Dark stay as selected.</p><div className="appearance-width-options">{(['auto', 'light', 'dark'] as const).map(theme => <label key={theme}><input type="radio" name="theme" value={theme} checked={appearance.theme === theme} onChange={() => appearance.setTheme(theme)} /><span>{theme[0].toUpperCase() + theme.slice(1)}</span></label>)}</div></fieldset>
-      <fieldset className="appearance-width"><legend>Conversation width</legend><p className="small">Choose the text column width. Avatars sit outside it; the layout fits smaller windows automatically.</p><div className="appearance-width-options">{(['narrow', 'wide', 'large'] as const).map(width => <label key={width}><input type="radio" name="conversation-width" value={width} checked={appearance.conversationWidth === width} onChange={() => appearance.setConversationWidth(width)} /><span>{width[0].toUpperCase() + width.slice(1)}</span></label>)}</div></fieldset>
-      <fieldset className="appearance-width" aria-describedby="conversation-detail-description">
-        <legend>Conversation detail</legend>
-        <p className="small" id="conversation-detail-description">Compact keeps all tool calls and thinking traces collapsed by default. Extended expands them by default. Every row remains individually expandable. Normal responses and execution are unchanged.</p>
-        <div className="appearance-width-options appearance-detail-options">{(['compact', 'extended'] as const).map(detail => <label key={detail}><input type="radio" name="conversation-detail" value={detail} checked={appearance.conversationDetail === detail} onChange={() => appearance.setConversationDetail(detail)} /><span>{detail[0].toUpperCase() + detail.slice(1)}</span></label>)}</div>
-      </fieldset>
-      <label className="appearance-toggle"><span>Frosted glass<small>Blur the desktop behind the sidebar and window frame.</small></span>
-        <input type="checkbox" role="switch" aria-label="Frosted glass" checked={appearance.frosted} disabled={!appearance.supported} onChange={event => appearance.setFrosted(event.target.checked)} />
-      </label>
-      {!appearance.supported && <p className="small">Available in the macOS desktop app.</p>}
-      {appearance.reduced && <p className="small">Using a solid background to respect reduced transparency or increased contrast.</p>}
-      <label className="appearance-opacity" htmlFor="glass-opacity"><span>Glass opacity <output htmlFor="glass-opacity">{appearance.opacity}%</output></span>
-        <input id="glass-opacity" type="range" min={minGlassOpacity} max={maxGlassOpacity} step="1" value={appearance.opacity} disabled={!appearance.supported || !appearance.frosted || appearance.reduced} onChange={event => appearance.setOpacity(Number(event.target.value))} />
-        <small>0% is clear, 100% is solid, and frost is strongest in the middle.</small>
-      </label>
-      <label className="appearance-toggle"><span>Collapse sidebar<small>Hover the left edge to reveal it. Pin it inside the sidebar, or use ⌘B.</small></span>
-        <input type="checkbox" role="switch" aria-label="Collapse sidebar" checked={appearance.sidebarCollapsed} onChange={event => appearance.setSidebarCollapsed(event.target.checked)} />
-      </label>
+  return <div className="appearance-settings appearance-preferences">
+    <div className="appearance-controls ui-stack">
+      <Section title="Startup" description="What Outpost opens when it starts.">
+        <AppearanceChoiceRow title="On startup" className="appearance-startup-row" icon={<House size={18} />}
+          description="Applies next launch. New task home page is the default.">
+          <div className="appearance-width-options appearance-detail-options">{(['home', 'last'] as const).map(startupPage => <label key={startupPage}><input type="radio" name="startup-page" value={startupPage} checked={appearance.startupPage === startupPage} onChange={() => appearance.setStartupPage(startupPage)} /><span>{startupPage === 'home' ? 'New task home page' : 'Last working page'}</span></label>)}</div>
+        </AppearanceChoiceRow>
+      </Section>
+      <Section title="Theme" description="Auto follows your Mac’s appearance.">
+        <AppearanceChoiceRow title="Theme" icon={<Contrast size={18} />} description="Light and Dark stay as selected.">
+          <div className="appearance-width-options">{(['auto', 'light', 'dark'] as const).map(theme => <label key={theme}><input type="radio" name="theme" value={theme} checked={appearance.theme === theme} onChange={() => appearance.setTheme(theme)} /><span>{theme[0].toUpperCase() + theme.slice(1)}</span></label>)}</div>
+        </AppearanceChoiceRow>
+      </Section>
+      <Section title="Conversation" description="Text measure and how much execution detail is expanded.">
+        <AppearanceChoiceRow title="Conversation width" icon={<ArrowLeftRight size={18} />}
+          description="Avatars sit outside the text column; smaller windows adapt automatically.">
+          <div className="appearance-width-options">{(['narrow', 'wide', 'large'] as const).map(width => <label key={width}><input type="radio" name="conversation-width" value={width} checked={appearance.conversationWidth === width} onChange={() => appearance.setConversationWidth(width)} /><span>{width[0].toUpperCase() + width.slice(1)}</span></label>)}</div>
+        </AppearanceChoiceRow>
+        <AppearanceChoiceRow title="Conversation detail" className="appearance-detail-row" icon={<TextAlignStart size={18} />}
+          description="Compact collapses tool calls and thinking by default. Extended expands them. Every row remains individually expandable; responses and execution are unchanged.">
+          <div className="appearance-width-options appearance-detail-options">{(['compact', 'extended'] as const).map(detail => <label key={detail}><input type="radio" name="conversation-detail" value={detail} checked={appearance.conversationDetail === detail} onChange={() => appearance.setConversationDetail(detail)} /><span>{detail[0].toUpperCase() + detail.slice(1)}</span></label>)}</div>
+        </AppearanceChoiceRow>
+      </Section>
+      <Section title="Window" description="Sidebar behavior and the window material.">
+        <AppearancePreview frosted={appearance.supported && appearance.frosted} opacity={appearance.opacity}
+          collapsed={appearance.sidebarCollapsed} reducedTransparency={appearance.reduced} />
+        <AppearanceToggleRow title="Frosted glass" icon={<Sparkles size={18} />} checked={appearance.frosted}
+          disabled={!appearance.supported} onChange={appearance.setFrosted}
+          description={<>Blur the desktop behind the sidebar and window frame.
+            {!appearance.supported && <span className="appearance-support-note">Available in the macOS desktop app.</span>}
+            {appearance.reduced && <span className="appearance-support-note">Using a solid background to respect reduced transparency or increased contrast.</span>}
+          </>} />
+        <SettingRow className="appearance-opacity-row" title={<label htmlFor="glass-opacity">Glass opacity</label>} icon={<Droplet size={18} />}
+          description={<span id="glass-opacity-description">0% is clear, 100% is solid, and frost is strongest in the middle.</span>}>
+          <div className="appearance-opacity">
+            <input id="glass-opacity" aria-describedby="glass-opacity-description" type="range" min={minGlassOpacity} max={maxGlassOpacity} step="1" value={appearance.opacity}
+              disabled={!appearance.supported || !appearance.frosted || appearance.reduced} onChange={event => appearance.setOpacity(Number(event.target.value))} />
+            <output htmlFor="glass-opacity">{appearance.opacity}%</output>
+          </div>
+        </SettingRow>
+        <AppearanceToggleRow title="Collapse sidebar" icon={<PanelLeft size={18} />} checked={appearance.sidebarCollapsed}
+          onChange={appearance.setSidebarCollapsed} description="Hover the left edge to reveal it. Pin it inside the sidebar, or use ⌘B." />
+      </Section>
       {appearance.error && <p role="alert" className="error-text">{appearance.error}</p>}
     </div>
-  </section>;
+  </div>;
 }

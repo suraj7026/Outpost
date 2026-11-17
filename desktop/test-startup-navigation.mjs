@@ -231,10 +231,11 @@ async function appearance(page) {
   await startupGroup(page).waitFor();
 }
 async function setStartup(page, mode, persist = true) {
+  const hash = new URL(page.url()).hash;
   await startupRadio(page, mode).check();
   check(await startupRadio(page, mode).isChecked(), `Startup radio selects ${mode}`);
-  await heading(page, 'Appearance').waitFor();
-  equal(new URL(page.url()).hash, '#settings/appearance', 'Changing startup preference does not navigate immediately');
+  await heading(page, hash === '#settings/appearance' ? 'Appearance' : 'Settings').waitFor();
+  equal(new URL(page.url()).hash, hash, 'Changing startup preference does not navigate immediately');
   if (persist) {
     await page.waitForFunction(({ key, mode }) => JSON.parse(localStorage.getItem(key))?.startupPage === mode, { key: appearanceKey, mode });
     equal((await stored(page, appearanceKey)).startupPage, mode, 'Startup preference is saved through the controls');
@@ -431,12 +432,15 @@ async function run() {
     });
   }
 
-  await scenario('Remember Settings and its Appearance section', { appearance: lastPreference }, async page => {
+  await scenario('Remember Settings preferences and the legacy Appearance route', { appearance: lastPreference }, async page => {
     await openSettings(page, { page: 'home' });
     await savedLocation(page, { page: 'connection', hash: '#settings' });
     await freshLaunch(page); await heading(page, 'Settings').waitFor();
     equal(new URL(page.url()).hash, '#settings', 'Settings root hash is restored');
-    await page.locator('.settings-link-list a[href="#settings/appearance"]').click();
+    await startupGroup(page).waitFor();
+    check(await page.getByRole('group', { name: 'Theme', exact: true }).isVisible(), 'Restored Settings root shows appearance preferences');
+    equal(await page.locator('.settings-workspace .settings-link-list a').count(), 0, 'Settings root has no Machines or Appearance menu links');
+    await page.evaluate(() => { window.location.hash = '#settings/appearance'; });
     await heading(page, 'Appearance').waitFor();
     await savedLocation(page, { page: 'connection', hash: '#settings/appearance' });
     await freshLaunch(page); await heading(page, 'Appearance').waitFor();

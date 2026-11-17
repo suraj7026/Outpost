@@ -67,8 +67,13 @@ try {
       const box = selector => { const rect = document.querySelector(selector).getBoundingClientRect(); return { x: rect.x, y: rect.y, width: rect.width }; };
       return { sidebar: box('#app-sidebar'), navigation: box('.web-sidebar nav'), chrome: box('.sidebar-chrome'), control: box('.sidebar-chrome button') };
     });
-    const centeredControls = () => page.evaluate(() => Math.abs(window.__controlFrames.at(-1).y - document.querySelector('.new-task-button').getBoundingClientRect().top / 2) < .5);
-    check(await centeredControls(), 'Traffic lights are vertically centered between the window top and New task');
+    const centeredControls = () => page.evaluate(() => {
+      const nativeY = window.__controlFrames.at(-1).y;
+      const button = document.querySelector('.sidebar-chrome button').getBoundingClientRect();
+      return Math.abs(nativeY - document.querySelector('.new-task-button').getBoundingClientRect().top / 2) < .5
+        && Math.abs(nativeY - (button.top + button.height / 2)) < .5;
+    });
+    check(await centeredControls(), 'Traffic lights and sidebar control share the vertical midpoint between the window top and New task');
     const anchor = await geometry();
     const nativeRequests = await page.evaluate(() => window.__controlFrames.length);
     for (const width of [1601, 1600, 1599, 1151, 1150, 1149, 901, 900, 901, 1151, 1320]) {

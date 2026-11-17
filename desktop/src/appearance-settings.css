@@ -1,0 +1,50 @@
+.appearance-preferences {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  container: appearance / inline-size;
+  min-width: 0;
+}
+.appearance-preferences > .appearance-controls { gap: 24px; min-width: 0; }
+.appearance-preferences .ui-section-heading p { margin: 4px 0 0; }
+.appearance-preferences .ui-row { flex-wrap: nowrap; gap: 14px; }
+.appearance-preferences .ui-row-content { flex: 1; min-width: 0; }
+.appearance-preferences .ui-row-actions { min-width: 0; margin-left: 0; }
+.appearance-preferences .appearance-choice-row .ui-row-actions { flex: 0 1 300px; }
+.appearance-preferences .appearance-startup-row .ui-row-actions { flex-basis: 360px; }
+.appearance-preferences .appearance-detail-row .ui-row-actions { flex-basis: 240px; }
+.appearance-preferences .appearance-width { width: 100%; }
+.appearance-preferences .appearance-width-options { max-width: none; }
+.appearance-preferences .appearance-width-options label { font-size: 13px; }
+.appearance-preferences .ui-row.appearance-toggle { justify-content: flex-start; gap: 14px; }
+.appearance-preferences .appearance-toggle > .ui-row-content,
+.appearance-preferences .appearance-toggle .ui-row-description { display: block; }
+.appearance-preferences .appearance-toggle > .ui-row-actions { display: flex; }
+.appearance-preferences .appearance-support-note { display: block; margin-top: 4px; }
+.appearance-preferences .appearance-opacity { display: flex; align-items: center; gap: 12px; width: 208px; max-width: 100%; }
+.settings-workspace .appearance-preferences .appearance-opacity input[type="range"] {
+  flex: 1;
+  width: 160px;
+  min-width: 0;
+  min-height: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--muted);
+}
+.appearance-preferences .appearance-opacity output { flex: none; min-width: 4ch; font-size: 12px; text-align: right; }
+.appearance-preferences .appearance-opacity input:disabled { opacity: .5; cursor: not-allowed; }
+.appearance-preferences .ui-row:has(input:focus-visible) { background-color: var(--focus-surface); }
+
+@container appearance (max-width: 700px) {
+  .appearance-preferences .appearance-choice-row { flex-wrap: wrap; }
+  .appearance-preferences .appearance-choice-row > .ui-row-content { flex-basis: calc(100% - 48px); }
+  .appearance-preferences .appearance-choice-row > .ui-row-actions { flex: 0 1 360px; width: calc(100% - 48px); max-width: calc(100% - 48px); margin-left: 48px; }
+}
+@container appearance (max-width: 460px) {
+  .appearance-preferences .appearance-opacity-row { flex-wrap: wrap; }
+  .appearance-preferences .appearance-opacity-row > .ui-row-content { flex-basis: calc(100% - 48px); }
+  .appearance-preferences .appearance-opacity-row > .ui-row-actions { flex: 1; margin-left: 48px; }
+  .appearance-preferences .appearance-opacity { width: 100%; }
+}

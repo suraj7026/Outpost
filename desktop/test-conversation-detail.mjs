@@ -5,6 +5,7 @@ import { dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, webkit } from 'playwright';
 import { openSettings } from './settings-test-navigation.mjs';
+import { openInitialTestChat } from './chat-test-navigation.mjs';
 
 // Build first, then run: node desktop/test-conversation-detail.mjs
 // Optional: OUTPOST_TEST_BROWSER=chromium|webkit, OUTPOST_TEST_FILTER=<case substring>, OUTPOST_TEST_DIST=<built directory>.
@@ -131,6 +132,13 @@ function installTransport({ records, options, storageKey, environmentId }) {
         control.ready = true;
         return new Promise(() => {});
       }
+      if (bound && command === 'artifact' && args.id === 'boundary-image' && args.hash === 'synthetic-boundary-image') {
+        const canvas = document.createElement('canvas');
+        canvas.width = 80; canvas.height = 50;
+        const context = canvas.getContext('2d');
+        context.fillStyle = '#446688'; context.fillRect(0, 0, 80, 50);
+        return canvas.toDataURL('image/png').split(',')[1];
+      }
       if (command === 'send_command') control.commands.push({ command: wireCommand, args });
       control.unexpected.push({ command: wireCommand, args });
       throw new Error(`Unexpected IPC (execution is forbidden): ${wireCommand}`);
@@ -167,7 +175,30 @@ async function screenshot(page, name) {
 }
 const entry = (page, id) => page.locator(`.conversation .execution-entry[data-record-id="${id}"]`);
 const reasoning = page => page.locator('.conversation .run-reasoning');
-const history = page => page.locator('.conversation .completed-action-group');
+const activity = (page, id) => page.locator('.conversation .activity-group').filter({ has: page.locator(`.execution-entry[data-record-id="${id}"]`) });
+const history = page => page.locator('.conversation .activity-group').filter({ has: page.locator('.execution-entry:is([data-record-id="history-one"], [data-record-id="other-history-one"])') });
+async function rememberExecution(page, id) {
+  await entry(page, id).evaluate((node, key) => {
+    window.__activityNodes ??= new Map();
+    window.__activityNodes.set(key, { row: node, stack: node.parentElement, group: node.closest('.activity-group') });
+  }, id);
+}
+async function sameExecution(page, id, original = id) {
+  equal(await entry(page, id).evaluate((node, key) => {
+    const saved = window.__activityNodes.get(key);
+    return { row: node === saved.row, stack: node.parentElement === saved.stack, group: node.closest('.activity-group') === saved.group, connected: saved.row.isConnected && saved.group.isConnected };
+  }, original), { row: true, stack: true, group: true, connected: true }, `${original} → ${id}: row, stack and group keep their DOM identity`);
+}
+async function freshRun(page, id, second = 40) {
+  await emit(page, { type: 'settled', record: row('message', id, second, { author: 'owner', text: `Inspect ${id}.` }) });
+  return page.locator(`.conversation-run[data-run-id="run:after:${id}"]`);
+}
+const actionRecord = (id, second, state = 'running', data = {}) => row('action', id, second, {
+  tool: 'command.run', arguments: { argv: ['printf', id] }, state, ...data,
+});
+const streamRecord = (id, second, data = {}) => row('tool_stream', id, second, {
+  name: 'outpost_action', arguments: { tool: 'command.run', arguments: { argv: ['printf', id] } }, state: 'running', streaming: true, output: 'Partial synthetic output', ...data,
+}, 0);
 const detailGroup = page => page.getByRole('group', { name: 'Conversation detail', exact: true });
 const radio = (page, name) => detailGroup(page).getByRole('radio', { name, exact: true });
 const saved = page => page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
@@ -209,7 +240,13 @@ async function defaults(page, extended, other = false) {
   equal(await reasoning(page).count(), 1, 'Reasoning stays one aggregate per run');
   await openState(reasoning(page), extended, 'Aggregate reasoning obeys the detail default');
   equal(await reasoning(page).locator('.reasoning-segments pre').count(), other ? 1 : 2, 'All reasoning segments are retained');
+  equal(await page.locator('.conversation .activity-group').count(), other ? 1 : 2, 'Consecutive action and stream records share a group without crossing message boundaries');
+  equal(await page.locator('.conversation .activity-group > summary + .activity-stack > .execution-entry').count(), other ? 2 : 9, 'Every execution row lives in the activity stack');
   equal(await history(page).count(), 1, 'Consecutive completed history retains its outer disclosure');
+  if (!other) {
+    await openState(activity(page, 'history-failed'), true, 'Active and failed work remains expanded regardless of preference');
+    equal(await activity(page, 'history-failed').locator('.execution-entry').count(), 7, 'Failure and consecutive live action/stream rows share one stack');
+  }
   await openState(history(page), extended, 'Historical outer group obeys the detail default');
   equal(await entry(page, other ? 'other-history-one' : 'history-one').locator(':scope > summary').isVisible(), extended, 'History rows are visible only through the expanded outer group');
   equal(await reasoning(page).locator(':scope > summary').getByText('Thinking', { exact: true }).count(), 1, 'Settled reasoning says Thinking, not an invented duration');
@@ -224,12 +261,14 @@ async function scenario(engine, name, options, run) {
   page.on('pageerror', error => errors.push(error.message));
   try {
     await page.route('**/*', route => {
-      if (route.request().url().startsWith(origin + '/')) return route.continue();
+      // WebKit routes local Blob previews too; these contain synthetic IPC bytes, not network requests.
+      if (route.request().url().startsWith(origin + '/') || route.request().url().startsWith(`blob:${origin}/`)) return route.continue();
       remote.push(route.request().url()); return route.abort();
     });
     await page.addInitScript(installTransport, { records: fixture(options), options, storageKey, environmentId });
     await page.goto(origin);
     await page.waitForFunction(() => window.__detail.ready);
+    await openInitialTestChat(page);
     await chat(page);
     await run(page);
     equal(await page.evaluate(() => window.__detail.commands), [], 'Preferences and disclosure inspection never execute or approve work');
@@ -241,6 +280,13 @@ async function scenario(engine, name, options, run) {
     failures.push(`${engine.name()} / ${name}: ${error.message}`);
     console.error(`FAIL ${engine.name()} / ${name}\n${error.stack}`);
     if (errors.length) console.error('PAGE ERRORS', errors);
+    if (remote.length) console.error('BLOCKED REQUESTS', remote);
+    const unexpected = await page.evaluate(() => window.__detail?.unexpected);
+    if (unexpected?.length) console.error('UNEXPECTED IPC', unexpected);
+    if (name.includes('text-image-empty-and-owner-boundaries')) console.error('IMAGE BOUNDARY', await page.locator('#artifact-boundary-image').evaluateAll(nodes => nodes.map(node => ({
+      text: node.textContent, bounds: node.getBoundingClientRect().toJSON(),
+      images: [...node.querySelectorAll('img')].map(image => ({ complete: image.complete, width: image.naturalWidth, src: image.currentSrc })),
+    }))));
   } finally { await page.close(); }
 }
 
@@ -264,7 +310,7 @@ try {
           { tag: 'INPUT', type: 'radio', name: 'conversation-detail' }, { tag: 'INPUT', type: 'radio', name: 'conversation-detail' },
         ], 'Detail selection uses native mutually exclusive radios');
         equal((await saved(page)).conversationDetail, 'compact', 'Sanitized detail preference is saved as compact');
-                if (name === 'absent') await screenshot(page, `${engine.name()}-settings`);
+        if (name === 'absent') await screenshot(page, `${engine.name()}-settings`);
       });
 
       await scenario(engine, 'extended-persisted-reload-and-chat-navigation', { stored: JSON.stringify({ conversationDetail: 'extended', theme: 'light', conversationWidth: 'wide', opacity: 61 }) }, async page => {
@@ -317,6 +363,7 @@ try {
             for (const kind of ['tool_stream', 'action']) {
               const id = `${kind === 'action' ? 'action' : 'stream'}-${type.key}`;
               const details = entry(page, id);
+              await rememberExecution(page, id);
               await toggle(details);
               await update(page, kind, id, kind === 'action' ? { state: 'running', result: { stdout: 'First action revision' } } : { output: 'First stream revision' }, kind === 'action' ? 'settled' : 'live');
               await openState(details, !extended, `${kind}/${type.key}: manual choice survives updates`);
@@ -330,13 +377,15 @@ try {
                 await emit(page, { type: 'settled', record: row('action', linkedId, 25, { tool: type.tool, state: 'dispatching', arguments: type.arguments }) });
                 equal(await details.count(), 0, 'Linked stream is replaced, not duplicated');
                 await openState(entry(page, linkedId), !extended, `${type.key}: stream-to-action linking preserves the reader choice`);
+                await sameExecution(page, linkedId, id);
                 await update(page, kind, id, { streaming: false, state: 'finished' });
                 await update(page, 'action', linkedId, { state: 'succeeded', result: { stdout: 'Linked final result', exitCode: 0 } });
                 await openState(entry(page, linkedId), !extended, `${type.key}: linked completion does not reset the disclosure`);
-                check(!await entry(page, linkedId).evaluate(node => !!node.closest('.completed-action-group')), 'Newly completed live work is not remounted as historical work');
+                await sameExecution(page, linkedId, id);
               } else {
                 await update(page, kind, id, { state: 'succeeded', result: { stdout: 'Final result', exitCode: 0 } });
                 await openState(details, extended, `${type.key}: action completion preserves the reader choice`);
+                await sameExecution(page, id);
               }
             }
           }
@@ -353,6 +402,207 @@ try {
           await update(page, 'message', 'history-reasoning-two', { thinking: 'Another reasoning revision.' });
           await openState(reasoning(page), extended, 'Both aggregate reasoning choices persist');
           equal(await reasoning(page).count(), 1, 'Updates never split the per-run aggregate');
+        });
+
+        await scenario(engine, `${mode}-activity-uninspected-lifecycle-and-explicit-expansion`, options, async page => {
+          const run = await freshRun(page, 'activity-owner');
+          await emit(page, { type: 'live', record: streamRecord('activity-first', 41) });
+          const group = activity(page, 'activity-first');
+          await rememberExecution(page, 'activity-first');
+          equal(await group.getAttribute('data-single'), 'true', 'The first singleton already owns its stable group');
+          equal(await group.locator(':scope > summary').isVisible(), false, 'Singleton hides only the redundant outer summary');
+          check(await entry(page, 'activity-first').locator(':scope > summary').isVisible(), 'Singleton row stays visible');
+          await openState(group, true, 'Singleton wrapper is open in both modes');
+
+          await emit(page, { type: 'settled', record: actionRecord('activity-second', 42) });
+          await sameExecution(page, 'activity-first');
+          equal(await run.locator('.activity-group').count(), 1, 'Appending active work grows the existing stack');
+          equal(await group.getAttribute('data-single'), 'false', 'Second row reveals the outer summary');
+          check(await group.locator(':scope > summary').isVisible(), 'Multi-row summary is visible');
+          equal(await group.locator('.activity-group-title').textContent(), 'Working', 'Active-only group is working, not complete');
+          equal(await group.locator('.activity-group-progress').textContent(), '0 of 2 actions complete', 'Progress does not count active work as success');
+          equal(await group.locator(':scope > .activity-stack > .execution-entry').count(), 2, 'Action and stream occupy the same stack');
+          await screenshot(page, `${engine.name()}-${mode}-activity-live`);
+          await update(page, 'tool_stream', 'activity-first', { state: 'finished', streaming: false });
+          await openState(group, true, 'Completing one row cannot collapse remaining active work');
+          equal(await group.locator('.activity-group-progress').textContent(), '1 of 2 actions complete', 'Only the completed row is counted');
+          await update(page, 'action', 'activity-second', { state: 'succeeded', result: { stdout: 'Completed second action', exitCode: 0 } });
+          await openState(group, extended, 'Without any group or row interaction, last completion follows the detail default');
+          equal(await group.locator('.activity-group-title').textContent(), '2 actions completed', 'All-complete summary has an accurate count');
+          equal(await group.locator('.thinking-indicator[data-active="true"]').count(), 0, 'Completed group has no stale activity indicator');
+          await sameExecution(page, 'activity-first');
+          if (extended) await toggle(group, 'Space');
+          await openState(group, false, 'Completed group can be collapsed with the keyboard');
+          await emit(page, { type: 'live', record: streamRecord('activity-third', 43) });
+          await openState(group, true, 'New active work reopens even an explicitly collapsed group');
+          check(await entry(page, 'activity-third').locator(':scope > summary').isVisible(), 'Appended active row is visible');
+          await sameExecution(page, 'activity-first');
+          await toggle(group, 'Enter');
+          await openState(group, true, 'Enter cannot hide active work');
+          await toggle(group, 'Space');
+          await openState(group, true, 'Space cannot hide active work');
+          await update(page, 'tool_stream', 'activity-third', { state: 'finished', streaming: false });
+          await openState(group, false, 'Completion restores the compact default or prior explicit collapse');
+          await toggle(group, 'Enter');
+          await openState(group, true, 'Explicit outer expansion works without inspecting a row');
+          await emit(page, { type: 'settled', record: actionRecord('activity-fourth', 44) });
+          await update(page, 'action', 'activity-fourth', { state: 'succeeded', result: { exitCode: 0 } });
+          await openState(group, true, 'Explicit outer expansion survives another active-to-complete cycle');
+          await toggle(group, 'Space');
+          await update(page, 'action', 'activity-second', { result: { stdout: 'Revised completed output', exitCode: 0 } });
+          await openState(group, false, 'Explicit outer collapse survives child revisions');
+          await sameExecution(page, 'activity-first');
+          await setDetail(page, extended ? 'Compact' : 'Extended');
+          await openState(group, !extended, 'Changing preferences discards the prior manual outer choice');
+          await toggle(group);
+          await setDetail(page, extended ? 'Extended' : 'Compact');
+          await openState(group, extended, 'Returning to the original preference resets the outer choice again');
+        });
+
+        await scenario(engine, `${mode}-activity-completed-singleton-remains-visible`, options, async page => {
+          await freshRun(page, 'singleton-owner');
+          await emit(page, { type: 'settled', record: actionRecord('singleton-first', 41, 'succeeded', { result: { stdout: 'Singleton completed', exitCode: 0 } }) });
+          const group = activity(page, 'singleton-first');
+          await rememberExecution(page, 'singleton-first');
+          await openState(group, true, 'Even a completed singleton keeps its only row visible');
+          equal(await group.getAttribute('data-single'), 'true', 'Completed singleton uses the same group structure');
+          equal(await group.locator(':scope > summary').isVisible(), false, 'Completed singleton hides only the redundant outer header');
+          check(await entry(page, 'singleton-first').locator(':scope > summary').isVisible(), 'Completed singleton is not lost to compact auto-collapse');
+          await openState(entry(page, 'singleton-first'), extended, 'Completed singleton row still obeys the detail preference');
+          await emit(page, { type: 'settled', record: actionRecord('singleton-second', 42, 'succeeded', { result: { exitCode: 0 } }) });
+          await sameExecution(page, 'singleton-first');
+          await openState(group, extended, 'Appending a second completed row follows the outer detail default without remounting');
+        });
+
+        for (const inspection of ['pointer', 'focus']) await scenario(engine, `${mode}-activity-${inspection}-inspection-survives-completion`, options, async page => {
+          await freshRun(page, 'inspected-owner');
+          await emit(page, { type: 'settled', record: actionRecord('inspected-first', 41, 'running', { result: { stdout: 'Output being inspected' } }) });
+          await emit(page, { type: 'settled', record: actionRecord('inspected-second', 42, 'succeeded', { result: { exitCode: 0 } }) });
+          const details = entry(page, 'inspected-first');
+          const group = activity(page, 'inspected-first');
+          await rememberExecution(page, 'inspected-first');
+          if (inspection === 'pointer') {
+            if (!extended) await details.locator(':scope > summary').click();
+            await details.locator('.execution-output').click();
+          } else {
+            if (!extended) await toggle(details, 'Space');
+            await details.locator('.execution-output').focus();
+          }
+          await frames(page);
+          await openState(details, true, 'Inspected row is expanded before completion');
+          await update(page, 'action', 'inspected-first', { state: 'succeeded', result: { stdout: 'Final inspected output', exitCode: 0 } });
+          await openState(group, true, `${inspection} inspection prevents completed compact content from disappearing`);
+          await openState(details, true, 'Completion preserves the individual disclosure choice');
+          check(await details.getByText('Final inspected output', { exact: true }).isVisible(), 'Final output remains visible after completion');
+          await sameExecution(page, 'inspected-first');
+          if (inspection === 'focus') check(await details.locator('.execution-output').evaluate(node => document.activeElement === node), 'Focused output retains focus across completion');
+          await setDetail(page, extended ? 'Compact' : 'Extended');
+          await openState(group, !extended, 'Preference change resets inspected-group expansion');
+          await setDetail(page, extended ? 'Extended' : 'Compact');
+          await openState(group, extended, 'Inspection does not leak into the next preference generation');
+        });
+
+        for (const actionFirst of [false, true]) await scenario(engine, `${mode}-activity-first-stream-alias-keeps-group-and-row-${actionFirst ? 'action-before-link' : 'link-before-action'}`, options, async page => {
+          await freshRun(page, 'alias-owner');
+          await emit(page, { type: 'live', record: streamRecord('alias-stream', 41) });
+          await rememberExecution(page, 'alias-stream');
+          await toggle(entry(page, 'alias-stream'));
+          if (actionFirst) await emit(page, { type: 'settled', record: actionRecord('alias-action', 45) });
+          await update(page, 'tool_stream', 'alias-stream', { actionId: 'alias-action' }, 'live');
+          if (!actionFirst) await emit(page, { type: 'settled', record: actionRecord('alias-action', 45) });
+          equal(await entry(page, 'alias-stream').count(), 0, 'Alias replaces the stream projection rather than duplicating it');
+          await sameExecution(page, 'alias-action', 'alias-stream');
+          await openState(entry(page, 'alias-action'), !extended, 'Singleton stream-to-action replacement preserves row choice');
+          await emit(page, { type: 'settled', record: actionRecord('alias-companion', 46, 'succeeded', { result: { exitCode: 0 } }) });
+          await update(page, 'tool_stream', 'alias-stream', { state: 'finished', streaming: false });
+          await openState(activity(page, 'alias-action'), true, 'Finished stream cannot falsely complete its running action');
+          equal(await activity(page, 'alias-action').locator('.activity-group-progress').textContent(), '1 of 2 actions complete', 'Linked wrapper completion is not counted as another successful action');
+          await update(page, 'action', 'alias-action', { state: 'succeeded', result: { stdout: 'Aliased action completed', exitCode: 0 } });
+          await sameExecution(page, 'alias-action', 'alias-stream');
+          await openState(activity(page, 'alias-action'), true, 'Inspection survives linking, append and completion of the first row');
+          await openState(entry(page, 'alias-action'), !extended, 'Final completion still preserves the original row choice');
+        });
+
+        await scenario(engine, `${mode}-activity-text-image-empty-and-owner-boundaries`, options, async page => {
+          const run = await freshRun(page, 'boundary-owner');
+          const pair = async (prefix, second) => {
+            await emit(page, { type: 'records', records: [actionRecord(`${prefix}-one`, second, 'succeeded', { result: { exitCode: 0 } }), actionRecord(`${prefix}-two`, second + 0.1, 'succeeded', { result: { exitCode: 0 } })] });
+            await rememberExecution(page, `${prefix}-one`);
+          };
+          await pair('before-text', 41);
+          await emit(page, { type: 'settled', record: row('message', 'boundary-text', 42, { author: 'assistant', text: 'Text separates tool stacks.' }) });
+          await pair('after-text', 43);
+          await emit(page, { type: 'settled', record: row('artifact', 'boundary-image', 44, { name: 'boundary.png', mime: 'image/png', hash: 'synthetic-boundary-image' }) });
+          await pair('after-image', 45);
+          await emit(page, { type: 'live', record: row('message', 'boundary-empty', 46, { author: 'assistant', text: '', streaming: true }, 0) });
+          await pair('after-empty', 47);
+          const expectedOrder = ['before-text-one', 'boundary-text', 'after-text-one', 'artifact-boundary-image', 'after-image-one', 'boundary-empty', 'after-empty-one'];
+          const order = () => run.locator('.run-content > :not(.run-reasoning)').evaluateAll(nodes => nodes.map(node => node.matches('.activity-group') ? node.querySelector('.execution-entry').dataset.recordId : node.dataset.recordId || node.id));
+          equal(await order(), expectedOrder, 'Text, image and even empty messages divide stacks without reordering content');
+          equal(await run.locator('.activity-group').count(), 4, 'No stack crosses a message or artifact boundary');
+          equal(await run.locator('.activity-group .run-message, .activity-group .stream-artifact').count(), 0, 'Messages and artifacts never become collapsible tool rows');
+          check(await run.getByText('Text separates tool stacks.', { exact: true }).isVisible(), 'Text stays visible between completed stacks');
+          const image = run.locator('#artifact-boundary-image img');
+          await run.locator('#artifact-boundary-image').scrollIntoViewIfNeeded();
+          await image.waitFor();
+          await page.waitForFunction(() => {
+            const image = document.querySelector('#artifact-boundary-image img');
+            return image?.complete && image.naturalWidth > 0;
+          });
+          check(await image.isVisible(), 'Actual decoded image remains visible outside collapsed activity');
+          await update(page, 'message', 'boundary-empty', { text: 'Previously empty message now has text.', streaming: false });
+          equal(await order(), expectedOrder, 'Filling an empty message keeps the existing boundaries');
+          for (const prefix of ['before-text', 'after-text', 'after-image', 'after-empty']) await sameExecution(page, `${prefix}-one`);
+          await update(page, 'message', 'boundary-empty', { text: '' });
+          equal(await order(), expectedOrder, 'Clearing message text does not merge adjacent stacks');
+          await sameExecution(page, 'after-empty-one');
+          const nextRun = await freshRun(page, 'boundary-next-owner', 48);
+          await pair('after-owner', 49);
+          equal(await run.locator('.activity-group').count(), 4, 'New owner turn cannot absorb the preceding stack');
+          equal(await nextRun.locator('.activity-group').count(), 1, 'New owner turn starts its own activity group');
+          await sameExecution(page, 'after-empty-one');
+        });
+
+        for (const [stateName, kind, data, expectedState] of [
+          ['failed', 'action', { state: 'failed' }, 'attention'],
+          ['error', 'tool_stream', { state: 'error', streaming: false }, 'attention'],
+          ['unknown-action', 'action', { state: 'unknown' }, 'attention'],
+          ['unknown-stream', 'tool_stream', { state: 'unknown', streaming: false }, 'attention'],
+          ['pending', 'action', { state: 'pending' }, 'attention'],
+          ['authorized', 'action', { state: 'authorized' }, 'attention'],
+          ['denied', 'action', { state: 'denied' }, 'attention'],
+          ['interrupted', 'tool_stream', { state: 'finished', streaming: false, interrupted: true }, 'attention'],
+          ['cancelled', 'action', { state: 'cancelled' }, 'attention'],
+          ['nonzero-exit', 'action', { state: 'succeeded', result: { stdout: 'Attempt output retained', stderr: 'Synthetic command rejection', exitCode: 7 } }, 'attention'],
+          ['reported-rejection', 'action', { state: 'succeeded', result: { agent_reported_success: false, detail: 'Synthetic execution rejected' } }, 'attention'],
+          ['unrecognized-state', 'action', { state: 'future-server-state' }, 'waiting'],
+        ]) await scenario(engine, `${mode}-activity-${stateName}-cannot-falsely-complete`, options, async page => {
+          await freshRun(page, 'outcome-owner');
+          await emit(page, { type: 'records', records: [actionRecord('outcome-one', 41, 'succeeded'), actionRecord('outcome-two', 42, 'succeeded')] });
+          const group = activity(page, 'outcome-one');
+          if (extended) await toggle(group);
+          await openState(group, false, 'Outcome fixture starts as a collapsed completed group');
+          await emit(page, { type: 'settled', record: kind === 'action' ? actionRecord('outcome-attention', 43, data.state, data) : streamRecord('outcome-attention', 43, data) });
+          await openState(group, expectedState === 'attention' || !extended, 'Attention forces expansion; unrecognized waiting states follow the default or explicit choice');
+          equal(await group.getAttribute('data-state'), expectedState, 'Group reports the actual unresolved outcome');
+          if (expectedState === 'attention') check(await entry(page, 'outcome-attention').locator(':scope > summary').isVisible(), 'Unsuccessful/unresolved row summary stays visible');
+          if (['pending', 'authorized'].includes(stateName)) check(await entry(page, 'outcome-attention').getByRole('button', { name: 'Review', exact: true }).isVisible(), 'Approval controls cannot disappear into previously collapsed activity');
+          equal(await group.locator('.activity-group-progress').textContent(), '2 of 3 actions complete', 'Unsuccessful or unresolved work is excluded from completion count');
+          equal(await group.locator('.activity-complete').count(), 0, 'No success icon on an incomplete group');
+          check(!/actions completed/.test(await group.locator('.activity-group-title').textContent()), 'No false all-complete label');
+          if (expectedState === 'attention') {
+            await toggle(group);
+            await openState(group, true, 'Attention cannot be hidden by keyboard collapse');
+          }
+          if (['nonzero-exit', 'reported-rejection'].includes(stateName)) {
+            const details = entry(page, 'outcome-attention');
+            if (!extended) await toggle(details);
+            check(await details.locator('.action-state').getByLabel('Needs review', { exact: true }).isVisible(), 'Succeeded envelope with rejected execution remains Needs review');
+            if (stateName === 'nonzero-exit') {
+              check(await details.getByText('Exit code 7', { exact: true }).isVisible(), 'Actual nonzero exit code is retained');
+              check(await details.getByText('Synthetic command rejection', { exact: true }).isVisible(), 'Actual rejection output remains inspectable');
+            } else check(await details.getByText('Synthetic execution rejected', { exact: true }).isVisible(), 'Reported rejection detail is retained');
+          }
         });
 
         await scenario(engine, `${mode}-thinking-indicator-lifecycle`, options, async page => {
@@ -406,6 +656,10 @@ try {
 
         for (const state of ['pending', 'authorized']) await scenario(engine, `${mode}-${state}-approval-remains-open`, { ...options, approval: state }, async page => {
           await openState(entry(page, 'approval-action'), extended, 'Timeline approval row follows detail preference');
+          await openState(activity(page, 'approval-action'), true, 'Approval remains visible in its expanded activity stack');
+          equal(await activity(page, 'approval-action').locator('.activity-group-title').textContent(), 'Waiting for approval', 'Approval is not reported as completed activity');
+          await toggle(activity(page, 'approval-action'));
+          await openState(activity(page, 'approval-action'), true, 'Keyboard collapse cannot hide approval controls');
           await entry(page, 'approval-action').getByRole('button', { name: 'Review', exact: true }).click();
           const dialog = page.getByRole('dialog', { name: 'Review the exact action', exact: true });
           await dialog.waitFor();
@@ -436,7 +690,9 @@ try {
         await detailGroup(page).scrollIntoViewIfNeeded();
         await frames(page);
         await fits(detailGroup(page), 'Conversation detail fieldset');
-        await fits(detailGroup(page).locator(':scope > legend'), 'Conversation detail legend');
+        equal(await detailGroup(page).locator(':scope > legend').textContent(), 'Conversation detail', 'Native legend retains the accessible group name');
+        check(await detailGroup(page).locator(':scope > legend').evaluate(node => node.classList.contains('sr-only')), 'Native legend is visually hidden in the row layout');
+        await fits(page.locator('.appearance-choice-row').filter({ has: detailGroup(page) }).locator('.ui-row-content > strong'), 'Conversation detail row title');
         for (const name of ['Compact', 'Extended']) {
           const control = radio(page, name);
           await fits(control.locator('..'), `${name} radio label`);

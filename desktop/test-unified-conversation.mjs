@@ -600,6 +600,7 @@ try {
         await frames(page);
         check(!(await reasoning.evaluate(node => node.open)), 'User-closed aggregated reasoning stays closed');
         const action = entry(page, 'active-action');
+        await action.evaluate(node => { window.__inspectedActivityRow = node; });
         check(!(await action.evaluate(node => node.open)), 'Compact starts active execution collapsed');
         await action.locator(':scope > summary').click();
         check(await action.evaluate(node => node.open), 'Reader can open active execution');
@@ -607,7 +608,7 @@ try {
         await update(page, 'active-action', { state: 'succeeded', result: { stdout: replacementOutput, exitCode: 0 } });
         await frames(page);
         check(!(await action.evaluate(node => node.open)), 'User-collapsed execution remains collapsed after completion');
-        check(!(await action.evaluate(node => !!node.closest('.completed-action-group'))), 'A live row is not remounted inside a historical completion group');
+        check(await action.evaluate(node => node === window.__inspectedActivityRow && !!node.closest('.activity-group')), 'Completion retains the same inspected row inside its activity stack');
         await action.locator(':scope > summary').click();
         await update(page, 'active-action', { result: { stdout: replacementOutput + '\nfinal result retained', exitCode: 0 } });
         await frames(page);
