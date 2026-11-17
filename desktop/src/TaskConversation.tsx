@@ -1,5 +1,5 @@
 import { memo, useMemo, useRef, type ReactNode } from 'react';
-import Markdown from 'react-markdown';
+import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Check, ChevronRight, UserRound } from 'lucide-react';
 import { call } from './api';
@@ -12,15 +12,25 @@ import { ThinkingIndicator, useConversationDisclosure } from './conversation-det
 import OutpostMark from './OutpostMark';
 
 import Artifact from './image-viewer/Artifact';
+import MarkdownImage from './image-viewer/MarkdownImage';
+
+type MarkdownNode = { type: string; tagName?: string; children?: MarkdownNode[] };
+function containsImage(node: MarkdownNode): boolean {
+  return node.tagName === 'img' || Boolean(node.children?.some(containsImage));
+}
 
 const MessageText = memo(function MessageText({ record, onError }: { record: ServerRecord; onError: Connection['setError'] }) {
-  return <div className="message-markdown"><Markdown remarkPlugins={[remarkGfm]} components={{
-    img: () => null,
-    a: ({ href, children }) => <a href={href} onClick={event => {
-      event.preventDefault();
-      if (href) void call('open_url', { url: href }).catch(error => onError(String(error)));
-    }}>{children}</a>,
-  }}>{text(record, 'text')}</Markdown></div>;
+  const taskId = text(record, 'taskId');
+  const components = useMemo<Components>(() => ({
+    img: ({ src, alt }) => <MarkdownImage src={typeof src === 'string' ? src : undefined} alt={alt} taskId={taskId} />,
+    a: ({ href, children, node }) => node && containsImage(node)
+      ? <span>{children}</span>
+      : <a href={href} onClick={event => {
+        event.preventDefault();
+        if (href) void call('open_url', { url: href }).catch(error => onError(String(error)));
+      }}>{children}</a>,
+  }), [taskId, onError]);
+  return <div className="message-markdown"><Markdown remarkPlugins={[remarkGfm]} components={components}>{text(record, 'text')}</Markdown></div>;
 });
 
 function RunReasoning({ records }: { records: ServerRecord[] }) {

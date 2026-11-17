@@ -34,6 +34,30 @@ function ImageViewer({ record, index, count, opener, onClose, onPrevious, onNext
   record: ServerRecord; index: number; count: number; opener: HTMLElement | null;
   onClose: () => void; onPrevious: () => void; onNext: () => void;
 }) {
+  const image = useArtifactImage(record), download = useArtifactDownload(record);
+  return <ImageDialog imageKey={imageKey(record)} name={text(record, "name") || "Image"}
+    format={imageMime(record)?.replace("image/", "").toUpperCase()} image={image}
+    index={index} count={count} opener={opener} onClose={onClose} onPrevious={onPrevious} onNext={onNext}
+    action={<button className="image-download" disabled={!download.available || download.pending || recordedPreview()} onClick={() => void download.download()}><Download size={15} />{download.pending ? "Saving…" : "Download"}</button>}
+    status={(download.error || download.saved) && <p className="image-download-status" role={download.error ? "alert" : "status"}>{download.error || `Saved to ${download.saved}`}</p>} />;
+}
+
+export interface ImageDialogProps {
+  imageKey: string;
+  name: string;
+  format?: string;
+  image: { url: string; error: string; retry: () => void };
+  opener: HTMLElement | null;
+  onClose: () => void;
+  index?: number;
+  count?: number;
+  onPrevious?: () => void;
+  onNext?: () => void;
+  action?: ReactNode;
+  status?: ReactNode;
+}
+
+export function ImageDialog({ imageKey, opener, onClose, ...slide }: ImageDialogProps) {
   const dialog = useRef<HTMLDialogElement>(null);
   useLayoutEffect(() => {
     const node = dialog.current;
@@ -46,16 +70,12 @@ function ImageViewer({ record, index, count, opener, onClose, onPrevious, onNext
   return <dialog ref={dialog} className="image-viewer" aria-label="Image viewer"
     onCancel={(event) => { event.preventDefault(); onClose(); }}
     onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <ImageSlide key={imageKey(record)} record={record} index={index} count={count}
-      onClose={onClose} onPrevious={onPrevious} onNext={onNext} />
+    <ImageSlide key={imageKey} {...slide} onClose={onClose} />
   </dialog>;
 }
 
-function ImageSlide({ record, index, count, onClose, onPrevious, onNext }: {
-  record: ServerRecord; index: number; count: number;
-  onClose: () => void; onPrevious: () => void; onNext: () => void;
-}) {
-  const image = useArtifactImage(record), download = useArtifactDownload(record);
+function ImageSlide({ name, format, image, index = 0, count, onClose, onPrevious, onNext, action, status }: Omit<ImageDialogProps, "imageKey" | "opener">) {
+  const imageCount = count ?? 1;
   const stage = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: number; x: number; y: number; left: number; top: number } | null>(null);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
@@ -83,8 +103,8 @@ function ImageSlide({ record, index, count, onClose, onPrevious, onNext }: {
     if (node) node.scrollTo({ left: (node.scrollWidth - node.clientWidth) / 2, top: (node.scrollHeight - node.clientHeight) / 2, behavior: "instant" });
   }, [scale, size]);
   return <div className="image-viewer-content" onKeyDown={(event) => {
-    if (event.key === "ArrowLeft") { event.preventDefault(); onPrevious(); }
-    else if (event.key === "ArrowRight") { event.preventDefault(); onNext(); }
+    if (event.key === "ArrowLeft" && count !== undefined && onPrevious) { event.preventDefault(); onPrevious(); }
+    else if (event.key === "ArrowRight" && count !== undefined && onNext) { event.preventDefault(); onNext(); }
     else if (ready && ["+", "=", "-", "0", "1"].includes(event.key)) {
       event.preventDefault();
       if (event.key === "0") setZoom(null);
@@ -93,11 +113,13 @@ function ImageSlide({ record, index, count, onClose, onPrevious, onNext }: {
     }
   }}>
     <header className="image-viewer-header">
-      <div className="image-viewer-title"><h2>{text(record, "name") || "Image"}</h2><span>{size ? `${size.width} × ${size.height}` : imageMime(record)?.replace("image/", "").toUpperCase()}</span></div>
+      <div className="image-viewer-title"><h2>{name}</h2><span>{size ? `${size.width} × ${size.height}` : format}</span></div>
       <div className="image-viewer-actions">
-        <button className="icon-button" aria-label="Previous image" title="Previous image" disabled={index <= 0} onClick={onPrevious}><ChevronLeft size={18} /></button>
-        <span className="image-position" aria-live="polite">{index + 1} / {count}</span>
-        <button className="icon-button" aria-label="Next image" title="Next image" disabled={index >= count - 1} onClick={onNext}><ChevronRight size={18} /></button>
+        {count !== undefined && <>
+          <button className="icon-button" aria-label="Previous image" title="Previous image" disabled={index <= 0 || !onPrevious} onClick={onPrevious}><ChevronLeft size={18} /></button>
+          <span className="image-position" aria-live="polite">{index + 1} / {imageCount}</span>
+          <button className="icon-button" aria-label="Next image" title="Next image" disabled={index >= imageCount - 1 || !onNext} onClick={onNext}><ChevronRight size={18} /></button>
+        </>}
         <button className="icon-button" aria-label="Close image viewer" title="Close image viewer" onClick={onClose}><X size={19} /></button>
       </div>
     </header>
@@ -126,7 +148,7 @@ function ImageSlide({ record, index, count, onClose, onPrevious, onNext }: {
       {error ? <div className="image-viewer-state"><p role="alert">Unable to display this image. {error}</p><button onClick={() => { setDecodeError(""); setSize(null); image.retry(); }}>Retry image</button></div> : <>
         {!ready && <p className="image-loading" role="status">Loading image…</p>}
         <div className="image-canvas" style={{ width: Math.max(viewport.width, (size?.width ?? 0) * scale + 32), height: Math.max(viewport.height, (size?.height ?? 0) * scale + 32) }}>
-          {image.url && <img src={image.url} alt={text(record, "name") || "Task image"} draggable={false}
+          {image.url && <img src={image.url} alt={name} draggable={false} referrerPolicy="no-referrer" crossOrigin="anonymous"
             style={{ width: size ? size.width * scale : undefined, height: size ? size.height * scale : undefined, visibility: size ? "visible" : "hidden" }}
             onLoad={(event) => setSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })}
             onError={() => setDecodeError("The image is damaged or its format does not match the file.")} />}
@@ -141,8 +163,8 @@ function ImageSlide({ record, index, count, onClose, onPrevious, onNext }: {
         <button title="Fit to window (0)" aria-pressed={zoom === null} disabled={!ready} onClick={() => setZoom(null)}><Maximize size={14} />Fit</button>
         <button title="Actual size (1)" aria-pressed={zoom === 1} disabled={!ready} onClick={() => setZoom(1)}>Actual size</button>
       </div>
-      <button className="image-download" disabled={!download.available || download.pending || recordedPreview()} onClick={() => void download.download()}><Download size={15} />{download.pending ? "Saving…" : "Download"}</button>
+      {action}
     </footer>
-    {(download.error || download.saved) && <p className="image-download-status" role={download.error ? "alert" : "status"}>{download.error || `Saved to ${download.saved}`}</p>}
+    {status}
   </div>;
 }

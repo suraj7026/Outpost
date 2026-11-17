@@ -17,16 +17,17 @@ const server = createServer((request, response) => {
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 let browser = await chromium.launch();
 const imagePage = await browser.newPage();
-const images = await imagePage.evaluate(() => Object.fromEntries(['png', 'jpeg', 'webp'].map((format, index) => {
-  const canvas = document.createElement('canvas'); canvas.width = 1600 - index * 100; canvas.height = 1000 - index * 100;
+const images = await imagePage.evaluate(() => Object.fromEntries(['png', 'jpeg', 'webp', 'portrait', 'small'].map((format, index) => {
+  const canvas = document.createElement('canvas');
+  [canvas.width, canvas.height] = format === 'portrait' ? [600, 1200] : format === 'small' ? [80, 50] : [1600 - index * 100, 1000 - index * 100];
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = ['#202a29', '#302527', '#252833'][index]; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = ['#202a29', '#302527', '#252833'][index % 3]; ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.strokeStyle = '#68787b'; ctx.lineWidth = 1;
   for (let x = 0; x < canvas.width; x += 100) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
   for (let y = 0; y < canvas.height; y += 100) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
   ctx.fillStyle = '#ededef'; ctx.font = '48px sans-serif'; ctx.fillText(`Synthetic ${format.toUpperCase()} image`, 80, 150);
   ctx.font = '24px sans-serif'; ctx.fillText('Image viewer verification · No live data', 80, 210);
-  return [format, canvas.toDataURL(`image/${format}`).split(',')[1]];
+  return [format, canvas.toDataURL(`image/${['portrait', 'small'].includes(format) ? 'png' : format}`).split(',')[1]];
 })));
 await imagePage.close();
 if (process.env.OUTPOST_TEST_BROWSER === 'webkit') { await browser.close(); browser = await webkit.launch(); }
@@ -41,20 +42,45 @@ const fixture = { snapshot: { cursor: 1, protocolVersion: 1, records: [
 ] }, runtime: { model: 'fixture:cloud' }, models: { models: ['fixture:cloud'], defaultModel: 'fixture:cloud' } };
 let checks = 0;
 const check = (value, message) => { assert.ok(value, message); checks++; };
-const errors = [], externalRequests = [];
-async function open({ width = 1440, scenario = 'live', colorScheme = 'dark', reducedMotion = 'no-preference' } = {}) {
-  const page = await browser.newPage({ viewport: { width, height: 900 }, colorScheme, reducedMotion });
+const errors = [], externalRequests = [], unexpectedRequests = [];
+const remoteUrl = 'https://untrusted.invalid/tracker.png';
+const origin = `http://127.0.0.1:${server.address().port}`;
+const withMarkdown = markdown => {
+  const value = structuredClone(fixture);
+  value.snapshot.records.find(record => record.kind === 'message').data.text = markdown;
+  return value;
+};
+async function open({ width = 1440, scenario = 'live', colorScheme = 'dark', reducedMotion = 'no-preference', testFixture = fixture, imageData = images, remote, stream = false } = {}) {
+  const page = await browser.newPage({ viewport: { width, height: 900 }, colorScheme, reducedMotion, serviceWorkers: 'block' });
   page.on('pageerror', error => errors.push(error.message));
-  page.on('request', request => { if (request.url().startsWith('https://')) externalRequests.push(request.url()); });
-  await page.addInitScript(({ fixture, images, scenario }) => {
+  page.on('request', request => {
+    if (/^https?:/.test(request.url()) && new URL(request.url()).origin !== origin) (remote?.traffic ?? externalRequests).push(request.url());
+  });
+  await page.route(/^https?:\/\//, async route => {
+    const request = route.request();
+    if (remote && request.url() === remoteUrl) {
+      remote.requests.push({ url: request.url(), headers: await request.allHeaders() });
+      await route.fulfill({ status: remote.failFirst && remote.requests.length === 1 ? 503 : 200,
+        headers: { 'content-type': 'image/png', 'access-control-allow-origin': '*', 'cache-control': 'no-store' },
+        body: remote.failFirst && remote.requests.length === 1 ? Buffer.from('Synthetic image failure') : Buffer.from(images.png, 'base64') });
+    } else if (new URL(request.url()).origin === origin && request.resourceType() !== 'image') {
+      await route.continue();
+    } else {
+      unexpectedRequests.push(request.url());
+      await route.abort();
+    }
+  });
+  if (remote) await page.context().addCookies([{ name: 'image-secret', value: 'must-not-leak', domain: 'untrusted.invalid', path: '/', secure: true, sameSite: 'None' }]);
+  await page.addInitScript(({ fixture, images, scenario, stream }) => {
     window.__requests = []; window.__revoked = []; window.__held = [];
     window.__failImages = scenario === 'retry'; window.__corrupt = scenario === 'corrupt'; window.__holdPng = scenario === 'late';
     const revoke = URL.revokeObjectURL.bind(URL); URL.revokeObjectURL = (url) => { window.__revoked.push(url); revoke(url); };
     if (scenario === 'preview') { window.__OUTPOST_RECORDED_PREVIEW__ = fixture; return; }
-    let sequence = 0; window.isTauri = true;
+    let sequence = 0, channel, index = 0; const callbacks = new Map(); window.isTauri = true;
+    window.__emitLive = frame => callbacks.get(channel.id)({ index: index++, message: frame });
     window.__TAURI_INTERNALS__ = {
       metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
-      transformCallback() { return ++sequence; }, unregisterCallback() {},
+      transformCallback(fn) { const id = ++sequence; callbacks.set(id, fn); return id; }, unregisterCallback(id) { callbacks.delete(id); },
       async invoke(command, args) {
         if (command === 'plugin:window|set_theme' && args?.label === 'main' && [null, 'light', 'dark'].includes(args.value)) return;
         if (command === 'environment_list') return { registry: { version: 1, legacyMutationsRetired: false, selectedEnvironmentId: null, environments: {} }, legacy: { endpoint: null, pending: false } };
@@ -66,7 +92,14 @@ async function open({ width = 1440, scenario = 'live', colorScheme = 'dark', red
           if (args.kind === 'events') return { events: [], hasMore: false, nextCursor: 1 };
           return structuredClone(fixture[args.kind]);
         }
-        if (command === 'stream_events') return new Promise(() => {});
+        if (command === 'stream_events') {
+          if (stream) {
+            channel = args.channel;
+            callbacks.get(channel.id)({ index: index++, message: { type: 'snapshot', ...fixture.snapshot, live: [] } });
+            window.__streamReady = true;
+          }
+          return new Promise(() => {});
+        }
         window.__requests.push({ command, args });
         if (command === 'artifact') {
           if (window.__failImages) throw new Error('Synthetic integrity check failed');
@@ -77,6 +110,7 @@ async function open({ width = 1440, scenario = 'live', colorScheme = 'dark', red
           if (window.__holdPng && args.id === 'image-0') return new Promise(resolve => window.__held.push(() => resolve(content)));
           return content;
         }
+        if (command === 'open_url') return;
         if (command === 'save_artifact') {
           if (window.__failDownload) throw new Error('Synthetic download failed');
           return `/synthetic/Downloads/${args.name}`;
@@ -84,8 +118,8 @@ async function open({ width = 1440, scenario = 'live', colorScheme = 'dark', red
         throw new Error(`Unexpected IPC: ${command}`);
       },
     };
-  }, { fixture, images, scenario });
-  await page.goto(`http://127.0.0.1:${server.address().port}`);
+  }, { fixture: testFixture, images: imageData, scenario, stream });
+  await page.goto(origin);
   await page.getByRole('textbox', { name: 'Message Outpost' }).waitFor();
   await page.locator('.conversation .stream-artifact').first().waitFor();
   return page;
@@ -96,10 +130,50 @@ const ready = page => page.waitForFunction(() => {
   const fit = Math.max(.01, Math.min(1, (stage.clientWidth - 32) / img.naturalWidth, (stage.clientHeight - 32) / img.naturalHeight));
   return Math.abs(Number(stage.dataset.zoom) - fit) < .002;
 });
+async function assertPreview(card, label, { small = false, portrait = false } = {}) {
+  await card.scrollIntoViewIfNeeded();
+  await card.locator('.artifact-preview img').waitFor({ state: 'visible' });
+  await card.page().waitForFunction(element => {
+    const img = element.querySelector('.artifact-preview img');
+    return img?.complete && img.naturalWidth > 0 && getComputedStyle(img).display !== 'none';
+  }, await card.elementHandle());
+  const geometry = await card.evaluate(element => {
+    const preview = element.querySelector('.artifact-preview'), img = preview.querySelector('img');
+    const rect = node => { const { x, width, height } = node.getBoundingClientRect(); return { x, width, height }; };
+    return { card: rect(element), preview: rect(preview), image: rect(img), naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, viewport: innerWidth };
+  });
+  const { card: box, preview, image, naturalWidth, naturalHeight } = geometry;
+  check(box.width >= 159 && box.width <= 561, `${label}: card width stays between 160 and 560px`);
+  check(box.x >= 0 && box.x + box.width <= geometry.viewport + 1, `${label}: card fits viewport`);
+  check(image.width > 0 && image.width <= 560 && image.height > 0 && image.height <= 360, `${label}: image respects 560 × 360 bounds`);
+  check(Math.abs(image.width / image.height - naturalWidth / naturalHeight) < .015, `${label}: intrinsic aspect ratio retained`);
+  check(Math.abs(preview.height - image.height - 2) < 2, `${label}: preview wraps image instead of a fixed-height strip`);
+  if (small) {
+    check(Math.abs(box.width - 160) < 1, `${label}: small image has a 160px card`);
+    check(Math.abs(image.width - naturalWidth) < 1 && Math.abs(image.height - naturalHeight) < 1, `${label}: small image is not enlarged`);
+  } else {
+    check(image.height > 140, `${label}: large image is not a 120px strip`);
+    const expectedWidth = Math.min(naturalWidth, 560, naturalWidth / naturalHeight * 360, preview.width - 2);
+    check(Math.abs(image.width - expectedWidth) < 2, `${label}: preview uses the available image size`);
+    if (portrait) check(image.height >= 350 && image.width < image.height, `${label}: portrait uses the height limit`);
+  }
+  const screenshot = await card.screenshot({ path: `${out}/chat-${label}.png`, animations: 'disabled' });
+  check(screenshot.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])), `${label}: screenshot is a PNG`);
+  check(Math.abs(screenshot.readUInt32BE(16) - box.width) <= 2 && Math.abs(screenshot.readUInt32BE(20) - box.height) <= 2, `${label}: screenshot captures the full card geometry`);
+}
 const out = `/tmp/outpost-image-viewer${process.env.OUTPOST_TEST_BROWSER === 'webkit' ? '-webkit' : ''}`; mkdirSync(out, { recursive: true });
 try {
   for (const width of [1440, 768, 390]) {
     const page = await open({ width });
+    const consent = page.locator('.markdown-image-consent');
+    check(await consent.getByRole('button', { name: 'Load image', exact: true }).isEnabled(), `HTTPS image requires consent at ${width}`);
+    check(await consent.locator('img').count() === 0, 'Consent placeholder has no remote img');
+    for (const format of ['png', 'jpeg', 'webp']) {
+      await assertPreview(page.locator('.stream-artifact .chat-image').filter({ has: page.getByRole('button', { name: `View capture.${format}`, exact: true }) }), `${format}-${width}`);
+    }
+    await page.getByRole('button', { name: 'View capture.png', exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `${out}/chat-${width}.png` });
+    check(externalRequests.length === 0, `No request before consent at ${width}`);
     await page.getByRole('button', { name: 'View capture.png', exact: true }).click();
     await ready(page);
     check(await page.getByRole('dialog', { name: 'Image viewer' }).isVisible(), `Modal opens at ${width}`);
@@ -182,6 +256,8 @@ try {
   const preview = await open({ scenario: 'preview' });
   check(await preview.getByRole('button', { name: 'View capture.png', exact: true }).isDisabled(), 'Recorded preview does not fetch images');
   check(await preview.getByRole('button', { name: 'Download capture.png', exact: true }).isDisabled(), 'Recorded preview cannot save');
+    check(await preview.locator('.markdown-image-consent').getByRole('button', { name: 'Load image', exact: true }).isDisabled(), 'Recorded preview cannot consent to external images');
+    check(await preview.locator('.message-markdown img').count() === 0, 'Recorded Markdown preview has no external image element');
   check((await preview.evaluate(() => window.__requests)).length === 0, 'No IPC from recorded-preview images');
   await preview.close();
   const light = await open({ colorScheme: 'light', reducedMotion: 'reduce' });
@@ -189,7 +265,119 @@ try {
   check(await light.locator('.image-viewer').evaluate(node => getComputedStyle(node).animationName) === 'none', 'Reduced motion disables viewer animation');
   checks += await assertIconControls(light, '.image-viewer');
   await light.screenshot({ path: `${out}/viewer-light.png` }); await light.close();
+  for (const width of [1440, 768, 390]) {
+    for (const shape of ['portrait', 'small']) {
+      const shapeFixture = withMarkdown(`Inspect the ${shape} attachment.`);
+      const record = shapeFixture.snapshot.records.find(record => record.id === 'image-0');
+      record.data.hash = createHash('sha256').update(Buffer.from(images[shape], 'base64')).digest('hex');
+      const page = await open({ width, testFixture: shapeFixture, imageData: { ...images, png: images[shape] } });
+      await assertPreview(page.locator('#artifact-image-0 .chat-image'), `${shape}-${width}`, { [shape]: true });
+      await page.close();
+    }
+  }
+  const unavailable = [
+    ['Insecure image', 'http://untrusted.invalid/insecure.png'],
+    ['File image', 'file:///synthetic/private.png'],
+    ['Data image', `data:image/png;base64,${images.small}`],
+    ['Unknown relative image', 'missing.png'],
+    ['Other task image', 'other-task.png'],
+    ['Unsupported attachment', 'untrusted.svg'],
+  ];
+  const unsupported = await open({ testFixture: withMarkdown(unavailable.map(([alt, src]) => `![${alt}](${src})`).join('\n\n')) });
+  for (const [alt] of unavailable) {
+    check(await unsupported.locator('.markdown-image-unavailable').filter({ hasText: alt }).count() === 1, `${alt}: unavailable placeholder`);
+  }
+  check(await unsupported.locator('.message-markdown img, .markdown-image-consent').count() === 0, 'Unsupported URLs never create images or consent controls');
+  await unsupported.screenshot({ path: `${out}/chat-unavailable.png` });
+  await unsupported.close();
+  for (const src of ['capture.png', '#artifact-image-0']) {
+    const page = await open({ testFixture: withMarkdown(`![Attached screenshot](${src})`) });
+    const card = page.locator('.message-markdown .chat-image');
+    await assertPreview(card, src.startsWith('#') ? 'attached-fragment' : 'attached-relative');
+    check(await card.locator('img').getAttribute('alt') === 'Attached screenshot', 'Attachment preserves Markdown alt text');
+    check((await card.locator('img').getAttribute('src')).startsWith('blob:'), 'Known attachment uses native artifact bytes');
+    const opener = card.getByRole('button', { name: 'View capture.png', exact: true });
+    await opener.click(); await ready(page);
+    check(await page.getByText('1 / 3', { exact: true }).isVisible(), `${src}: Markdown attachment opens task-scoped gallery`);
+    check((await page.evaluate(() => window.__requests)).every(request => !['open_url', 'save_artifact'].includes(request.command)), 'Viewing a Markdown attachment neither downloads nor opens a browser');
+    await page.keyboard.press('Escape');
+    check(await opener.evaluate(node => document.activeElement === node), 'Markdown attachment receives focus after Escape');
+    await card.getByRole('button', { name: 'Download capture.png', exact: true }).click();
+    await card.getByRole('status').filter({ hasText: 'Saved to /synthetic/Downloads/capture.png' }).waitFor();
+    assert.deepEqual(await page.evaluate(() => window.__requests.filter(request => request.command === 'save_artifact')),
+      [{ command: 'save_artifact', args: { id: 'image-0', hash: artifacts[0].data.hash, name: 'capture.png' } }]); checks++;
+    await page.close();
+  }
   check(externalRequests.length === 0, 'Untrusted Markdown images never cause remote requests');
+  for (const scenario of ['consent', 'linked', 'remote-retry']) {
+    const remote = { requests: [], traffic: [], failFirst: scenario === 'remote-retry' };
+    const alt = scenario === 'linked' ? 'Linked image' : 'Untrusted remote image';
+    const markdown = scenario === 'linked' ? `[**![${alt}](${remoteUrl})**](https://destination.invalid)` : `![${alt}](${remoteUrl})`;
+    const testFixture = withMarkdown(markdown);
+    const stream = scenario === 'consent';
+    if (stream) {
+      const message = testFixture.snapshot.records.find(record => record.kind === 'message');
+      message.revision = 0; message.data.streaming = true;
+    }
+    const page = await open({ testFixture, remote, stream });
+    if (stream) await page.waitForFunction(() => window.__streamReady);
+    const consent = page.locator('.markdown-image-consent');
+    await consent.scrollIntoViewIfNeeded();
+    check(await consent.getByRole('button', { name: 'Load image', exact: true }).isEnabled(), `${scenario}: explicit consent required`);
+    check(remote.traffic.length === 0 && remote.requests.length === 0, `${scenario}: no network request before consent`);
+    check(await page.locator('.message-markdown img').count() === 0, `${scenario}: no hidden pre-consent image`);
+    check(await consent.evaluate(node => !node.closest('a')), `${scenario}: consent is not nested in a link`);
+    check(await page.locator('.message-markdown a[href="https://destination.invalid"]').count() === 0, 'Linked image replaces its destination anchor');
+    await consent.getByRole('button', { name: 'Load image', exact: true }).click();
+    const card = page.locator('.message-markdown .chat-image');
+    if (remote.failFirst) {
+      const retry = card.getByRole('button', { name: `Retry ${alt}`, exact: true });
+      await retry.waitFor();
+      check(remote.requests.length === 1, 'Remote failure does not auto-retry');
+      check(await page.getByRole('dialog').count() === 0, 'Remote failure stays in the chat card');
+      await retry.click();
+    }
+    await assertPreview(card, scenario);
+    check(remote.requests.length === (remote.failFirst ? 2 : 1), `${scenario}: only consent and explicit retry fetch the image`);
+    check(await card.locator('img').evaluate(img => img.crossOrigin === 'anonymous' && img.referrerPolicy === 'no-referrer'), `${scenario}: preview opts out of credentials and referrer`);
+    check(await card.evaluate(node => !node.closest('a') && !node.querySelector('a button, button button')), `${scenario}: loaded card has no nested interactive wrappers`);
+    check((await page.evaluate(() => window.__requests)).every(request => request.command !== 'open_url'), `${scenario}: Load and Retry never invoke open_url`);
+    if (stream) {
+      const message = structuredClone(testFixture.snapshot.records.find(record => record.kind === 'message'));
+      message.data.text += '\n\nStreaming text after consent.';
+      message.updatedAt = '2026-10-30T12:00:01Z';
+      await page.evaluate(record => window.__emitLive({ type: 'live', record }), message);
+      await page.getByText('Streaming text after consent.', { exact: true }).waitFor();
+      check(await page.locator('.markdown-image-consent').count() === 0, 'Streaming text updates preserve image consent');
+      check(await card.locator('img').isVisible() && remote.requests.length === 1, 'Streaming text does not remount or refetch the image');
+    }
+    const opener = card.getByRole('button', { name: `View ${alt}`, exact: true });
+    await opener.click(); await ready(page);
+    check(await page.getByRole('dialog', { name: 'Image viewer' }).isVisible(), `${scenario}: shared ImageDialog opens`);
+    check(await page.getByRole('heading', { name: alt, exact: true }).isVisible(), `${scenario}: viewer uses Markdown alt text`);
+    check(await page.locator('.image-canvas img').evaluate(img => img.crossOrigin === 'anonymous' && img.referrerPolicy === 'no-referrer'), `${scenario}: viewer also omits credentials and referrer`);
+    check(await page.evaluate(() => Boolean(document.activeElement.closest('dialog'))), `${scenario}: viewer owns focus`);
+    const fit = Number(await page.locator('.image-stage').getAttribute('data-zoom'));
+    await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+    check(Number(await page.locator('.image-stage').getAttribute('data-zoom')) > fit, `${scenario}: remote image zooms`);
+    await page.getByRole('button', { name: 'Actual size', exact: true }).click();
+    check(await page.locator('.image-stage').getAttribute('data-zoom') === '1.000', `${scenario}: remote actual size`);
+    await page.screenshot({ path: `${out}/viewer-${scenario}.png` });
+    check((await page.evaluate(() => window.__requests)).every(request => !['open_url', 'save_artifact'].includes(request.command)), `${scenario}: viewing never opens the browser or downloads`);
+    await page.keyboard.press('Escape');
+    check(await page.getByRole('dialog').count() === 0, `${scenario}: Escape closes remote viewer`);
+    check(await opener.evaluate(node => document.activeElement === node), `${scenario}: focus returns to remote card`);
+    await card.getByRole('button', { name: `Open original ${alt}`, exact: true }).click();
+    assert.deepEqual(await page.evaluate(() => window.__requests.filter(request => request.command === 'open_url')),
+      [{ command: 'open_url', args: { url: remoteUrl } }]); checks++;
+    check(remote.traffic.length === remote.requests.length && remote.traffic.every(url => url === remoteUrl), `${scenario}: all external traffic was intercepted, never the destination link`);
+    for (const { headers } of remote.requests) {
+      check(!headers.cookie && !headers.referer && !headers.referrer, `${scenario}: intercepted image request has no cookies or referrer`);
+    }
+    await page.close();
+  }
+  check(externalRequests.length === 0, 'Consent scenarios do not contaminate baseline traffic capture');
+  check(unexpectedRequests.length === 0, `Unsupported URLs must never request: ${unexpectedRequests.join(', ')}`);
   check(errors.length === 0, errors.join('\n'));
   console.log(`PASS: ${checks} image viewer checks. Synthetic screenshots: ${out}`);
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
