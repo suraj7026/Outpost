@@ -5,16 +5,18 @@ import { z } from 'zod';
 
 const DAY_MS = 86_400_000;
 export const CALENDAR_LIMITS = { previewSize: 100, horizonMs: 366 * 8 * DAY_MS, candidates: 10_000 } as const;
+export const MIN_CALENDAR_TIMESTAMP = Date.UTC(1970, 0, 3);
+export const MAX_CALENDAR_TIMESTAMP = Date.UTC(2099, 11, 29);
 // Deliberately bounded to modern dates; no host-local timezone or Date overflow semantics.
-export const CalendarTimestamp = z.number().int().min(Date.UTC(1970, 0, 3)).max(Date.UTC(2099, 11, 29));
-const definitionSchema = z.strictObject({
+export const CalendarTimestamp = z.number().int().min(MIN_CALENDAR_TIMESTAMP).max(MAX_CALENDAR_TIMESTAMP);
+export const CalendarDefinitionSchema = z.strictObject({
   kind: z.literal('cron'),
   expression: z.string().trim().min(1).max(256),
   timezone: z.string().trim().min(1).max(100),
   gap: z.literal('skip'),
   fold: z.enum(['earlier', 'later', 'both']),
 });
-export type CalendarDefinition = z.infer<typeof definitionSchema>;
+export type CalendarDefinition = z.infer<typeof CalendarDefinitionSchema>;
 
 function compile(expression: string, years?: string): Cron {
   // No callback/name: Croner is a parser/evaluator here, never a scheduler.
@@ -50,7 +52,7 @@ function validCronItem(item: string, field: (typeof CRON_FIELDS)[number]): boole
 }
 
 export function validateCalendarDefinition(input: unknown): CalendarDefinition {
-  const value = definitionSchema.parse(input);
+  const value = CalendarDefinitionSchema.parse(input);
   value.expression = value.expression.split(/\s+/).join(' ');
   const fields = value.expression.split(' ');
   if (fields.length !== 5 || !fields.every((field, index) => {

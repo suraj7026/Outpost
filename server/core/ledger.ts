@@ -50,6 +50,17 @@ export class Ledger {
     this.db.prepare('INSERT INTO events(id,aggregate_id,revision,type,payload,created_at) VALUES(?,?,?,?,?,?)').run(id(),key,revision,eventType,canonical({ kind, id: key, revision, data, updatedAt }),updatedAt);
     return { kind, id: key, revision, data, updatedAt };
   }
+  delete(kind: string, key: string, expected: number, eventType = `${kind}.deleted`): RecordValue<{ deleted: true }> & { deleted: true } {
+    if (this.depth === 0) return this.transaction(() => this.delete(kind,key,expected,eventType));
+    const current = this.get(kind, key);
+    requireThat(current, 'not_found', `${kind} not found`);
+    requireThat(current.revision === expected, 'stale_revision');
+    const revision = expected + 1, updatedAt = now();
+    const record = { kind, id: key, revision, data: { deleted: true as const }, updatedAt, deleted: true as const };
+    this.db.prepare('DELETE FROM records WHERE kind=? AND id=?').run(kind, key);
+    this.db.prepare('INSERT INTO events(id,aggregate_id,revision,type,payload,created_at) VALUES(?,?,?,?,?,?)').run(id(),key,revision,eventType,canonical(record),updatedAt);
+    return record;
+  }
   enqueue(topic: string, payload: Json, key: string = id()) {
     this.db.prepare('INSERT OR IGNORE INTO outbox(id,topic,payload,created_at) VALUES(?,?,?,?)').run(key,topic,canonical(payload),now()); return key;
   }

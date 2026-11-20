@@ -45,6 +45,117 @@ test('signed SSE streams partial output, reconnects from snapshots, and closes o
   } finally { abort.abort(); coordinator.live.close(); await new Promise<void>(resolve => server.close(() => resolve())); db.close(); rmSync(root,{ recursive: true,force: true }); }
 });
 
+test('automation.preview and automation.delete enforce revisions, idempotency, snapshot exclusion and SSE deletion delivery', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'outpost-auto-del-')), db = new Ledger(join(root, 'ledger.sqlite')), coordinator = new Coordinator(db, root);
+  const keys = generateKeyPairSync('ed25519'), deviceId = id(), scheduleId = id();
+  coordinator.devices.pair(deviceId, 'fixture', keys.publicKey.export({ format: 'der', type: 'spki' }).subarray(-32).toString('base64'));
+  const server = httpServer(coordinator, 'unused'); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address(); assert.ok(address && typeof address !== 'string');
+  const base = `http://127.0.0.1:${address.port}`, abort = new AbortController();
+  const post = async (path: string, body: object) => {
+    const bytes = Buffer.from(JSON.stringify(body));
+    return fetch(`${base}${path}`, { method: 'POST', body: bytes, headers: { 'x-outpost-signature': sign(null, bytes, keys.privateKey).toString('base64') } });
+  };
+  const cmd = (type: string, aggregateId: string, expectedRevision: number, payload: object, idempotencyKey = id()) => ({
+    protocolVersion: 1, commandId: id(), idempotencyKey, deviceId, issuedAt: Date.now(), type, aggregateId, expectedRevision, payload,
+  });
+  try {
+    // 1. automation.preview valid & invalid cases
+    const previewRes = await post('/v1/query', {
+      deviceId, issuedAt: Date.now(), type: 'automation.preview',
+      payload: { calendar: { kind: 'cron', expression: '0 9 * * 1-5', timezone: 'America/New_York', gap: 'skip', fold: 'earlier' }, afterAt: Date.parse('2026-03-06T12:00:00Z'), limit: 3 },
+    });
+    assert.equal(previewRes.status, 200);
+    const preview = await previewRes.json() as { status: string; occurrences: { scheduledAt: number }[] };
+    assert.equal(preview.occurrences.length, 3);
+    assert.equal(preview.occurrences[0]?.scheduledAt, Date.parse('2026-03-06T14:00:00Z'));
+    assert.equal(preview.occurrences[1]?.scheduledAt, Date.parse('2026-03-09T13:00:00Z')); // after spring forward
+    assert.equal(preview.status, 'limit');
+
+    for (const bad of [
+      { calendar: { kind: 'cron', expression: 'bad cron', timezone: 'UTC' } },
+      { calendar: { kind: 'cron', expression: '0 9 * * *', timezone: '+05:30' } },
+      { calendar: { kind: 'cron', expression: '0 9 * * *', timezone: 'Mars/Olympus' } },
+      {},
+    ]) {
+      const res = await post('/v1/query', { deviceId, issuedAt: Date.now(), type: 'automation.preview', payload: bad });
+      assert.equal(res.status, 400);
+    }
+
+    // 2. Open SSE stream before saving/deleting
+    const subBytes = Buffer.from(JSON.stringify({ deviceId, issuedAt: Date.now(), type: 'subscribe', payload: {} }));
+    const streamRes = await fetch(`${base}/v1/stream`, { method: 'POST', body: subBytes, signal: AbortSignal.any([abort.signal, AbortSignal.timeout(5000)]), headers: { 'x-outpost-signature': sign(null, subBytes, keys.privateKey).toString('base64') } });
+    assert.equal(streamRes.status, 200);
+    const reader = streamRes.body!.getReader(), decoder = new TextDecoder(); let buffer = '';
+    const nextFrame = async (): Promise<Record<string, unknown>> => {
+      while (!buffer.includes('\n\n')) { const chunk = await reader.read(); assert.equal(chunk.done, false); buffer += decoder.decode(chunk.value, { stream: true }); }
+      const end = buffer.indexOf('\n\n'), frame = buffer.slice(0, end); buffer = buffer.slice(end + 2); return JSON.parse(frame.slice(6));
+    };
+    assert.equal((await nextFrame()).type, 'snapshot');
+
+    // 3. Save calendar schedule
+    const saveRes = await post('/v1/commands', cmd('automation.save', scheduleId, 0, {
+      name: 'Weekday digest', timezone: 'America/New_York', nextAt: 0, intervalMs: null, missed: 'coalesce', paused: false,
+      calendar: { kind: 'cron', expression: '0 9 * * 1-5', timezone: 'America/New_York', gap: 'skip', fold: 'earlier' },
+      task: { goal: 'Send digest', profile: 'code', mode: 'full_control' },
+    }));
+    assert.equal(saveRes.status, 200);
+    const saved = await saveRes.json() as { id: string; revision: number; data: { nextAt: number } };
+    assert.equal(saved.revision, 1);
+    assert.ok(saved.data.nextAt > Date.now());
+
+    // Wait for SSE records frame containing the saved schedule
+    let seenSaved = false;
+    for (let i = 0; i < 10 && !seenSaved; i++) {
+      const frame = await nextFrame();
+      if (frame.type === 'records' && Array.isArray(frame.records) && frame.records.some((r: { id?: string; revision?: number }) => r.id === scheduleId && r.revision === 1)) seenSaved = true;
+    }
+    assert.ok(seenSaved, 'SSE delivered saved schedule');
+
+    // 4. Delete rejections: extra payload field, stale revision
+    assert.equal((await post('/v1/commands', cmd('automation.delete', scheduleId, 1, { extra: true }))).status, 400);
+    const staleRes = await post('/v1/commands', cmd('automation.delete', scheduleId, 0, {}));
+    assert.equal(staleRes.status, 409);
+    assert.equal((await staleRes.json() as { error: string }).error, 'stale_revision');
+    assert.equal(db.list('automation').length, 1);
+
+    // 5. Valid delete + idempotent retry with same idempotencyKey
+    const delCmd = cmd('automation.delete', scheduleId, 1, {});
+    const delRes1 = await post('/v1/commands', delCmd);
+    assert.equal(delRes1.status, 200);
+    const deleted = await delRes1.json() as { kind: string; id: string; revision: number; deleted?: boolean; data: { deleted?: boolean } };
+    assert.equal(deleted.kind, 'automation');
+    assert.equal(deleted.id, scheduleId);
+    assert.equal(deleted.revision, 2);
+    assert.equal(deleted.deleted, true);
+    assert.equal(deleted.data.deleted, true);
+
+    const delRes2 = await post('/v1/commands', delCmd);
+    assert.equal(delRes2.status, 200);
+    assert.deepEqual(await delRes2.json(), deleted);
+
+    // 6. Deleting again with a new idempotencyKey returns not_found
+    const repeatRes = await post('/v1/commands', cmd('automation.delete', scheduleId, 2, {}));
+    assert.equal(repeatRes.status, 409);
+    assert.equal((await repeatRes.json() as { error: string }).error, 'not_found');
+
+    // 7. SSE delivers deletion frame, snapshot excludes deleted automation, tick does not fire
+    let seenDeleted = false;
+    for (let i = 0; i < 10 && !seenDeleted; i++) {
+      const frame = await nextFrame();
+      if (frame.type === 'records' && Array.isArray(frame.records) && frame.records.some((r: { id?: string; revision?: number; deleted?: boolean }) => r.id === scheduleId && r.revision === 2 && r.deleted === true)) seenDeleted = true;
+    }
+    assert.ok(seenDeleted, 'SSE delivered automation deletion record');
+
+    const snap = await (await post('/v1/query', { deviceId, issuedAt: Date.now(), type: 'snapshot', payload: {} })).json() as { records: { kind: string; id: string }[] };
+    assert.equal(snap.records.some(r => r.kind === 'automation' && r.id === scheduleId), false);
+    assert.equal(coordinator.scheduler.tick(saved.data.nextAt + 1000).length, 0);
+    assert.equal(db.list('task').length, 0);
+  } finally {
+    abort.abort(); coordinator.live.close(); await new Promise<void>(resolve => server.close(() => resolve())); db.close(); rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('subagent snapshots persist and restart/interruption never invent terminal success', () => {
   const root = mkdtempSync(join(tmpdir(), 'outpost-subagent-history-')), path = join(root, 'ledger.sqlite');
   let db = new Ledger(path);
