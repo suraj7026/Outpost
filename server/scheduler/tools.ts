@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { requireThat } from '../core/contracts.js';
 import { Gate } from '../policy/trust.js';
+import { registerBuiltin } from '../policy/auto-policy.js';
 import { Schedule, Scheduler } from './scheduler.js';
 
 const AutomationId = z.string().trim().min(1).max(200).describe('Stable automation ID. Reuse the ID from automation.list for existing schedules; choose a unique descriptive ID for a new schedule and keep it when reconciling an uncertain save.');
@@ -17,7 +18,7 @@ const SaveInput = z.strictObject({
     nextAt: z.number().int().nonnegative().describe('First/next due time as Unix epoch milliseconds. Use serverTime from automation.list as a clock reference.'),
     intervalMs: z.number().int().min(60000).nullable().describe('null for one run; otherwise elapsed milliseconds between runs, at least 60000. Every 86400000 ms is not calendar-daily scheduling across DST.'),
     missed: z.enum(['skip', 'coalesce']).describe('For missed intervals: skip drops an overdue occurrence; coalesce starts one task rather than replaying every missed interval.'),
-    task: Schedule.shape.task.describe('Self-contained instructions for a NEW agent task, not a shell command or a continuation of this chat. mode defaults to ask_permission and cannot exceed this chat’s control mode. modelRef requires a configured Pi worker.'),
+    task: Schedule.shape.task.describe('Self-contained instructions for a NEW agent task, not a shell command or a continuation of this chat. Uses its saved mode (default full_control). Auto requires exact review of schedule writes, including Full Control children. modelRef requires a configured Pi worker.'),
   }),
 });
 const PauseInput = z.strictObject({
@@ -25,9 +26,9 @@ const PauseInput = z.strictObject({
   expectedRevision: z.number().int().min(1).describe('Latest schedule revision from automation.list.'),
   paused: z.boolean().describe('true pauses future occurrences; false resumes using the existing nextAt and missed-interval policy. Does not cancel already-created tasks.'),
 });
-const modeRank = { ask_permission: 0, auto: 1, full_control: 2 } as const;
 
-export function registerAutomationTools(gate: Gate, scheduler: Scheduler, taskId: string, options: {
+
+export function registerAutomationTools(gate: Gate, scheduler: Scheduler, options: {
   workerAvailable: boolean;
   assertWritable: () => void;
 }) {
@@ -37,7 +38,7 @@ export function registerAutomationTools(gate: Gate, scheduler: Scheduler, taskId
     return record;
   };
   const validateTask = (schedule: Schedule) => {
-    requireThat(modeRank[schedule.task.mode] <= modeRank[gate.policy(taskId).data.mode], 'automation_mode_escalation', 'Scheduled tasks cannot use a more permissive control mode than this task. Ask the owner to configure that mode in Automations.');
+
     requireThat(!schedule.task.modelRef || options.workerAvailable, 'pi_worker_required');
   };
   const assertWritable = () => {
@@ -63,7 +64,7 @@ export function registerAutomationTools(gate: Gate, scheduler: Scheduler, taskId
     return args;
   };
 
-  gate.register('automation.list', {
+  registerBuiltin(gate, 'automation.list', {
     version: 1, effects: ['automation.read'], inputSchema: z.toJSONSchema(ListInput),
     description: 'List Outpost Automations on this server, or inspect one by automationId. Returns IDs, revisions, complete schedules and serverTime (Unix milliseconds). Use before creating to avoid duplicates, before editing/pausing/resuming for the current revision, and after uncertain results. Paginate with limit/offset. Does not inspect Linux crontab or /etc/cron.d.',
     parse: input => z.record(z.string(), z.json()).parse(ListInput.parse(input)),
@@ -77,7 +78,7 @@ export function registerAutomationTools(gate: Gate, scheduler: Scheduler, taskId
   });
   gate.register('automation.save', {
     version: 1, effects: ['automation.write'], inputSchema: z.toJSONSchema(SaveInput),
-    description: 'Create or replace a server-owned Outpost Automation visible in the Automations UI. Supply a stable automationId, expectedRevision (0 for new) and a complete schedule. Supports one-time or fixed intervals >=60000 ms, NOT cron expressions/calendar recurrence. Each occurrence queues a NEW agent task under its configured permission mode; the server must be running. Defaults to ask_permission; cannot exceed this task’s control mode. Saving is not proof that a scheduled task ran. Inspect before retrying uncertain/stale writes.',
+    description: 'Create or replace a server-owned Outpost Automation visible in the Automations UI. Supply a stable automationId, expectedRevision (0 for new) and a complete schedule. Supports one-time or fixed intervals >=60000 ms, NOT cron expressions/calendar recurrence. Each occurrence queues a NEW task in the saved mode (default full_control); Auto requires exact approval of this schedule write; the server must be running. Saving is not proof that a scheduled task ran. Inspect before retrying uncertain/stale writes.',
     parse: input => z.record(z.string(), z.json()).parse(validateSave(input)),
     target: args => `automation ${args.automationId}: ${SaveInput.parse(args).schedule.name}`,
     execute: async input => gate.db.transaction(() => {
@@ -87,7 +88,7 @@ export function registerAutomationTools(gate: Gate, scheduler: Scheduler, taskId
   });
   gate.register('automation.set_paused', {
     version: 1, effects: ['automation.write'], inputSchema: z.toJSONSchema(PauseInput),
-    description: 'Pause or resume an existing Outpost Automation using its current revision from automation.list. Preserves the schedule and task settings. Pausing does not cancel tasks already queued/running. Resuming retains nextAt and the missed-interval policy, so a past-due schedule may run immediately; use automation.save to change nextAt first if needed. Cannot resume a task mode above this chat’s control mode. No deletion or OS-cron changes.',
+    description: 'Pause or resume an existing Outpost Automation using its current revision from automation.list. Preserves the schedule and task settings. Pausing does not cancel tasks already queued/running. Resuming retains nextAt and the missed-interval policy, so a past-due schedule may run immediately; use automation.save to change nextAt first if needed. No deletion or OS-cron changes.',
     parse: validatePause,
     target: args => `${args.paused ? 'pause' : 'resume'} automation ${args.automationId}`,
     execute: async input => gate.db.transaction(() => {

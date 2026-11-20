@@ -1,3 +1,4 @@
+import { ServerUpdateIndicator } from './AutomaticUpdates';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   ArrowUp,
@@ -37,7 +38,8 @@ import { ConversationDetailContext } from './conversation-detail';
 import { useSidebar } from "./useSidebar";
 import { rememberWorkingLocation, type WorkingPage, type WorkingLocation } from "./startup-navigation";
 import ComposerContext from "./ComposerContext";
-import { ControlMode, ComposerModelSelect } from './ComposerControls';
+import { ComposerModelSelect, ControlMode } from './ComposerControls';
+import { modeBlocker, type ControlMode as Mode } from './control-mode';
 import TerminalPane from './server-terminal/TerminalPane';
 import WorkspaceView, { isWorkspaceSection } from "./WorkspaceViews";
 
@@ -84,8 +86,9 @@ function Composer({
 }) {
   const [goal, setGoal] = useState(""),
     [profile, setProfile] = useState(initialProfile),
-    [model, setModel] = useState(""),
-    [mode, setMode] = useState("full_control");
+    [model, setModel] = useState("");
+  const [mode, setMode] = useState<Mode>('full_control');
+  const modeBlocked = modeBlocker(mode, connection.runtime);
   const [modelRef, setModelRef] = useState<ModelRef | null>(null);
   const managed = !!connection.runtime?.piManagement;
   const selectedRef = chosenModel(connection.agentCatalogue, modelRef);
@@ -94,6 +97,7 @@ function Composer({
   const submit = async () => {
     if (
       !goal.trim() ||
+      !!modeBlocked || recordedPreview() ||
       !modelReady ||
       connection.busy ||
       !connection.connected ||
@@ -165,7 +169,7 @@ function Composer({
           }}
         />
         <div className="composer-toolbar">
-          <ControlMode label="Control mode" value={mode} onChange={(event) => setMode(event.target.value)} />
+          <ControlMode label="New task control mode" value={mode} runtime={connection.runtime} onModeChange={setMode} disabled={!connection.connected || connection.busy || connection.retired || !!connection.info?.pending || !!connection.info?.pendingError || recordedPreview()} />
           <div className="composer-model-control">
           {managed ? <ModelPicker catalogue={connection.agentCatalogue} value={selectedRef} onChange={setModelRef} disabled={!connection.connected || connection.busy || !!connection.info?.pending || connection.retired || !!connection.info?.pendingError} /> : <ComposerModelSelect
             aria-label="Ollama model"
@@ -185,6 +189,7 @@ function Composer({
             title="Start task"
             disabled={
               !goal.trim() ||
+              !!modeBlocked || recordedPreview() ||
               !modelReady ||
               !connection.connected ||
               connection.busy ||
@@ -344,7 +349,7 @@ export default function App({ connection, initialTask, initialPage = "home", ini
                 onClick={() => select(item.id)}
               >
                 <item.glyph size={16} />
-                {item.title}
+                {item.title}{item.id === "machines" && <ServerUpdateIndicator navigation />}
 
               </button>
             ))}

@@ -47,20 +47,22 @@ test('root execution requires host opt-in and binds authenticated requests to th
     const restricted = new Gate(db); registerHosts(restricted,configuration,taskId);
     await assert.rejects(restricted.propose(taskId,'host.execute',{ host: 'surajhomeserver',command: 'id -u' }),/protected_effect/);
     assert.equal(calls,0);
-    const gate = new Gate(db,undefined,true); registerHosts(gate,configuration,taskId);
+    const gate = new Gate(db,true); registerHosts(gate,configuration,taskId);
     const proposed = await gate.propose(taskId,'host.execute',{ host: 'surajhomeserver',command: 'id -u' });
     const result = await gate.dispatch(proposed.id); assert.equal(result.data.state,'succeeded'); assert.equal(calls,1);
     await assert.rejects(gate.propose(taskId,'host.execute',{ host: 'unrecognized-host',command: 'id -u' }));
-    const native = new Gate(db,undefined,true);
+    const native = new Gate(db,true);
     registerHosts(native,{ token: 'fixture-private-token',endpoints: { local: endpoint } },taskId);
     const local = await native.propose(taskId,'host.execute',{ host: 'local',command: 'id -u' });
     assert.equal((await native.dispatch(local.id)).data.state,'succeeded');
     assert.equal(calls,2);
     await assert.rejects(native.propose(taskId,'host.execute',{ host: 'surajhomeserver',command: 'id -u' }));
     db.put('policy',taskId,1,{ mode: 'ask_permission' });
-    const approval = await native.propose(taskId,'host.execute',{ host: 'local',command: 'id -u' });
-    await assert.rejects(native.dispatch(approval.id));
-    assert.equal(calls,2,'root availability does not skip task approval policy');
+    const legacy = await native.propose(taskId,'host.execute',{ host: 'local',command: 'id -u' });
+    assert.equal(legacy.data.state,'pending');
+    await assert.rejects(native.dispatch(legacy.id), /not_authorized/);
+    assert.equal(calls,2,'Auto cannot prove arbitrary root shell effects');
+    assert.equal(db.list('inbox').length,1);
     gate.register('protected.fixture',{ version: 1,effects: ['owner.identity'],parse: () => ({}),target: () => 'owner',execute: async () => null });
     await assert.rejects(gate.propose(taskId,'protected.fixture',{}),/protected_effect/);
   } finally { await new Promise<void>(resolve => server.close(() => resolve())); db.close(); rmSync(root,{ recursive: true,force: true }); }

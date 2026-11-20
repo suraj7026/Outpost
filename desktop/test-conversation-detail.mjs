@@ -719,7 +719,7 @@ try {
           ['unknown-action', 'action', { state: 'unknown' }, 'attention'],
           ['unknown-stream', 'tool_stream', { state: 'unknown', streaming: false }, 'attention'],
           ['pending', 'action', { state: 'pending' }, 'attention'],
-          ['authorized', 'action', { state: 'authorized' }, 'attention'],
+          ['authorized', 'action', { state: 'authorized' }, 'active'],
           ['denied', 'action', { state: 'denied' }, 'attention'],
           ['interrupted', 'tool_stream', { state: 'finished', streaming: false, interrupted: true }, 'attention'],
           ['cancelled', 'action', { state: 'cancelled' }, 'attention'],
@@ -733,16 +733,21 @@ try {
           if (extended) await toggle(group);
           await openState(group, false, 'Outcome fixture starts as a collapsed completed group');
           await emit(page, { type: 'settled', record: kind === 'action' ? actionRecord('outcome-attention', 43, data.state, data) : streamRecord('outcome-attention', 43, data) });
-          await openState(group, expectedState === 'attention' || !extended, 'Attention forces expansion; unrecognized waiting states follow the default or explicit choice');
+          await openState(group, ['attention', 'active'].includes(expectedState) || !extended, 'Attention and active work force expansion; unrecognized waiting states follow the default or explicit choice');
           equal(await group.getAttribute('data-state'), expectedState, 'Group reports the actual unresolved outcome');
           if (expectedState === 'attention') check(await entry(page, 'outcome-attention').locator(':scope > summary').isVisible(), 'Unsuccessful/unresolved row summary stays visible');
-          if (['pending', 'authorized'].includes(stateName)) check(await entry(page, 'outcome-attention').getByRole('button', { name: 'Review', exact: true }).isVisible(), 'Approval controls cannot disappear into previously collapsed activity');
+          if (stateName === 'pending') check(await entry(page, 'outcome-attention').getByRole('button', { name: 'Review', exact: true }).isVisible(), 'Legacy pending approval controls cannot disappear into previously collapsed activity');
+          if (stateName === 'authorized') {
+            equal(await group.locator('.activity-group-title').textContent(), 'Working', 'Authorized work is queued automatically, not waiting for approval');
+            equal(await entry(page, 'outcome-attention').locator('.action-state').textContent(), 'Queued', 'Authorized row does not claim dispatch or completion');
+            equal(await entry(page, 'outcome-attention').getByRole('button', { name: 'Review', exact: true }).count(), 0, 'Authorized work has no approval affordance');
+          }
           equal(await group.locator('.activity-group-progress').textContent(), '2 of 3 actions complete', 'Unsuccessful or unresolved work is excluded from completion count');
           equal(await group.locator('.activity-complete').count(), 0, 'No success icon on an incomplete group');
           check(!/actions completed/.test(await group.locator('.activity-group-title').textContent()), 'No false all-complete label');
-          if (expectedState === 'attention') {
+          if (['attention', 'active'].includes(expectedState)) {
             await toggle(group);
-            await openState(group, true, 'Attention cannot be hidden by keyboard collapse');
+            await openState(group, true, 'Attention and active work cannot be hidden by keyboard collapse');
           }
           if (['nonzero-exit', 'reported-rejection'].includes(stateName)) {
             const details = entry(page, 'outcome-attention');
@@ -804,7 +809,7 @@ try {
           }
         });
 
-        for (const state of ['pending', 'authorized']) await scenario(engine, `${mode}-${state}-approval-remains-open`, { ...options, approval: state }, async page => {
+        await scenario(engine, `${mode}-pending-approval-remains-open`, { ...options, approval: 'pending' }, async page => {
           await openState(entry(page, 'approval-action'), extended, 'Timeline approval row follows detail preference');
           await openState(activity(page, 'approval-action'), true, 'Approval remains visible in its expanded activity stack');
           equal(await activity(page, 'approval-action').locator('.activity-group-title').textContent(), 'Waiting for approval', 'Approval is not reported as completed activity');
@@ -816,10 +821,31 @@ try {
           await openState(dialog.locator('.action'), true, 'Safety review stays expanded independently of conversation detail');
           const args = dialog.locator('.action-body > pre').first();
           check(await args.isVisible(), 'Exact approval arguments are visible without opening another disclosure');
-          equal(JSON.parse(await args.textContent()), approval(state).data.arguments, 'Review retains the exact arguments');
-          check(await dialog.getByRole('button', { name: state === 'pending' ? 'Approve' : 'Run approved action', exact: true }).isVisible(), 'Approval controls remain visibly reviewable');
+          equal(JSON.parse(await args.textContent()), approval('pending').data.arguments, 'Review retains the exact arguments');
+          check(await dialog.getByRole('button', { name: 'Approve', exact: true }).isVisible(), 'Legacy pending approval controls remain visibly reviewable');
           await dialog.getByRole('button', { name: 'Close review', exact: true }).click();
           await openState(entry(page, 'approval-action'), extended, 'Closing the review does not alter the timeline disclosure');
+        });
+
+        await scenario(engine, `${mode}-authorized-queued-without-review`, { ...options, approval: 'authorized', records: [
+          row('message', 'queued-owner', 29, { author: 'owner', text: 'Run the next automatic action.' }),
+          actionRecord('queued-predecessor', 29.5, 'succeeded'),
+        ] }, async page => {
+          const queued = entry(page, 'approval-action'), group = activity(page, 'approval-action');
+          await openState(queued, extended, 'Queued row follows the conversation detail preference');
+          await openState(group, true, 'Queued automatic work keeps its activity stack open');
+          equal(await group.getAttribute('data-state'), 'active', 'Authorized work is active, not attention');
+          equal(await activity(page, 'history-failed').getAttribute('data-state'), 'attention', 'Historical failure evidence remains attention in its original group');
+          equal(await group.locator('.activity-group-title').textContent(), 'Working', 'Authorized work does not wait for approval');
+          equal(await queued.locator('.action-state').textContent(), 'Queued', 'Authorized row is queued, not yet dispatched');
+          equal(await queued.getByRole('button', { name: 'Review', exact: true }).count(), 0, 'No review affordance for automatic work');
+          equal(await page.getByRole('button', { name: 'Run approved action', exact: true }).count(), 0, 'No manual dispatch control');
+          equal(await page.locator('.task-attention-indicator, .review-shortcut').count(), 0, 'Queued work does not add approval attention');
+          await toggle(group);
+          await openState(group, true, 'Queued work stays visible like other active work');
+          if (!extended) await toggle(queued);
+          check(await queued.getByText('Queued for automatic execution.', { exact: true }).isVisible(), 'Expanded evidence explains automatic dispatch');
+          equal(await page.getByRole('dialog').count(), 0, 'Inspecting queued work never opens an approval dialog');
         });
       }
 

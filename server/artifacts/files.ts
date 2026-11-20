@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { id, requireThat } from '../core/contracts.js';
 import { Ledger } from '../core/ledger.js';
 import type { Gate } from '../policy/trust.js';
+import { registerBuiltin, classifyWorkspaceWrite, securityPath } from '../policy/auto-policy.js';
 const sha = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 export class Workspace {
   readonly root: string;
@@ -31,8 +32,15 @@ export class Workspace {
   register(gate: Gate) {
     const Read = z.strictObject({ path: z.string().min(1).max(1000) });
     const Write = Read.extend({ text: z.string().max(1_048_576),expectedHash: z.string().regex(/^[a-f0-9]{64}$/).nullable() });
-    gate.register('file.read',{ version: 1,effects: ['workspace.read'],inputSchema: z.toJSONSchema(Read),description: 'Reads a relative file path inside the task workspace, for example STATUS.md. Not an artifact ID or directory listing. To list the workspace use command.run with argv ["/bin/ls", "-la"] and cwd ".".',parse: value => Read.parse(value),target: args => String(args.path),execute: async args => this.read(String(args.path)) });
-    gate.register('file.write',{ version: 1,effects: ['workspace.write'],inputSchema: z.toJSONSchema(Write),description: 'Writes a relative workspace file. expectedHash must be null for a new file or the current SHA-256 for an existing file.',parse: value => Write.parse(value),target: args => String(args.path),execute: async args => { const data = Write.parse(args); return this.write(data.path,data.text,data.expectedHash); } });
+    registerBuiltin(gate, 'file.read',{ version: 1,effects: ['workspace.read'],inputSchema: z.toJSONSchema(Read),description: 'Reads a relative file path inside the task workspace, for example STATUS.md. Not an artifact ID or directory listing. To list the workspace use command.run with argv ["/bin/ls", "-la"] and cwd ".".',parse: value => Read.parse(value),target: args => String(args.path),execute: async args => this.read(String(args.path)) }, args => { this.path(String(args.path)); return securityPath(String(args.path)) ? 'security' : 'routine'; });
+    registerBuiltin(gate, 'file.write',{ version: 1,effects: ['workspace.write'],inputSchema: z.toJSONSchema(Write),description: 'Writes a relative workspace file. expectedHash must be null for a new file or the current SHA-256 for an existing file.',parse: value => Write.parse(value),target: args => String(args.path),execute: async args => { const data = Write.parse(args); return this.write(data.path,data.text,data.expectedHash); } }, args => {
+      const data = Write.parse(args), path = this.path(data.path), name = relative(this.root, path);
+      if (securityPath(name)) return 'security';
+      if (existsSync(path) && statSync(path).size > 65536) return 'destructive';
+      const previous = existsSync(path) ? readFileSync(path) : null;
+      requireThat((previous ? sha(previous) : null) === data.expectedHash, 'file_changed');
+      return classifyWorkspaceWrite(name, data.text, previous?.toString('utf8') ?? null);
+    });
   }
 }
 interface Upload { taskId: string; name: string; mime: string; size: number; hash: string; offset: number; state: string }

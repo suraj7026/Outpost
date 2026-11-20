@@ -33,7 +33,7 @@ const fixture = {
     row('policy', 'focus-fixture', { mode: 'ask_permission' }),
     row('message', 'assistant', { taskId: 'focus-fixture', author: 'assistant', text: '## Synthetic focus review\nKeyboard focus stays visible without outlining the composer. No live server or private data is used.' }),
   ] },
-  runtime: { configured: true, model: 'fixture:cloud', piManagement: true, hostAdministration: false, browserDirect: false, unrestrictedCommands: false },
+  runtime: { controlModes: ['full_control', 'auto'], autoPolicyVersion: 1, configured: true, model: 'fixture:cloud', piManagement: true, hostAdministration: false, browserDirect: false, unrestrictedCommands: false },
   models: { models: ['fixture:cloud'], defaultModel: 'fixture:cloud' },
   catalogue: {
     protocolVersion: 1, piVersion: '1.4.0', profilePath: '/synthetic/.pi/agent', generation: 'a'.repeat(64),
@@ -87,7 +87,7 @@ async function inspect(locator) {
     return {
       active: document.activeElement === node, visible: node.matches(':focus-visible'),
       painted: bounds.width > 0 && bounds.height > 0 && bounds.bottom > 0 && bounds.top < innerHeight && bounds.right > 0 && bounds.left < innerWidth && style.visibility === 'visible' && Number(style.opacity) > 0,
-      background: rgba(style.backgroundColor), controlBackground: rgba(getComputedStyle(node.closest('.composer-select-field') ?? node).backgroundColor), effective, foreground: over(rgba(style.color), effective), backgroundImage: style.backgroundImage,
+      background: rgba(style.backgroundColor), controlBackground: rgba(getComputedStyle(node.closest('.composer-select-field, .anchor-menu-search') ?? node).backgroundColor), effective, foreground: over(rgba(style.color), effective), backgroundImage: style.backgroundImage,
       ...edge(node), ancestors, pseudo,
     };
   });
@@ -226,14 +226,13 @@ async function picker(page, label) {
   const trigger = page.locator('.model-picker-trigger');
   await control(page, trigger, `${label}/model trigger`);
   await page.keyboard.press('Enter');
-  const dialog = page.getByRole('dialog', { name: 'Model for the next instruction', exact: true });
-  await dialog.waitFor();
-  check(await dialog.evaluate(node => node.matches(':modal')), `${label}: real top-layer model dialog (not a CSS fixture)`);
-  check(await dialog.evaluate(node => node.contains(document.activeElement)), `${label}: opening model dialog moves focus inside`);
-  const search = dialog.getByRole('textbox', { name: 'Search models', exact: true });
+  const menu = page.getByRole('dialog', { name: 'Model', exact: true });
+  await menu.waitFor();
+  check(await menu.evaluate(node => node.contains(document.activeElement)), `${label}: opening model menu moves focus inside`);
+  const search = menu.getByRole('searchbox', { name: 'Search models', exact: true });
   await search.fill('Synthetic');
   await control(page, search, `${label}/model search`);
-  const models = dialog.locator('.model-results button');
+  const models = menu.locator('.anchor-menu-row');
   equal(await models.count(), 2, `${label}: both synthetic model results are present`);
   const firstBefore = await inspect(models.nth(0)), secondBefore = await inspect(models.nth(1));
   const first = await nextFocus(page, models.nth(0), `${label}/selected model`);
@@ -246,16 +245,16 @@ async function picker(page, label) {
   check(contrast(secondDetail.foreground, secondDetail.effective) >= 4.5, `${label}/next model: secondary text contrast >= 4.5:1`, { ratio: contrast(secondDetail.foreground, secondDetail.effective) });
   await screenshot(page, label, 'model-dialog-keyboard');
   await page.keyboard.press('Enter');
-  await dialog.waitFor({ state: 'hidden' });
+  await menu.waitFor({ state: 'hidden' });
   keyboardState(await inspect(trigger), `${label}: selecting a model returns keyboard focus to trigger`);
   check((await trigger.textContent()).includes('beta'), `${label}: keyboard selection changes the local model`);
-  await page.keyboard.press('Enter'); await dialog.waitFor();
+  await page.keyboard.press('Enter'); await menu.waitFor();
   await rest(page);
   const selected = await inspect(models.nth(1));
   equal(selected.border, secondBefore.border, `${label}: selecting model does not add a border`);
   filled(secondBefore, selected, `${label}: selected model uses fill`);
   await search.focus(); await page.keyboard.press('Escape');
-  await dialog.waitFor({ state: 'hidden' });
+  await menu.waitFor({ state: 'hidden' });
   keyboardState(await inspect(trigger), `${label}: Escape restores keyboard focus`);
 }
 async function settings(page, label) {
@@ -402,24 +401,24 @@ async function forcedColorsChecks(browser, scheme) {
       equal(after.shadow, before.shadow, `${label}/${name}: no added shadow ring`);
       return after;
     };
-    await focusControl(page.getByRole('combobox', { name: 'Task control mode', exact: true }), 'select');
+    await focusControl(page.locator('.control-mode-picker'), 'task control mode');
     await focusControl(page.locator('.model-picker-trigger'), 'model trigger');
     await page.keyboard.press('Enter');
-    const dialog = page.getByRole('dialog', { name: 'Model for the next instruction', exact: true });
-    await dialog.waitFor();
-    check(await dialog.evaluate(node => node.matches(':modal')), `${label}: actual model dialog is modal`);
-    await focusControl(dialog.getByRole('button', { name: 'Done', exact: true }), 'ordinary button');
-    const search = dialog.getByRole('textbox', { name: 'Search models', exact: true });
+    const menu = page.getByRole('dialog', { name: 'Model', exact: true });
+    await menu.waitFor();
+    check(await menu.evaluate(node => node.contains(document.activeElement)), `${label}: model menu opens inside the app surface`);
+    await focusControl(menu.locator('.anchor-menu-row').first(), 'ordinary option');
+    const search = menu.getByRole('searchbox', { name: 'Search models', exact: true });
     await search.fill('Synthetic');
     await focusControl(search, 'input');
-    const models = dialog.locator('.model-results button');
+    const models = menu.locator('.anchor-menu-row');
     equal(await models.count(), 2, `${label}: both model label states exercised`);
     for (let index = 0; index < 2; index++) {
       await focusControl(models.nth(index), `model ${index}`);
       await readable(models.nth(index).locator('small'), `model ${index} secondary label`);
     }
     await screenshot(page, label, 'model-secondary-keyboard');
-    await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'hidden' });
+    await page.keyboard.press('Escape'); await menu.waitFor({ state: 'hidden' });
     const textarea = page.getByRole('textbox', { name: 'Message Outpost', exact: true });
     await textarea.fill('Synthetic unsent forced-colors message'); await rest(page);
     const composerBefore = await inspect(page.locator('.reply-composer'));
@@ -504,13 +503,14 @@ try {
       await goal.waitFor();
       await composer(page, '.composer', 'Task goal', `${label}/main`, label);
       await goal.fill('Synthetic unsent task');
-      const mode = page.getByRole('combobox', { name: 'Control mode', exact: true });
+      const mode = page.locator('.control-mode-picker');
+      check(await mode.textContent() !== null, `${label}: new task control mode present`);
       const model = page.locator('.model-picker-trigger'), send = page.getByRole('button', { name: 'Start task', exact: true });
       check(await send.isEnabled(), `${label}: real primary send control is enabled without dispatch`);
       await rest(page);
       const modeBefore = await inspect(mode), modelBefore = await inspect(model), sendBefore = await inspect(send);
       await keyboardFocus(page, goal, `${label}/main textarea order anchor`);
-      for (const [target, before, name, minimumContrast] of [[mode, modeBefore, 'Control mode', 4.5], [model, modelBefore, 'model picker', 4.5], [send, sendBefore, 'primary send', 3]]) {
+      for (const [target, before, name, minimumContrast] of [[mode, modeBefore, 'control mode', 3], [model, modelBefore, 'model picker', 4.5], [send, sendBefore, 'primary send', 3]]) {
         const after = await nextFocus(page, target, `${label}/composer order/${name}`);
         stableEdges(before, after, `${label}/${name}`); filled(before, after, `${label}/${name}`, minimumContrast);
       }

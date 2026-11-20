@@ -85,12 +85,14 @@ async function scenario(name, options, run) {
       external.push(request.url()); return route.abort();
     });
     await context.routeWebSocket('**/*', socket => { external.push(socket.url()); socket.close(); });
+    if (options.virtualTime) await page.clock.install();
     await context.addInitScript(installWorkspaceTransport, workspaceFixture(options));
     await page.goto(origin);
     await openInitialTestChat(page);
     await page.waitForFunction(() => Object.values(window.__workspacePanelTest.states).every(state => state.ready));
     await selectChat(page);
     await page.evaluate(() => document.fonts.ready);
+    if (options.virtualTime) await page.clock.runFor(10);
     await run(page, result);
     result.status = 'passed';
   } catch (error) {
@@ -340,6 +342,7 @@ async function run() {
     await page.evaluate(owner => { window.__workspacePanelTest.states[owner].readError = 'Synthetic workspace read denied'; }, A);
     await file(page, 'notes.txt').click(); await body(page).getByRole('alert').filter({ hasText: 'Synthetic workspace read denied' }).waitFor();
     check(await download(page).isDisabled(), 'Failed read cannot download an unknown hash');
+    equal(await panel(page).getByRole('link', { name: 'Open Server updates', exact: true }).count(), 0, 'Permission/read failures do not masquerade as missing server APIs');
     await page.evaluate(owner => { window.__workspacePanelTest.states[owner].readError = ''; }, A);
     await body(page).getByRole('button', { name: 'Retry', exact: true }).click(); await textVisible(page, 'Unrecorded actual text');
     await page.evaluate(owner => window.__workspacePanelTest.offline(owner), A);
@@ -358,10 +361,47 @@ async function run() {
 
   await scenario('unsupported-server-feedback', { empty: true, listError: 'Unknown query: workspace.files' }, async page => {
     await open(page);
-    const alert = panel(page).getByRole('alert'); await alert.waitFor();
-    check((await alert.innerText()).includes('Unknown query: workspace.files'), 'Unsupported query error stays visible');
-    check((await alert.innerText()).includes('update it to enable file review'), 'Older server gets actionable update guidance');
+    const alert = panel(page).locator('.workspace-files').getByRole('alert'); await alert.waitFor();
+    check((await alert.innerText()).includes('Unknown query: workspace.files'), 'Older native string error stays visible');
+    check((await alert.innerText()).includes('This server needs an update to support file review.'), 'Older server gets actionable update guidance');
+    equal(await alert.getByRole('link', { name: 'Open Server updates' }).getAttribute('href'), `#settings/servers/${A}/runtime`, 'Update link targets the chat owner');
+    equal(await panel(page).getByText('No workspace files yet.', { exact: true }).count(), 0, 'An unsupported listing is not shown as an empty workspace');
     check(await panel(page).getByRole('button', { name: 'Refresh files' }).isEnabled(), 'Unsupported server retains retry affordance');
+  });
+
+  await scenario('coded-unsupported-document-and-settings-link', { listError: { code: 'unknown_query', message: 'Unsupported query' }, readError: { code: 'unknown_query', message: 'Unsupported query' } }, async page => {
+    await selectChat(page, B);
+    await open(page);
+    const alert = body(page).getByRole('alert'); await alert.getByText('Server update required', { exact: true }).waitFor();
+    check(await download(page).isDisabled(), 'Unsupported reads cannot download invented file bytes');
+    const link = alert.getByRole('link', { name: 'Open Server updates', exact: true });
+    equal(await link.getAttribute('href'), `#settings/servers/${B}/runtime`, 'Identical task IDs still navigate to the owning server');
+    await link.click();
+    await page.getByRole('heading', { name: 'Workspace Beta', exact: true }).waitFor();
+    equal(await page.getByRole('link', { name: 'Server updates', exact: true }).getAttribute('aria-current'), 'page', 'File review opens the real Server updates settings');
+    equal(await page.evaluate(() => window.__workspacePanelTest.calls.filter(call => /environment_update_(check|start|cancel)|automatic_updates_enable/.test(call.command)).length), 0, 'Following the link never authorizes or launches an update');
+  });
+
+  await scenario('automatic-completion-reloads-own-workspace', { virtualTime: true, listError: { code: 'unknown_query', message: 'Unsupported query' }, readError: { code: 'unknown_query', message: 'Unsupported query' } }, async page => {
+    await open(page);
+    await body(page).getByRole('alert').getByText('Server update required', { exact: true }).waitFor();
+    const workspaceReads = () => page.evaluate(owner => window.__workspacePanelTest.calls.filter(call => call.args.environmentId === owner && ['workspace.files', 'workspace.read'].includes(call.args.kind)).length, A);
+    const before = await workspaceReads();
+    await page.evaluate(owner => { window.__workspacePanelTest.automaticStatus = { enabled: true, targets: [owner], activeEnvironmentId: null, servers: [{ environmentId: owner, state: 'complete', message: 'Verified complete', releaseId: 'other-release' }] }; }, B);
+    await page.clock.runFor(15_100);
+    equal(await workspaceReads(), before, 'Another server completing never refreshes this workspace');
+    await page.evaluate(owner => {
+      const control = window.__workspacePanelTest;
+      control.states[owner].listError = ''; control.states[owner].readError = '';
+      control.automaticStatus = { enabled: true, targets: [owner], activeEnvironmentId: null, servers: [{ environmentId: owner, state: 'complete', message: 'Verified complete', releaseId: 'workspace-capable-release' }] };
+    }, A);
+    await page.clock.runFor(15_100);
+    await textVisible(page, 'Actual workspace bytes');
+    check(await workspaceReads() > before, 'Verified completion reloads listing and selected file without Retry or reconnect');
+    equal(await panel(page).getByText('Server update required', { exact: true }).count(), 0, 'Successful reload clears obsolete upgrade notices');
+    const refreshed = await workspaceReads();
+    await page.clock.runFor(15_100);
+    equal(await workspaceReads(), refreshed, 'Repeated completion status does not repeatedly fetch documents');
   });
   equal(fingerprint(), distHash, 'Built desktop/dist remains unchanged throughout the suite');
 }

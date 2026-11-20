@@ -2,7 +2,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
 export const protocolVersion = 1;
-export const Mode = z.enum(['full_control', 'auto', 'ask_permission']);
+export const controlModes = ['full_control', 'auto'] as const;
+export const autoPolicyVersion = 1;
+// Legacy permission mode migrates conservatively, never to Full Control.
+export const Mode = z.enum(['full_control', 'auto', 'ask_permission']).transform(mode => mode === 'ask_permission' ? 'auto' as const : mode).pipe(z.enum(controlModes));
 export const RunState = z.enum(['queued', 'running', 'waiting_for_approval', 'waiting_for_login', 'waiting_for_human', 'waiting_for_payment_auth', 'waiting_for_capacity', 'verifying', 'completed', 'paused', 'cancelled', 'failed', 'interrupted', 'reconciling']);
 export const Command = z.strictObject({
   protocolVersion: z.literal(1), commandId: z.uuid(), idempotencyKey: z.string().min(1).max(200),

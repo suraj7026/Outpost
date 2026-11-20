@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { activityChunks, activitySummary } from './src/activity-model';
+import { activityChunks, activitySummary, executionOutcome } from './src/activity-model';
 import type { ServerRecord } from './src/types';
 
 const row = (kind: string, id: string, data: ServerRecord['data'] = {}): ServerRecord => ({
@@ -40,6 +40,32 @@ test('images remain outside groups and no input records, text or reasoning are m
   const before = structuredClone(records);
   assert.deepEqual(activityChunks(records).map(chunk => chunk.map(record => record.id)), [['first'], ['image'], ['last']]);
   assert.deepEqual(records, before);
+});
+
+test('authorized actions are active queued work, not approval or completion', () => {
+  const authorized = row('action', 'automatic', { state: 'authorized' });
+  assert.equal(executionOutcome(authorized), 'active');
+  assert.deepEqual(activitySummary([tool('finished'), authorized]), {
+    completed: 1, attention: false, active: true, complete: false, label: 'Working',
+  });
+  assert.deepEqual(activitySummary([authorized, row('action', 'legacy', { state: 'pending' })]), {
+    completed: 0, attention: true, active: true, complete: false, label: 'Waiting for approval',
+  });
+});
+
+test('automatic work does not hide failures, unknown outcomes, interruptions or denied actions', () => {
+  for (const data of [
+    { state: 'failed' }, { state: 'unknown' }, { state: 'denied' }, { state: 'cancelled' },
+    { state: 'authorized', interrupted: true }, { state: 'authorized', result: { exitCode: 7 } },
+    { state: 'succeeded', result: { agent_reported_success: false } },
+  ]) {
+    const evidence = row('action', 'evidence', data);
+    assert.equal(executionOutcome(evidence), 'attention');
+    assert.deepEqual(activitySummary([row('action', 'automatic', { state: 'authorized' }), evidence]), {
+      completed: 0, attention: true, active: true, complete: false, label: 'Needs attention',
+    });
+  }
+  assert.equal(executionOutcome(row('action', 'unfamiliar', { state: 'future_state' })), 'waiting');
 });
 
 test('late visible content splits and clearing it merges the presentation without reordering records', () => {

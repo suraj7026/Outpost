@@ -49,6 +49,9 @@
 .workspace-document-body > .artifact { margin: 24px; }
 .workspace-empty { padding: 24px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
 .workspace-empty p { font-size: inherit; }
+.workspace-empty a,.workspace-list-note a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.workspace-empty a { display: inline-block; margin-bottom: 8px; }
+.workspace-panel a:focus-visible { outline: 2px solid var(--muted); outline-offset: 3px; }
 .workspace-notice { flex: none; margin: 0; padding: 8px 16px; color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
 .workspace-files { min-width: 0; min-height: 0; border-left: 1px solid var(--line); display: flex; flex-direction: column; background: var(--surface); }
 .workspace-files-heading { height: var(--workspace-header-height); min-height: var(--workspace-header-height); display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-bottom: 1px solid var(--line); font-size: 13px; }

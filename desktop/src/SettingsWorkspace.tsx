@@ -1,3 +1,4 @@
+import { AutomaticUpdatesSection } from './AutomaticUpdates';
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronRight, Plus, Server, RefreshCw, SlidersHorizontal } from "lucide-react";
 import type { Connection } from "./useConnection";
@@ -17,7 +18,7 @@ import "./settings-refinement.css";
 import "./settings-pages.css";
 
 export const settingsLocation = () => window.location.hash.startsWith("#settings") ? window.location.hash.slice(1) : "settings";
-const tabs = [{ id: "general", label: "General" }, { id: "setup", label: "Connection" }, { id: "models", label: "Models & providers" }, { id: "runtime", label: "Pi & extensions" }, { id: "devices", label: "Devices" }, { id: "recovery", label: "Recovery" }] as const;
+const tabs = [{ id: "general", label: "General" }, { id: "setup", label: "Connection" }, { id: "models", label: "Models & providers" }, { id: "runtime", label: "Server update" }, { id: "devices", label: "Devices" }, { id: "recovery", label: "Recovery" }] as const;
 export type ServerSettingsTab = typeof tabs[number]["id"];
 
 export default function SettingsWorkspace({ registry, connections, groups, appearance, mutate, refresh, openChat }: {
@@ -46,7 +47,7 @@ export default function SettingsWorkspace({ registry, connections, groups, appea
       {id && !adding && connection && <div className="settings-header-actions"><Badge tone={connection.connected ? 'success' : 'neutral'}>{connection.busy ? 'Working…' : connection.connected ? 'Connected' : connection.info?.lifecycle?.state === 'paused' ? 'Paused' : connection.reconnecting ? 'Reconnecting' : connection.connecting ? 'Connecting' : 'Offline'}</Badge><Button variant="ghost" className="ui-close" aria-label="Reconnect" title="Refresh connection" disabled={connection.busy || connection.connecting || !nativeApp() || recordedPreview()} onClick={() => void connection.connect()}><RefreshCw size={18} /></Button></div>}
       {section === "servers" && !id && <a className="settings-add" href="#settings/servers/new"><Plus size={16} />Add server</a>}
     </div>
-    {(!section || section === "appearance") && <AppearanceSettings appearance={appearance} />}
+    {(!section || section === "appearance") && <><AppearanceSettings appearance={appearance} /><details className="ui-details"><summary>Automatic server update preferences</summary><AutomaticUpdatesSection /></details></>}
     {section === "servers" && !id && <div className="settings-link-list server-settings-list">
       {groups.filter(group => !group.archived).map(group => <a key={ownerKey(group.id)} href={`#settings/servers/${ownerKey(group.id)}`} data-server-id={ownerKey(group.id)}>
         <Server size={19} /><span><strong>{group.label}</strong><small>{connections[ownerKey(group.id)]?.info?.endpoint || "Connection not configured"}</small></span>
@@ -67,7 +68,7 @@ export default function SettingsWorkspace({ registry, connections, groups, appea
           onDeleted={() => {
             if (settingsLocation().split("/")[2] === id) window.location.hash = "machines";
           }} />}
-        {tab === "runtime" && <RuntimeSettings connection={connection} />}
+        {tab === "runtime" && <RuntimeSettings connection={connection} startRequested={parts[4] === "update"} />}
         <ConnectionSettings connection={connection} tab={tab} providerRequest={providerRequest} registry={registry} mutate={mutate} openChat={openChat} />
         {tab === "models" && <ProviderImport connection={connection} registry={registry} onSignIn={id => setProviderRequest({ id })} />}
         {tab === "setup" && connection.environmentId && <details className="ui-details"><summary>Installation & SSH setup</summary><ServerSetup environmentId={connection.environmentId} registry={registry} mutate={mutate} refresh={refresh} /></details>}

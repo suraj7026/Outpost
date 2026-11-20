@@ -52,7 +52,7 @@ function validStatus(value: AutomaticUpdatesStatus): boolean {
     value.servers.every(server => !!server && typeof server.environmentId === 'string' && typeof server.state === 'string' && typeof server.message === 'string' && (server.releaseId === undefined || typeof server.releaseId === 'string'));
 }
 
-type Command = 'automatic_updates_status' | 'automatic_updates_tick' | 'automatic_updates_enable' | 'automatic_updates_disable';
+type Command = 'automatic_updates_status' | 'automatic_updates_tick' | 'automatic_updates_enable' | 'automatic_updates_disable' | 'automatic_updates_recover';
 interface ControllerOptions {
   input: () => AutomaticUpdatesInput;
   invoke: (command: Command, args?: Record<string, unknown>) => Promise<AutomaticUpdatesStatus>;
@@ -90,10 +90,10 @@ export function createAutomaticUpdatesController({ input, invoke, working = { cu
       needsStatus = false;
       publish({ status, error: '', uncertain: false });
       accepted = true;
-    } catch {
+    } catch (error) {
       if (running && ticket === generation && automaticUpdatesAllowed(input())) {
         needsStatus = true;
-        publish({ uncertain: true, error: 'Supervisor status could not be confirmed. An enrollment or update may still be running. Outpost will reconcile native status; it will not repeat enrollment or blindly retry a launch.' });
+        publish({ uncertain: true, error: command === 'automatic_updates_recover' ? (typeof error === 'string' && ['Only a verified pre-activation idle timeout can use this recovery', 'Another server owns the update queue', 'The coordinator has not confirmed a released maintenance hold on the previous release; nothing was cleared', 'Host inspection could not be verified; nothing was cleared', 'Recovery refused: the failed operation, released maintenance hold, stopped updater and previous release must all agree'].includes(error) ? error : 'Recovery could not be verified. The retained operation must be inspected; no restart was automatically repeated.') : 'Supervisor status could not be confirmed. An enrollment or update may still be running. Outpost will reconcile native status; it will not repeat enrollment or blindly retry a launch.' });
       }
     } finally {
       working.current = false;
@@ -124,6 +124,19 @@ export function createAutomaticUpdatesController({ input, invoke, working = { cu
     stop() { running = false; generation += 1; requested = false; clearTimer(); },
     connectionsChanged() { if (running) { clearTimer(); void poll(); } },
     refresh: () => request('automatic_updates_status'),
+    async recoverServer(environmentId: string, approved: boolean, password = true) {
+      if (!approved || !automaticUpdateConnections(input()).includes(environmentId)) return false;
+      return request('automatic_updates_recover', { environmentId, approved: true, password });
+    },
+    async updateServer(environmentId: string) {
+      if (!automaticUpdateConnections(input()).includes(environmentId)) return false;
+      const accepted = await request('automatic_updates_tick', { connectedEnvironmentIds: [environmentId] });
+      if (accepted && snapshot.status?.enabled && snapshot.status.targets.includes(environmentId) && !snapshot.status.activeEnvironmentId &&
+        snapshot.status.servers.some(server => server.environmentId === environmentId && server.state === 'checked')) {
+        return request('automatic_updates_tick', { connectedEnvironmentIds: [environmentId] });
+      }
+      return accepted;
+    },
     async enable(approved: boolean, password = true, reviewedIds = automaticUpdateTargets(input())) {
       const environmentIds = automaticUpdateTargets(input());
       // Consent is bound to the entire current registry, not the selected connection or an obsolete dialog.

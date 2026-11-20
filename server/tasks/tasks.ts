@@ -2,8 +2,9 @@ import { z } from 'zod';
 import { Mode, RunState, id, requireThat } from '../core/contracts.js';
 import { Ledger } from '../core/ledger.js';
 import { ModelRef } from '../pi-management/contracts.js';
+import { retireLegacyApprovals } from '../policy/migration.js';
 
-export const NewTask = z.strictObject({ goal: z.string().trim().min(1).max(20000), profile: z.enum(['code','browser','operations','research','cowork','chat']), mode: Mode.default('ask_permission'), model: z.string().trim().min(1).max(200).optional(), modelRef: ModelRef.optional() }).refine(value => !(value.model && value.modelRef), 'Choose either a legacy model or a provider-qualified model');
+export const NewTask = z.strictObject({ goal: z.string().trim().min(1).max(20000), profile: z.enum(['code','browser','operations','research','cowork','chat']), mode: Mode.default('full_control'), model: z.string().trim().min(1).max(200).optional(), modelRef: ModelRef.optional() }).refine(value => !(value.model && value.modelRef), 'Choose either a legacy model or a provider-qualified model');
 export interface Task { goal: string; profile: string; model?: string; provider?: string; state: z.infer<typeof RunState>; runId: string; instructionSequence: number; plan: { title: string; state: string }[]; evidence: string[]; blocker: string | null }
 const terminal = new Set(['cancelled','completed']);
 export class Tasks {
@@ -87,6 +88,12 @@ export class Tasks {
           preserved.add(task.id);
         }
         if (checkpoint.data.state === 'prepared') this.db.put('maintenance_checkpoint','server',checkpoint.revision,{ ...checkpoint.data,state: 'restored' });
+      }
+      const paused = retireLegacyApprovals(this.db);
+      if (checkpoint && [...preserved].some(taskId => paused.has(taskId))) {
+        const current = this.db.need('maintenance_checkpoint','server');
+        const references = z.array(z.object({ id: z.string(), revision: z.number() })).parse(current.data.tasks);
+        this.db.put('maintenance_checkpoint','server',current.revision,{ ...current.data,tasks: references.filter(task => !paused.has(task.id)) });
       }
       for (const task of this.db.list<Task>('task')) if (['running','verifying'].includes(task.data.state) && !preserved.has(task.id)) this.db.put('task',task.id,task.revision,{ ...task.data,state: 'interrupted',blocker: 'Worker restart: reconcile outstanding effects before resuming' },'run.interrupted');
     });

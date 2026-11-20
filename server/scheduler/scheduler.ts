@@ -14,7 +14,7 @@ export class Scheduler {
     return this.db.transaction(() => {
       const started: string[] = [];
       for (const schedule of this.db.list<Schedule>('automation')) {
-        const data = schedule.data; if (data.paused || data.nextAt > time) continue;
+        const data = Schedule.parse(schedule.data); if (data.paused || data.nextAt > time) continue;
         const occurrence = `${schedule.id}:${schedule.revision}:${data.nextAt}`;
         const overdue = data.intervalMs !== null && time-data.nextAt >= data.intervalMs;
         if (!(overdue && data.missed === 'skip') && !this.db.get('occurrence',occurrence)) {

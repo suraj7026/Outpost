@@ -3,33 +3,68 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { Ledger } from '../core/ledger.js';
 import { Devices, Gate } from './trust.js';
-import type { Action, Reviewer } from './trust.js';
+import type { Action } from './trust.js';
 
-function setup(mode: string, reviewer?: Reviewer) {
-  const db = new Ledger(), gate = new Gate(db,reviewer); let effects = 0;
+function setup(mode: string) {
+  const db = new Ledger(), gate = new Gate(db); let effects = 0;
   gate.changePolicy('task',0,mode);
   gate.register('read',{ version: 1,effects: ['workspace.read'],parse: () => ({}),target: () => 'workspace',execute: async () => { effects++; return 'read'; } });
   return { db,gate,effects: () => effects };
 }
-test('all three modes, fail-to-ask, stale policy and single dispatch',async () => {
+test('Full Control executes once; Auto and legacy require approval for uncertified tools',async () => {
   for (const mode of ['full_control','auto','ask_permission']) {
-    const { gate,db,effects } = setup(mode,async action => ({ actionDigest: action.actionDigest,policyVersion: action.policyVersion,decision: 'allow',summary: 'Scoped read' }));
+    const { gate,db,effects } = setup(mode);
+    const auto = mode !== 'full_control';
+    assert.equal(gate.policy('task').data.mode,auto ? 'auto' : 'full_control');
+    // Exercise storage predating normalization, not just the public input parser.
+    db.put('policy','task',1,{ mode });
     const action = await gate.propose('task','read',{});
-    if (mode === 'ask_permission') {
-      await assert.rejects(gate.dispatch(action.id),/not_authorized/); assert.equal(effects(),0);
-      db.transaction(() => gate.decide(action.id,1,action.data.nonce,action.data.actionDigest,'approve','mac'));
-      const loser = db.transaction(() => gate.decide(action.id,1,action.data.nonce,action.data.actionDigest,'deny','phone'));
-      assert.equal(loser.data.state,'authorized');
+    assert.equal(action.data.state,auto ? 'pending' : 'authorized'); assert.equal(effects(),0);
+    assert.equal(gate.policy('task').data.mode,auto ? 'auto' : 'full_control');
+    assert.equal(db.list('inbox').length,auto ? 1 : 0);
+    assert.equal(db.db.prepare("SELECT COUNT(*) AS n FROM outbox WHERE topic='notice'").get()?.n,auto ? 1 : 0);
+    if (auto) {
+      db.put('device','owner',0,{ revoked: false });
+      gate.decide(action.id,action.revision,'owner',{ nonce: action.data.nonce, actionDigest: action.data.actionDigest, decision: 'approve' });
     }
     await gate.dispatch(action.id); assert.equal(effects(),1);
-    await assert.rejects(gate.dispatch(action.id)); db.close();
+    await assert.rejects(gate.dispatch(action.id),/not_authorized/); db.close();
   }
-  const { gate,db } = setup('auto',async () => ({ decision: 'allow' }));
-  const pending = await gate.propose('task','read',{}); assert.equal(pending.data.state,'pending');
-  assert.equal(db.list('inbox').length,1);
+});
+test('legacy policy changes normalize but retain revision validation and stale-action fencing',async () => {
+  const { gate,db,effects } = setup('auto');
+  const action = await gate.propose('task','read',{});
+  assert.throws(() => gate.changePolicy('task',0,'ask_permission'),/stale_revision/);
+  assert.throws(() => gate.changePolicy('task',1,'root'));
   gate.changePolicy('task',1,'ask_permission');
-  assert.throws(() => gate.decide(pending.id,1,pending.data.nonce,pending.data.actionDigest,'approve','mac'),/stale_policy/);
-  db.close();
+  assert.equal(gate.policy('task').data.mode,'auto');
+  assert.equal(db.need('action', action.id).data.state, 'denied');
+  await assert.rejects(gate.dispatch(action.id),/not_authorized/);
+  assert.equal(effects(),0); db.close();
+});
+for (const state of ['paused','cancelled','completed','failed','interrupted']) test(`full_control retains the ${state} dispatch boundary`,async () => {
+  const { gate,db,effects } = setup('full_control');
+  const action = await gate.propose('task','read',{});
+  db.put('task','task',0,{ state });
+  await assert.rejects(gate.dispatch(action.id),/task_not_dispatchable/);
+  assert.equal(effects(),0); db.close();
+});
+test('malformed persisted modes fail validation instead of silently authorizing actions',async () => {
+  const { gate,db,effects } = setup('full_control');
+  db.put('policy','task',1,{ mode: 'root' });
+  await assert.rejects(gate.propose('task','read',{}));
+  assert.equal(db.list('action').length,0); assert.equal(effects(),0); db.close();
+});
+for (const [change, code] of [
+  [{ expiresAt: 1 }, 'expired_action'],
+  [{ toolVersion: 2 }, 'tool_changed'],
+  [{ identityRef: 'owner' }, 'identity_not_delegated'],
+] as const) test(`full_control retains ${code} validation`,async () => {
+  const { gate,db,effects } = setup('full_control');
+  const action = await gate.propose('task','read',{});
+  db.put('action',action.id,action.revision,{ ...action.data,...change });
+  await assert.rejects(gate.dispatch(action.id),{ code });
+  assert.equal(effects(),0); db.close();
 });
 test('protected effects and ambiguous failures never grant or retry authority', async () => {
   const { gate,db } = setup('full_control');

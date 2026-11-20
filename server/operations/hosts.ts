@@ -33,7 +33,7 @@ export function registerHosts(gate: Gate, configuration: HostAdministration, tas
   requireThat(names.length > 0,'host_endpoints_required');
   const command = HostCommand.extend({ host: z.enum(names) });
   gate.register('host.execute',{
-    version: 1,effects: ['host.execute'],inputSchema: z.toJSONSchema(command),description: 'Executes a shell command as root on the specified enrolled host through the coordinator approval/evidence gate. Full host filesystem, Docker, system services and installed tools are available, subject to host configuration. No sudo is required here. The local host, when listed, is this environment’s server. Preserve unrelated workloads.',parse: input => command.parse(input),
+    version: 1,effects: ['host.execute'],inputSchema: z.toJSONSchema(command),description: 'Executes a shell command as root on the specified enrolled host through the coordinator validation/evidence gate. Full host filesystem, Docker, system services and installed tools are available, subject to host configuration. No sudo is required here. The local host, when listed, is this environment’s server. Preserve unrelated workloads.',parse: input => command.parse(input),
     target: args => `root@${String(args.host)}`,
     execute: async (args,signal) => {
       const input = command.parse(args);

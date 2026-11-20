@@ -240,7 +240,7 @@ try {
   await unmount.getByRole('button', { name: 'Sign in · Subscription' }).click();
   await unmount.getByRole('button', { name: 'Open provider sign-in', exact: true }).click();
   await unmount.getByRole('button', { name: 'Waiting for browser sign-in…' }).waitFor();
-  await unmount.getByRole('link', { name: 'Pi & extensions', exact: true }).click();
+  await unmount.getByRole('link', { name: 'Server updates', exact: true }).click();
   await unmount.waitForFunction(() => __management.some(request => request.type === 'login.cancel') && __callbackEvents.includes('cancel'));
   await unmount.evaluate(() => __finishCallback());
   await unmount.waitForTimeout(100);

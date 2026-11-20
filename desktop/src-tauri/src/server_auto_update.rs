@@ -1763,3 +1763,114 @@ async fn postverify(
 #[cfg(test)]
 #[path = "server_auto_update_tests.rs"]
 mod tests;
+
+fn validate_failed_recovery(review: &Value, environment: &str, owner: &str, maintenance: &Value, host: &Value) -> Result<(), String> {
+    let operation = review["operationId"].as_str().ok_or("Missing retained operation")?;
+    environments::validate_id(operation)?;
+    if review["state"] != "failed" || review["progress"]["failureStage"] != "waiting_for_idle"
+        || review["progress"]["failureCode"] != "waiting_for_idle_failed"
+        || maintenance["operationId"] != operation || maintenance["owner"] != owner
+        || maintenance["state"] != "cancelled" || maintenance["sha256"] != review["artifact"]["sha256"]
+        || host["environmentId"] != environment || host["operationId"] != operation
+        || host["expectedRelease"] != review["installed"]["releaseId"]
+        || host["sha256"] != review["artifact"]["sha256"] || host["state"] != "safe_to_recheck"
+        || ![Some("inactive"), Some("failed")].contains(&host["updaterState"].as_str()) {
+        return Err("Recovery refused: the failed operation, released maintenance hold, stopped updater and previous release must all agree".into());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn automatic_updates_recover(
+    app: tauri::AppHandle,
+    setup: tauri::State<'_, Arc<Setup>>,
+    registry: tauri::State<'_, environments::Registry>,
+    environment_id: String,
+    approved: bool,
+    password: bool,
+) -> Result<Value, String> {
+    if !approved { return Err("Recovery must be explicitly requested".into()); }
+    let _global = acquire_global(&setup.directory)?;
+    let mut journal = Journal::read(&setup.directory)?;
+    if journal.active_environment_id.as_deref().is_some_and(|id| id != environment_id) {
+        return Err("Another server owns the update queue".into());
+    }
+    let review = load(&setup, &environment_id)?;
+    if review["state"] != "failed" || review["progress"]["failureCode"] != "waiting_for_idle_failed" {
+        return Err("Only a verified pre-activation idle timeout can use this recovery".into());
+    }
+    let state = registry.get(&environment_id)?;
+    let owner = public_identity(&state)?.0;
+    let maintenance = state.agent_request(json!({"type":"maintenance.status"})).await?;
+    if maintenance["state"] != "cancelled" || maintenance["owner"] != owner
+        || maintenance["operationId"] != review["operationId"] || maintenance["sha256"] != review["artifact"]["sha256"]
+        {
+        return Err("The coordinator has not confirmed a released maintenance hold on the previous release; nothing was cleared".into());
+    }
+    let entry = setup.entry(review["setupId"].as_str().ok_or("Saved SSH route missing")?)?;
+    let operation = review["operationId"].as_str().ok_or("Operation missing")?;
+    environments::validate_id(operation)?;
+    let params = [environment_id.as_str(), operation, review["installed"]["releaseId"].as_str().ok_or("Previous release missing")?, review["artifact"]["sha256"].as_str().ok_or("Release digest missing")?];
+    let source = format!("{}\n", include_str!("../../../deploy/environment/inspect_failed_update.py"));
+    let root = entry.inspection.as_ref().is_some_and(|v| v.uid == 0);
+    let command = format!("{}{} {}", if root { "" } else if password { "sudo -k -S -p '' -- " } else { "sudo -n -- " }, isolated_python(&source), params.iter().map(|value| format!("'{}'", value.replace('\'', "'\\''"))).collect::<Vec<_>>().join(" "));
+    let mut args = setup.ssh_args(&entry)?;
+    args.extend(["--".into(), entry.target.host.clone(), command]);
+    let host = tauri::async_runtime::spawn_blocking(move || -> Result<Value, String> {
+        let mut input = zeroize::Zeroizing::new(Vec::new());
+        if !root && password {
+            let prompt = serde_json::to_string(&format!("Inspect the stopped Outpost update on {}@{}. This read-only check does not restart services. The password is not saved.", entry.target.user, entry.target.host)).map_err(|_| "Invalid prompt")?;
+            let script = format!("text returned of (display dialog {prompt} default answer \"\" with hidden answer buttons {{\"Cancel\",\"Inspect update\"}} default button \"Inspect update\" with title \"Outpost recovery\")");
+            let mut secret = zeroize::Zeroizing::new(run("/usr/bin/osascript", &["-e".into(), script], b"", Duration::from_secs(180), &AtomicBool::new(false))?);
+            while matches!(secret.last(), Some(b'\n' | b'\r')) { secret.pop(); }
+            if secret.is_empty() || secret.len() > 1024 || secret.contains(&b'\n') { return Err("Invalid authorization input".into()); }
+            input.extend_from_slice(&secret); input.push(b'\n'); secret.fill(0);
+        }
+        let bytes = run("/usr/bin/ssh", &args, &input, Duration::from_secs(30), &AtomicBool::new(false)).map_err(|_| "Host inspection could not be verified; nothing was cleared")?;
+        serde_json::from_slice(&bytes).map_err(|_| "Invalid host inspection".into())
+    }).await.map_err(|_| "Recovery inspection interrupted")??;
+    // Read authenticated coordinator state again after the privileged host probe.
+    let maintenance_after = state.agent_request(json!({"type":"maintenance.status"})).await?;
+    validate_failed_recovery(&review, &environment_id, &owner, &maintenance, &host)?;
+    validate_failed_recovery(&review, &environment_id, &owner, &maintenance_after, &host)?;
+    let archive = setup.directory.join(format!("recovered-update-{}-{}.json", environment_id, operation));
+    private_write(&archive, &serde_json::to_vec(&review).map_err(|_| "Invalid recovery archive")?)?;
+    let server = journal.servers.get_mut(&environment_id).ok_or("Server journal missing")?;
+    server.state = Phase::Ready; server.operation_id = None; server.review_id = None;
+    server.message = "Verified stopped pre-activation failure; retained receipt archived; checking a fresh update".into();
+    journal.active_environment_id = None;
+    journal.write(&setup.directory)?;
+    // Keeping the old failed receipt until the new check succeeds makes an interruption fail closed.
+    check_inner(app, setup, registry, environment_id).await?;
+    Ok(journal.status())
+}
+
+#[cfg(test)]
+mod failed_recovery_tests {
+    use super::*;
+    fn evidence() -> (Value, Value, Value, Value) {
+        let review = json!({"state":"failed","operationId":"33abaf6c-63dd-4977-a0c9-fba36a2b874b","progress":{"failureStage":"waiting_for_idle","failureCode":"waiting_for_idle_failed"},"artifact":{"sha256":"digest"},"installed":{"releaseId":"previous"}});
+        let maintenance = json!({"operationId":review["operationId"],"owner":"device","state":"cancelled","sha256":"digest"});
+        let inventory = json!({"releaseId":"previous"});
+        let host = json!({"environmentId":"environment","operationId":review["operationId"],"expectedRelease":"previous","sha256":"digest","state":"safe_to_recheck","updaterState":"inactive"});
+        (review, maintenance, inventory, host)
+    }
+    #[test]
+    fn recovery_requires_every_bound_piece_of_live_evidence() {
+        let (review, maintenance, _inventory, host) = evidence();
+        assert!(validate_failed_recovery(&review,"environment","device",&maintenance,&host).is_ok());
+        for key in ["operationId", "owner", "state", "sha256"] {
+            let mut bad=maintenance.clone(); bad[key]=json!("changed");
+            assert!(validate_failed_recovery(&review,"environment","device",&bad,&host).is_err(),"{key}");
+        }
+        for key in ["environmentId", "operationId", "expectedRelease", "sha256", "state", "updaterState"] {
+            let mut bad=host.clone(); bad[key]=json!("changed");
+            assert!(validate_failed_recovery(&review,"environment","device",&maintenance,&bad).is_err(),"{key}");
+        }
+        for state in ["unknown","staging","activating","rolled_back","complete","needs_attention"] {
+            let mut bad=review.clone(); bad["state"]=json!(state);
+            assert!(validate_failed_recovery(&bad,"environment","device",&maintenance,&host).is_err(),"{state}");
+        }
+
+    }
+}

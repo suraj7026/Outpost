@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { requireThat } from '../core/contracts.js';
 import type { Gate } from '../policy/trust.js';
 import { Workspace } from '../artifacts/files.js';
+import { registerBuiltin, classifyCommand } from '../policy/auto-policy.js';
 export const CommandInput = z.strictObject({ argv: z.array(z.string().max(8192)).min(1).max(128), cwd: z.string().default('.'), timeoutMs: z.number().int().min(100).max(300000).default(30000) });
 const commandPath = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 export async function resolveExecutable(name: string): Promise<string> {
@@ -41,11 +42,16 @@ export async function execute(argv: string[], cwd: string, signal: AbortSignal, 
   });
 }
 export function registerCommands(gate: Gate, workspace: Workspace, executables: Set<string>, unrestricted = false) {
-  gate.register('command.run',{ version: 1,effects: ['unknown'],inputSchema: z.toJSONSchema(CommandInput),description: 'Runs argv in the task workspace as the non-root coordinator user. In full-control installations bare executable names resolve against a fixed system PATH. For shell syntax use argv ["/bin/bash", "-lc", "your shell command"] and cwd ".". This is not root host execution; use host.execute for Docker, system services and host filesystem operations.',parse: value => CommandInput.parse(value),target: args => `workspace:${String(args.cwd)}`,
+  registerBuiltin(gate, 'command.run',{ version: 1,effects: ['unknown'],inputSchema: z.toJSONSchema(CommandInput),description: 'Runs argv in the task workspace as the non-root coordinator user. In full-control installations bare executable names resolve against a fixed system PATH. For shell syntax use argv ["/bin/bash", "-lc", "your shell command"] and cwd ".". This is not root host execution; use host.execute for Docker, system services and host filesystem operations.',parse: value => CommandInput.parse(value),target: args => `workspace:${String(args.cwd)}`,
     execute: async (args,signal) => {
       const input = CommandInput.parse(args); requireThat(unrestricted || executables.has(input.argv[0]!), 'executable_not_enrolled');
       const cwd = input.cwd === '.' ? workspace.root : workspace.path(input.cwd);
       const argv = unrestricted ? [await resolveExecutable(input.argv[0]!),...input.argv.slice(1)] : input.argv;
       return { ...await execute(argv,cwd,signal,input.timeoutMs) };
-    } });
+    } }, args => {
+      const input = CommandInput.parse(args);
+      requireThat(unrestricted || executables.has(input.argv[0]!), 'executable_not_enrolled');
+      if (input.cwd !== '.') workspace.path(input.cwd);
+      return classifyCommand(args);
+    });
 }

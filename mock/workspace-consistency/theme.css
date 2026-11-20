@@ -1,0 +1,74 @@
+html[data-theme="dark"] body.consistency-preview {
+  --bg: #0f0f0f;
+  --sidebar: #0f0f0f;
+  --surface: #1e1e1e;
+  --raised: #282828;
+  --active: #363636;
+  --line: #363636;
+  --control: #4e4e4e;
+  --text: #eeeeee;
+  --muted: #b3b3b3;
+  --subtle: #999999;
+  --preview-card: #222222;
+  --preview-dialog: #242424;
+  --preview-track: #191919;
+  --focus-surface: color-mix(in srgb, var(--active) 94%, var(--text));
+  --focus-composer: color-mix(in srgb, var(--raised) 96%, var(--text));
+  --composer-context-bg: #141414;
+  --composer-context-active: #363636;
+  color: var(--text);
+  background: var(--bg);
+}
+html[data-theme="dark"] body.consistency-preview .web-sidebar { background: var(--sidebar); }
+html[data-theme="dark"] body.consistency-preview .main-shell { background: var(--surface); }
+html[data-theme="dark"] body.consistency-preview .main-shell > .page :is(.machines-server-card,.workspace-chat,.workspace-note-card),
+html[data-theme="dark"] body.consistency-preview .workspace-view .outputs-grid > .artifact { background: var(--preview-card); }
+html[data-theme="dark"] body.consistency-preview .main-shell > .page :is(.machines-server-card,.workspace-chat,.workspace-note-card):hover { background: var(--raised); }
+html[data-theme="dark"] body.consistency-preview :is(.appearance-width-options,.workspace-scope) { background: var(--preview-track); }
+html[data-theme="dark"] body.consistency-preview .appearance-width-options label:has(input:checked),
+html[data-theme="dark"] body.consistency-preview .workspace-scope button[aria-pressed="true"] { background: var(--active); color: var(--text); box-shadow: none; }
+html[data-theme="dark"] body.consistency-preview .appearance-width-options input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  min-height: 14px;
+  border: 1.5px solid var(--subtle);
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+  flex: none;
+}
+html[data-theme="dark"] body.consistency-preview .appearance-width-options input[type="radio"]:checked { border-color: var(--text); background: var(--text); box-shadow: inset 0 0 0 3px var(--active); }
+html[data-theme="dark"] body.consistency-preview .main-shell > .page :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),select,textarea) { background-color: var(--raised); border-color: var(--line); color: var(--text); }
+html[data-theme="dark"] body.consistency-preview :is(input,textarea)::placeholder { color: var(--subtle); opacity: 1; }
+html[data-theme="dark"] body.consistency-preview .preview-standard-dialog,
+html[data-theme="dark"] body.consistency-preview .new-task-server > div {
+  --surface: var(--preview-dialog);
+  background: var(--surface);
+  border-color: var(--control);
+}
+html[data-theme="dark"] body.consistency-preview .preview-standard-dialog :is(.ui-dialog-heading,.modal-top,.agent-dialog-heading,.server-reboot-heading) { background: var(--surface); }
+html[data-theme="dark"] body.consistency-preview .preview-standard-dialog .preview-form-dialog .workspace-dialog-actions { background: var(--surface); }
+html[data-theme="dark"] body.consistency-preview .composer-context-run {
+  --bg: #141414;
+  --raised: #282828;
+  --text: #eeeeee;
+  --muted: #b3b3b3;
+  --subtle: #999999;
+  --active: #363636;
+  --line: #363636;
+  --keyboard-focus-bg: #404040;
+  --composer-context-bg: #141414;
+  --composer-context-active: #363636;
+}
+html[data-theme="dark"] body.consistency-preview .appearance-preview[data-frost="off"] .appearance-preview-sidebar { background: var(--sidebar); }
+html[data-theme="dark"] body.consistency-preview .appearance-preview[data-frost="off"] .appearance-preview-content { background: var(--surface); }
+html[data-theme="dark"] body.consistency-preview .preview-attention-filter { background: var(--raised); border-color: var(--control); }
+html[data-theme="dark"] body.consistency-preview .preview-attention-filter[aria-pressed="true"] { background: var(--active); }
+html[data-theme="dark"] body.consistency-preview .new-task-button { border-color: var(--control); }
+html[data-theme="dark"] body.consistency-preview .main-shell > .page .primary:not(:disabled),
+html[data-theme="dark"] body.consistency-preview .preview-standard-dialog :is(.primary,.ui-button-primary):not(:disabled) { background: var(--text); color: var(--bg); }
+html[data-theme="dark"] body.consistency-preview .workspace-chat .ui-badge-success { background: color-mix(in srgb,var(--positive) 10%,var(--preview-card)); }
+html[data-theme="dark"] body.consistency-preview .workspace-chat .ui-badge-warning { background: color-mix(in srgb,var(--warning) 10%,var(--preview-card)); }

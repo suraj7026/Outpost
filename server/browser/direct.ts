@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { BrowserAction, BrowserSessions } from './sessions.js';
 import type { Gate } from '../policy/trust.js';
+import { registerBuiltin } from '../policy/auto-policy.js';
 import type { Artifacts } from '../artifacts/files.js';
 
 const Empty = z.strictObject({});
@@ -14,13 +15,13 @@ export function registerDirectBrowser(gate: Gate, sessions: BrowserSessions, art
     parse: input => Open.parse(input), target: args => String(args.url),
     execute: async (args, signal) => sessions.open(taskId, Open.parse(args).url, signal),
   });
-  gate.register('browser.observe', {
+  registerBuiltin(gate, 'browser.observe', {
     version: 1, effects: ['browser.read'], inputSchema: z.toJSONSchema(Empty),
     description: 'Direct Pi control: read the current page and actionable element refs. Use the returned observation for the next browser.act; old observations are invalid after any action or owner interaction.',
     parse: input => Empty.parse(input), target: () => 'Task browser',
     execute: async (_, signal) => sessions.execute(taskId, 'direct', 'Observe page', signal, session => sessions.observe(session)),
   });
-  gate.register('browser.act', {
+  registerBuiltin(gate, 'browser.act', {
     version: 1, effects: ['unknown'], inputSchema: z.toJSONSchema(Act),
     description: 'Direct Pi control: execute one action with a fresh observation. Example: {observation:1,input:{action:"click",ref:"2"}}. Returns the changed page. Navigation, tabs, fill, select, press and scroll are also supported.',
     parse: input => Act.parse(input), target: () => 'Task browser',
@@ -28,8 +29,10 @@ export function registerDirectBrowser(gate: Gate, sessions: BrowserSessions, art
       const input = Act.parse(args);
       return sessions.execute(taskId, 'direct', input.input.action, signal, session => sessions.act(session, input.observation, input.input));
     },
-  });
-  gate.register('browser.capture', {
+// Scrolling dispatches real wheel events; a page can observe them and act. No browser
+// interaction is certified routine: side effects like payment submits can ride a scroll.
+  }, args => 'unclassified');
+  registerBuiltin(gate, 'browser.capture', {
     version: 1, effects: ['browser.read', 'workspace.write'], inputSchema: z.toJSONSchema(Empty),
     description: 'Save a PNG screenshot of this task browser as an evidence artifact. Live viewing itself does not save screenshots.',
     parse: input => Empty.parse(input), target: () => 'Task browser screenshot',

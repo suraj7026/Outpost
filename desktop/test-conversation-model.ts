@@ -374,9 +374,31 @@ test('parallel activity labels remain bounded and retain the count for huge comm
   assert.match(label, /… · 2 active$/u);
 });
 
-test('authorized is not dispatching and inactive, failed or interrupted projections are not live work', () => {
+test('authorized actions show queued automatic work without claiming dispatch or requiring approval', () => {
+  const queued = record('action', 'automatic', 1, { state: 'authorized', tool: 'file.read', arguments: { path: 'a' } });
+  const wrapper = record('tool_stream', 'wrapper', 2, { state: 'running', streaming: true, actionId: queued.id });
+  for (const state of ['running', 'reconciling']) {
+    assert.deepEqual(taskRunStatus(task(state), [queued, wrapper]), {
+      label: 'Queued: Read a', kind: 'running', active: true, transient: false,
+    });
+  }
+  const dispatched = { ...queued, revision: 2, data: { ...queued.data, state: 'dispatching' } };
+  assert.equal(taskRunStatus(task('running'), [queued, dispatched, wrapper]).label, 'Read a');
+  assert.equal(taskRunStatus(task('running'), [queued, record('action', 'pending', 3, { state: 'pending' })]).label, 'Waiting for approval');
+  assert.equal(taskRunStatus(task('running'), [queued, record('action', 'unknown', 3, { state: 'unknown' })]).label, 'Action outcome unknown');
+  for (const state of ['paused', 'failed', 'interrupted', 'cancelled', 'completed', 'waiting_for_approval']) {
+    assert.deepEqual(taskRunStatus(task(state), [queued]), taskRunStatus(task(state), []));
+  }
+  for (const result of [{ exitCode: 7 }, { agent_reported_success: false }]) {
+    const failed = { ...queued, data: { ...queued.data, result } };
+    assert.equal(taskRunStatus(task('running'), [failed]).kind, 'error');
+  }
+  const long = { ...queued, data: { ...queued.data, arguments: { path: 'a'.repeat(200) } } };
+  assert.ok(Array.from(taskRunStatus(task('running'), [long]).label).length <= 160);
+});
+
+test('inactive, failed or interrupted projections are not live work', () => {
   const cases: ServerRecord[] = [
-    record('action', 'authorized', 1, { state: 'authorized', tool: 'file.read', arguments: { path: 'a' } }),
     record('action', 'not-a-server-state', 1, { state: 'running', tool: 'file.read', arguments: { path: 'a' } }),
     record('tool_stream', 'settled', 1, { state: 'running', streaming: false }),
     record('tool_stream', 'finished', 1, { state: 'finished', streaming: true }),

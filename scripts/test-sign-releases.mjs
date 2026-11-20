@@ -11,7 +11,8 @@ const { privateKey } = generateKeyPairSync('ed25519');
 const manifest = { schema: 2, id: 'host-12345678901234567890', protocolVersion: 2, layoutVersion: 1, compatibility: 'native-v1', sequence: 6,
   rollback: true, piVersion: '1.5.2', extensions: [{ name: 'pi-ollama-cloud', version: '0.13.1' }, { name: 'pi-subagents', version: '0.88.1' }] };
 const files = ['package.json', 'package-lock.json', 'server/main.ts', 'server/pi-worker/main.ts', 'deploy/agent/host-executor.mjs',
-  'server/environment/update-checkpoint.ts', 'server/environment/qualify-runtime.ts', 'server/gateway/coordinator.ts', 'server/policy/trust.ts',
+  'server/environment/update-checkpoint.ts', 'server/environment/qualify-runtime.ts', 'server/gateway/coordinator.ts',
+  'server/gateway/http.ts', 'server/artifacts/workspace-review.ts', 'server/policy/trust.ts',
   'server/core/ledger.ts', 'server/scheduler/tools.ts', 'deploy/environment/auto_update.py'];
 const bytes = Buffer.from('fixture archive');
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -42,7 +43,7 @@ test('refuses archive hash, size, pins and manifest mismatches before signing', 
   assert.throws(() => signArtifact(metadata(), bytes, privateKey, { ...contents(), manifest: { ...manifest, sequence: 7 } }));
 });
 
-test('all service entrypoints and automation schemas must be packaged, including the root executor', () => {
+test('service entrypoints, workspace review API modules and automation schemas must be packaged', () => {
   for (const name of files) assert.throws(() => signArtifact(metadata(), bytes, privateKey, { ...contents(), files: files.filter(path => path !== name) }), /Incomplete release/);
   for (const tools of [[], requiredTools.slice(1), [...requiredTools, 'unknown.tool']]) assert.throws(() => signArtifact({ ...metadata(), requiredTools: tools }, bytes, privateKey, contents()));
 });
@@ -67,6 +68,15 @@ test('archive inspection binds actual manifest and pins without executing source
   const fixture = archiveFixture([{ name: './server/main.ts', data: 'throw Error("MUST NOT RUN")' }]);
   try {
     assert.deepEqual(inspectArchive(fixture.path), { manifest, runtimePinsSha256: hash(Buffer.from('{}')), files: ['deploy/environment/runtime-pins.json', 'host-manifest.json', 'server/main.ts'] });
+  } finally { fixture.cleanup(); }
+});
+
+test('a complete-looking archive without the workspace review module cannot be signed', () => {
+  const fixture = archiveFixture(files.filter(name => name !== 'server/artifacts/workspace-review.ts').map(name => ({ name })));
+  try {
+    const snapshot = readFileSync(fixture.path), inspected = inspectArchive(snapshot);
+    const value = { ...metadata(), sha256: hash(snapshot), size: snapshot.length, runtimePinsSha256: inspected.runtimePinsSha256 };
+    assert.throws(() => signArtifact(value, snapshot, privateKey, inspected), /Incomplete release: server\/artifacts\/workspace-review\.ts/);
   } finally { fixture.cleanup(); }
 });
 

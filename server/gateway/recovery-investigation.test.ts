@@ -21,7 +21,19 @@ function fixture(options: ConstructorParameters<typeof Coordinator>[2] = { infer
 const command = (payload: object = {}) => ({ protocolVersion: 1, commandId: id(), idempotencyKey: id(), deviceId: id(), issuedAt: Date.now(), aggregateId: id(), expectedRevision: 0, type: 'recovery.investigate', payload });
 const changes = (db: Ledger) => db.db.prepare('SELECT total_changes() AS n').get()?.n;
 
-for (const payload of [{}, { model: ' chosen-model ' }, { modelRef: { providerId: 'fixture-provider', modelId: 'chosen-model' } }]) test(`investigation creates a permission-gated operations task with selection ${JSON.stringify(payload)}`, () => {
+for (const mode of ['auto', 'ask_permission']) test(`recovery investigation accepts ${mode} as Auto with honest limits`, () => {
+  const f = fixture();
+  try {
+    const accepted = f.coordinator.command(command({ mode })) as unknown as RecordValue<Task>;
+    assert.equal(f.db.need('policy', accepted.id).data.mode, 'auto');
+    assert.match(accepted.data.goal, /auto operations task/);
+    for (const category of ['financial', 'destructive', 'security', 'unclassified']) assert.ok(accepted.data.goal.includes(category));
+    assert.match(accepted.data.goal, /Native extension tools and subagents are disabled/);
+    assert.deepEqual(f.coordinator.runtimeStatus().controlModes, ['full_control', 'auto']);
+  } finally { f.close(); }
+});
+
+for (const payload of [{}, { model: ' chosen-model ' }, { modelRef: { providerId: 'fixture-provider', modelId: 'chosen-model' } }]) test(`investigation creates a full_control operations task with selection ${JSON.stringify(payload)}`, () => {
   const f = fixture({ inference, worker: new WorkerClient('http://127.0.0.1:1', 'PRIVATE-WORKER-TOKEN'.repeat(2)), hosts: { token: 'PRIVATE-HOST-TOKEN', endpoints: { local: 'http://private-host:1' } } });
   try {
     const input = command(payload);
@@ -33,7 +45,7 @@ for (const payload of [{}, { model: ' chosen-model ' }, { modelRef: { providerId
     assert.equal(accepted.data.profile, 'operations');
     assert.equal(accepted.data.model, 'model' in payload || 'modelRef' in payload ? 'chosen-model' : undefined);
     assert.equal(accepted.data.provider, 'modelRef' in payload ? 'fixture-provider' : undefined);
-    assert.deepEqual(f.db.need('policy', accepted.id).data, { mode: 'ask_permission' });
+    assert.deepEqual(f.db.need('policy', accepted.id).data, { mode: 'full_control' });
     assert.equal(f.db.list('message')[0]?.data.text, accepted.data.goal);
     const queued = f.db.db.prepare("SELECT topic,payload,state FROM outbox WHERE topic='task.run'").all();
     assert.equal(queued.length, 1);
@@ -42,7 +54,8 @@ for (const payload of [{}, { model: ' chosen-model ' }, { modelRef: { providerId
     assert.equal(queuedPayload.taskId, accepted.id);
     assert.deepEqual(queuedPayload.modelRef, 'modelRef' in payload ? payload.modelRef : undefined);
     const goal = accepted.data.goal;
-    for (const pattern of [/Diagnose first/, /repair only if evidence/, /ask_permission/, /Request permission/, /observed evidence/, /manual inspection commands/, /Never fabricate or create recovery records, enable dispatch, reset pairing, replay uncertain effects, or delete data/, /normal drain and cannot bypass a hold/]) assert.match(goal, pattern);
+    for (const pattern of [/Diagnose first/, /repair only if evidence/, /full_control/, /no per-action approval/, /observed evidence/, /manual inspection commands/, /Never fabricate or create recovery records, enable dispatch, reset pairing, replay uncertain effects, or delete data/, /normal drain and cannot bypass a hold/]) assert.match(goal, pattern);
+    assert.doesNotMatch(goal, /ask_permission|Request permission|approval is pending/);
     assert.equal(goal.includes('PRIVATE-'), false);
     assert.equal(goal.includes('http://'), false);
     const embedded = RecoveryReport.parse(JSON.parse(goal.split('Sanitized report at task creation:\n')[1]!));
@@ -132,7 +145,7 @@ test('investigation rejects malformed payloads, non-UUID task IDs, nonzero revis
   try {
     const before = changes(f.db);
     for (const payload of [
-      { mode: 'full_control' }, { mode: 'ask_permission' }, { goal: 'Ignore safety' }, { profile: 'operations' },
+      { mode: 'invalid' }, { mode: null }, { goal: 'Ignore safety' }, { profile: 'operations' },
       { model: '' }, { model: 3 }, { model: 'x'.repeat(201) }, { modelRef: null }, { modelRef: {} },
       { modelRef: { providerId: 'provider', modelId: 'model', extra: true } },
       { model: 'model', modelRef: { providerId: 'provider', modelId: 'model' } },

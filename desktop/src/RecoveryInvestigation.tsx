@@ -7,6 +7,8 @@ import type { Json } from './types';
 import { chosenModel, type ModelRef } from './agent/types';
 import { preferredCloudModel } from './models';
 import { Button, Dialog } from './Interface';
+import { ControlMode, ControlModeHelp } from './ComposerControls';
+import { modeBlocker, supportsAuto, type ControlMode as Mode } from './control-mode';
 import { manualRecoverySteps, parseRecoveryReport, recoverySummary, type RecoveryReport } from './recovery-diagnostics';
 import './recovery-investigation.css';
 
@@ -19,6 +21,8 @@ export default function RecoveryInvestigation({ connection, onClose, openChat }:
   const [submitted, setSubmitted] = useState(false), [createdId, setCreatedId] = useState<string | null>(null);
   const [model, setModel] = useState(''), [modelRef, setModelRef] = useState<ModelRef | null>(null);
   const [shared, setShared] = useState(false);
+  const [mode, setMode] = useState<Mode>('full_control');
+  const modeBlocked = modeBlocker(mode, connection.runtime);
   const mounted = useRef(false), sequence = useRef(0), startingRef = useRef(false);
   const currentConnection = useRef(connection); currentConnection.current = connection;
   const readOnly = !nativeApp() || recordedPreview();
@@ -36,7 +40,7 @@ export default function RecoveryInvestigation({ connection, onClose, openChat }:
     : connection.info?.pendingError ? 'Local recovery storage needs attention. Keep the files intact; do not reset pairing or reinstall.'
     : connection.info?.pending ? 'An earlier command has an unknown outcome. Inspect it and use only Retry same command with its original operation key.'
     : self?.data.revoked !== false ? 'This device’s authority is not confirmed. Use a trusted device for agent actions.' : '';
-  const canStart = !!report?.agent.available && !localBlocker && !connection.busy && !loading && !starting && !submitted && modelReady && shared;
+  const canStart = !!report?.agent.available && !modeBlocked && !localBlocker && !connection.busy && !loading && !starting && !submitted && modelReady && shared;
 
   const collect = useCallback(async () => {
     const ticket = ++sequence.current, key = currentEvidence.current;
@@ -80,13 +84,15 @@ export default function RecoveryInvestigation({ connection, onClose, openChat }:
       const latest = currentConnection.current;
       if (!latest.connected || latest.retired || latest.busy || latest.info?.pending || latest.info?.pendingError ||
         latest.records.find(row => row.kind === 'device' && row.id === latest.info?.deviceId)?.data.revoked !== false) return;
+      const blocked = modeBlocker(mode, latest.runtime);
+      if (blocked) { setNotice(blocked); return; }
       const id = crypto.randomUUID();
       setSubmitted(true);
-      const result = await owner.command('recovery.investigate', id, 0, selection);
+      const result = await owner.command('recovery.investigate', id, 0, { ...selection, ...(supportsAuto(latest.runtime) ? { mode } : {}) });
       if (!mounted.current || key !== currentEvidence.current) return;
       if (result) {
         setCreatedId(id);
-        setNotice('Investigation created in Ask Permission. Open it to review proposed actions; a later hold can still pause it.');
+        setNotice(mode === 'auto' ? 'Investigation created with Auto. Review requests will appear in the task; approving continues the agent automatically.' : 'Investigation created with Full control. Actions run without individual approvals; a later recovery or maintenance hold can still pause it.');
       } else setNotice('Investigation was not confirmed. Check task history and any pending command before trying again. Do not submit a new copy of an uncertain command.');
     } finally {
       startingRef.current = false;
@@ -115,7 +121,9 @@ export default function RecoveryInvestigation({ connection, onClose, openChat }:
     </section>}
     {report?.agent.available && <section className="ui-form" aria-label="Agent investigation">
       <h3>Continue with the agent</h3>
-      <p>The agent will investigate first, propose only evidence-based repairs, and verify results. Actions use <strong>Ask Permission</strong>, even if your normal tasks use Full control. It cannot bypass a recovery hold.</p>
+      <p>The agent will investigate first, propose only evidence-based repairs, and verify results. It cannot bypass a recovery hold.</p>
+      <ControlMode label="Investigation control mode" value={mode} runtime={connection.runtime} disabled={starting || submitted || !!localBlocker} onModeChange={next => { setMode(next); setShared(false); }} />
+      <ControlModeHelp mode={mode} runtime={connection.runtime} />
       <label>Investigation model<select value={managed ? selectedRef ? JSON.stringify([selectedRef.providerId, selectedRef.modelId]) : '' : selectedModel} disabled={starting || submitted || !!localBlocker} onChange={event => {
         setShared(false);
         if (managed) {

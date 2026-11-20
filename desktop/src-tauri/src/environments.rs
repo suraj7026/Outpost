@@ -589,6 +589,16 @@ pub(super) async fn query_value(
     kind: String,
     payload: Value,
 ) -> Result<Value, String> {
+    query_command_value(state, kind, payload)
+        .await
+        .map_err(QueryError::into_message)
+}
+
+async fn query_command_value(
+    state: &State,
+    kind: String,
+    payload: Value,
+) -> Result<Value, QueryError> {
     let response = state
         .request("v1/query", json!({"type": kind, "payload": payload}), true)
         .await?;
@@ -598,7 +608,7 @@ pub(super) async fn query_value(
         .await
         .map_err(|_| "Invalid query response")?;
     if !status.is_success() {
-        return Err(value["message"].as_str().unwrap_or("Query rejected").into());
+        return Err(query_rejection(&kind, &value, "Query rejected"));
     }
     Ok(value)
 }
@@ -789,8 +799,8 @@ pub async fn environment_query(
     environment_id: String,
     kind: String,
     payload: Value,
-) -> Result<Value, String> {
-    query_value(registry.get(&environment_id)?.as_ref(), kind, payload).await
+) -> Result<Value, QueryError> {
+    query_command_value(registry.get(&environment_id)?.as_ref(), kind, payload).await
 }
 #[tauri::command]
 pub async fn environment_browser_request(

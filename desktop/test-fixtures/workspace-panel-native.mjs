@@ -34,7 +34,7 @@ export function workspaceFixture(options = {}) {
       const text = `# Retrieved attachment ${label} / ${taskLabel}\nArtifact bytes, not metadata.\n`;
       return [`${taskId}-attachment`, { text, hash: hash(text), base64: Buffer.from(text).toString('base64') }];
     }));
-    states[owner] = { records, documents, artifacts, cursor: 1, listError: options.listError ?? '', readError: '', truncated: !!options.truncated, offline: false, ready: false };
+    states[owner] = { records, documents, artifacts, cursor: 1, listError: options.listError ?? '', readError: options.readError ?? '', truncated: !!options.truncated, offline: false, ready: false };
   }
   return { registry, states };
 }
@@ -46,6 +46,7 @@ export function installWorkspaceTransport({ registry, states }) {
   let sequence = 0;
   const control = window.__workspacePanelTest = {
     registry, states, calls: [], unexpected: [], downloads: [], holdReads: [], heldReads: [], holdDownloads: false, heldDownloads: [],
+    automaticStatus: { enabled: false, targets: [], activeEnvironmentId: null, servers: [] },
     releaseReads() { this.holdReads = []; this.heldReads.splice(0).forEach(entry => entry.resolve(entry.result)); },
     releaseDownloads() { this.holdDownloads = false; this.heldDownloads.splice(0).forEach(entry => entry.resolve(entry.result)); },
     offline(owner) { states[owner].offline = true; streams.get(owner)?.resolve(); },
@@ -78,13 +79,15 @@ export function installWorkspaceTransport({ registry, states }) {
       if (command === 'plugin:event|unlisten') return;
       if (command === 'environment_list') return { registry: structuredClone(registry), legacy: { endpoint: null, pending: false } };
       if (command === 'setup_list') return [];
-      if (['automatic_updates_status', 'automatic_updates_tick'].includes(command)) return { enabled: false, targets: [], activeEnvironmentId: null, servers: [] };
+      if (['automatic_updates_status', 'automatic_updates_tick'].includes(command)) return structuredClone(control.automaticStatus);
       if (command === 'connection_info') return { endpoint: null, pending: false, nativeSidebar: false };
       if (command === 'disconnect' && !args.pause) return;
       if (command === 'environment_select' && states[args.environmentId]) { registry.selectedEnvironmentId = args.environmentId; return structuredClone(registry); }
       if (!command.startsWith('environment_') || !states[args.environmentId]) return deny(command, args);
       const owner = args.environmentId, state = states[owner], op = command.slice('environment_'.length);
       if (op === 'disconnect' && !args.pause) { streams.get(owner)?.resolve(); streams.delete(owner); return; }
+      if (op === 'update_status') throw 'No synthetic update receipt';
+      if (op === 'agent_request' && args.payload?.type === 'runtime.inventory') throw 'Synthetic runtime inventory unavailable';
       if (op === 'connection_info') return { environmentId: owner, endpoint: registry.environments[owner].activeRoute, deviceId: 'workspace-synthetic-device', publicKey: '', pending: false, pendingError: null, nativeSidebar: false };
       if (op === 'query') {
         if (state.offline) throw new Error('Synthetic workspace owner offline');
@@ -97,12 +100,12 @@ export function installWorkspaceTransport({ registry, states }) {
         const documents = state.documents[payload.taskId];
         if (args.kind === 'workspace.files') {
           requireValue(Object.keys(payload).join() === 'taskId', command, args);
-          if (state.listError) throw new Error(state.listError);
+          if (state.listError) throw typeof state.listError === 'string' ? new Error(state.listError) : state.listError;
           return { files: Object.values(documents).map(({ text, hash, ...metadata }) => structuredClone(metadata)), truncated: state.truncated };
         }
         if (args.kind === 'workspace.read') {
           requireValue(Object.keys(payload).sort().join() === 'path,taskId' && documents[payload.path], command, args);
-          if (state.readError) throw new Error(state.readError);
+          if (state.readError) throw typeof state.readError === 'string' ? new Error(state.readError) : state.readError;
           const result = structuredClone(documents[payload.path]);
           if (control.holdReads.some(hold => hold.owner === owner && hold.taskId === payload.taskId && hold.path === payload.path)) return new Promise(resolve => control.heldReads.push({ owner, ...payload, result, resolve }));
           return result;

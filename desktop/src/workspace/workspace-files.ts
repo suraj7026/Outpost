@@ -5,6 +5,16 @@ export interface WorkspaceDocument extends WorkspaceFile { text: string; hash: s
 export interface WorkspaceListing { files: WorkspaceFile[]; truncated: boolean }
 export type WorkspaceSelection = { kind: 'workspace'; path: string } | { kind: 'artifact'; id: string };
 export interface WorkspaceOpenRequest { selection: WorkspaceSelection; sequence: number }
+export interface WorkspaceFailure { message: string; updateRequired: boolean }
+
+export function workspaceFailure(error: unknown, workspaceQuery = true): WorkspaceFailure {
+  const code = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' ? error.code : undefined;
+  const message = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string'
+    ? error.message : typeof error === 'string' ? error : 'The server could not complete this request.';
+  // Older desktop bridges returned only a string, so recognize their exact unsupported-query responses.
+  const unsupported = code ? code === 'unknown_query' : /^(?:Error: )?(?:Unsupported query|Unknown query: workspace\.(?:files|read))$/.test(message);
+  return { message, updateRequired: workspaceQuery && unsupported };
+}
 export interface RecordedChange {
   kind: 'added' | 'modified';
   writtenText?: string;

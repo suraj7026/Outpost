@@ -1,4 +1,5 @@
 import { actionNeedsReview, object, text, type Json, type ServerRecord } from './types';
+import { isSubagentParent, isSubagentRecord, subagentRun, type SubagentRun } from './subagents/model';
 
 export type ConversationGroup =
   | { kind: 'owner'; id: string; record: ServerRecord }
@@ -11,7 +12,7 @@ export interface TaskRunStatus {
   transient: boolean;
 }
 
-const conversationKinds = new Set(['message', 'action', 'tool_stream', 'artifact']);
+const conversationKinds = new Set(['message', 'action', 'tool_stream', 'subagent_run', 'artifact']);
 const identity = (record: ServerRecord) => `${record.kind}:${record.id}`;
 
 function latestRecords(records: ServerRecord[]): ServerRecord[] {
@@ -47,11 +48,13 @@ export function linkedToolStreams(records: ServerRecord[]): Map<string, ServerRe
 
 /**
  * Pass one task's records and retain firstSeen across snapshots of that conversation.
- * The caller-owned cache uses kind:id keys; its insertion order breaks timestamp ties.
+ * The caller-owned cache uses kind:id keys plus verified subagent-slot links;
+ * its insertion order breaks timestamp ties.
  * Only this cache is mutated. A run is a presentation group, not a server run ID.
  */
 export function groupConversation(records: ServerRecord[], firstSeen: Map<string, number>): ConversationGroup[] {
-  const items = latestRecords(records);
+  const known = new Set(firstSeen.keys());
+  const items = latestRecords(records).filter(record => record.kind !== 'subagent_run' || subagentRun(record));
   // Assistant startedAt is emitted by live-events. Other current emissions only have
   // updatedAt; accept an explicit createdAt if supplied, never infer it from a revision.
   const initialTimes = items.map(record => timestamp(record.data.startedAt)
@@ -65,9 +68,33 @@ export function groupConversation(records: ServerRecord[], firstSeen: Map<string
     if (!Number.isFinite(firstSeen.get(key))) firstSeen.set(key, initialTimes[index] ?? fallback);
   });
   const positions = new Map([...firstSeen.keys()].map((key, index) => [key, index]));
+  const replacements = new Map<ServerRecord, ServerRecord>();
+  const slots = new Map<ServerRecord, { time: number; key: string }>();
+  for (const record of items) {
+    if (record.kind !== 'subagent_run') continue;
+    const run = subagentRun(record)!;
+    const parent = items.find(item => isSubagentParent(item, run));
+    const slotKey = `subagent-slot:${run.taskId}:${run.parentSessionId}:${run.parentToolId}`;
+    const parentKey = `tool_stream:${run.parentToolId}`;
+    if (parent) {
+      replacements.set(parent, record);
+      // Remember verified correlation even after the wrapper disappears from a snapshot.
+      const parentTime = firstSeen.get(parentKey)!;
+      const time = known.has(identity(record)) && !known.has(parentKey)
+        ? Math.min(parentTime, firstSeen.get(identity(record))!) : parentTime;
+      if (!firstSeen.has(slotKey)) firstSeen.set(slotKey, time);
+    }
+    const time = firstSeen.get(slotKey);
+    if (time !== undefined) {
+      const keys = [parentKey, identity(record)].filter(key => firstSeen.get(key) === time);
+      keys.sort((a, b) => positions.get(a)! - positions.get(b)!);
+      slots.set(record, { time, key: keys[0] ?? identity(record) });
+    }
+  }
   const ordered = [...items].sort((a, b) => {
-    const aKey = identity(a), bKey = identity(b);
-    return firstSeen.get(aKey)! - firstSeen.get(bKey)! || positions.get(aKey)! - positions.get(bKey)!;
+    const aSlot = slots.get(a), bSlot = slots.get(b);
+    const aKey = aSlot?.key ?? identity(a), bKey = bSlot?.key ?? identity(b);
+    return (aSlot?.time ?? firstSeen.get(aKey)!) - (bSlot?.time ?? firstSeen.get(bKey)!) || positions.get(aKey)! - positions.get(bKey)!;
   });
   const actions = new Map(items.filter(record => record.kind === 'action').map(record => [record.id, record]));
   const emitted = new Set<string>();
@@ -75,7 +102,8 @@ export function groupConversation(records: ServerRecord[], firstSeen: Map<string
   let runId = 'run:before-owner';
   for (const item of ordered) {
     // Whichever is earlier, the action or a linked stream, claims the action's slot.
-    const record = item.kind === 'tool_stream' ? actions.get(text(item, 'actionId')) ?? item : item;
+    const action = item.kind === 'tool_stream' && !isSubagentRecord(item) ? actions.get(text(item, 'actionId')) : undefined;
+    const record = replacements.get(item) ?? (action && text(action, 'taskId') === text(item, 'taskId') ? action : item);
     const key = identity(record);
     if (emitted.has(key)) continue;
     emitted.add(key);
@@ -140,7 +168,18 @@ const status = (label: string, kind: TaskRunStatus['kind'], transient = false): 
 const observationTime = (record: ServerRecord) => timestamp(record.updatedAt)
   ?? timestamp(record.data.startedAt) ?? timestamp(record.data.createdAt) ?? 0;
 
+function subagentOutcome(run: SubagentRun): TaskRunStatus | undefined {
+  switch (run.state) {
+    case 'failed': return status('Subagent failed', 'error');
+    case 'partial': return status('Subagent partially completed', 'review');
+    case 'unknown': return status('Subagent outcome unknown', 'review');
+    case 'stopped': return status('Subagent stopped', 'stopped');
+  }
+}
+
 function eventOutcome(record: ServerRecord, actions: Map<string, ServerRecord>): TaskRunStatus | undefined {
+  const run = subagentRun(record);
+  if (run) return subagentOutcome(run);
   if (record.kind === 'action') {
     if (actionNeedsReview(record)) return status('Action failed', 'error');
     if (text(record, 'state') === 'denied') return status('Action denied', 'review');
@@ -158,7 +197,10 @@ function activeStatus(records: ServerRecord[], actions: Map<string, ServerRecord
   const active = new Map<string, ServerRecord>();
   for (const record of records) {
     if (record.data.interrupted === true || eventOutcome(record, actions)) continue;
-    if (record.kind === 'action' && text(record, 'state') === 'dispatching') {
+    const run = subagentRun(record);
+    if (run && ['queued', 'running'].includes(run.state)) {
+      active.set(identity(record), record);
+    } else if (record.kind === 'action' && ['authorized', 'dispatching'].includes(text(record, 'state'))) {
       active.set(identity(record), record);
     } else if (record.data.streaming === true) {
       if (record.kind === 'tool_stream' && ['preparing', 'running'].includes(text(record, 'state'))) {
@@ -175,9 +217,12 @@ function activeStatus(records: ServerRecord[], actions: Map<string, ServerRecord
   // Actual tool work takes precedence over a concurrently streaming explanation.
   const primary = current.find(record => record.kind !== 'message') ?? current[0];
   if (!primary) return undefined;
-  let label = primary.kind === 'message'
-    ? text(primary, 'text').trim() ? 'Responding' : text(primary, 'thinking').trim() ? 'Thinking' : 'Waiting for model output'
-    : actionLabel(primary);
+  const child = subagentRun(primary);
+  let label = child ? displayLine(`${child.state === 'queued' ? 'Queued' : 'Running'} subagent: ${child.label}`)
+    : primary.kind === 'message'
+      ? text(primary, 'text').trim() ? 'Responding' : text(primary, 'thinking').trim() ? 'Thinking' : 'Waiting for model output'
+      : primary.kind === 'action' && text(primary, 'state') === 'authorized'
+        ? displayLine(`Queued: ${actionLabel(primary)}`) : actionLabel(primary);
   if (current.length > 1) {
     const suffix = ` · ${current.length} active`;
     const available = 160 - suffix.length;
@@ -190,8 +235,9 @@ function activeStatus(records: ServerRecord[], actions: Map<string, ServerRecord
 
 /**
  * The bar describes current task/activity, not a verdict on every historical attempt.
- * Only pending/unknown actions remain actionable regardless of newer observations.
- * Completed is authoritative except for those safety notices; cancelled always wins.
+ * Pending/unknown actions and unresolved children remain visible despite newer observations.
+ * Completed is authoritative except for safety notices and unresolved child work;
+ * cancelled always wins. Child detail incompleteness alone is not a failed outcome.
  * active describes working status, not whether the parent should offer Stop.
  */
 export function taskRunStatus(task: ServerRecord, records: ServerRecord[]): TaskRunStatus {
@@ -200,13 +246,27 @@ export function taskRunStatus(task: ServerRecord, records: ServerRecord[]): Task
   if (state === 'failed') return status('Failed', 'error');
   if (state === 'interrupted') return status('Interrupted', 'stopped');
 
-  const related = latestRecords(records)
-    .filter(record => text(record, 'taskId') === task.id && record.kind !== 'artifact')
+  const candidates = latestRecords(records)
+    .filter(record => text(record, 'taskId') === task.id && record.kind !== 'artifact');
+  const projected = candidates.filter(record => record.kind === 'subagent_run')
+    .map(record => subagentRun(record, task.id)).filter((run): run is SubagentRun => run !== undefined);
+  const related = candidates.filter(record => record.kind === 'subagent_run' ? subagentRun(record, task.id) !== undefined
+    : !projected.some(run => isSubagentParent(record, run)))
     .sort((a, b) => observationTime(b) - observationTime(a) || identity(a).localeCompare(identity(b)));
   const actions = new Map(related.filter(record => record.kind === 'action').map(record => [record.id, record]));
   if ([...actions.values()].some(record => text(record, 'state') === 'pending')) return status('Waiting for approval', 'review');
   if ([...actions.values()].some(record => text(record, 'state') === 'unknown')) return status('Action outcome unknown', 'review');
-  if (state === 'completed') return status('Completed', 'success', true);
+  const children = related.map(record => subagentRun(record, task.id)).filter((run): run is SubagentRun => run !== undefined);
+  const activeChildren = related.filter(record => {
+    const run = subagentRun(record, task.id);
+    return run && ['queued', 'running'].includes(run.state);
+  });
+  const childOutcomes = children.map(subagentOutcome);
+  const childOutcome = childOutcomes.find(outcome => outcome?.kind === 'error') ?? childOutcomes.find(Boolean);
+  if (state === 'completed') {
+    const active = activeStatus(activeChildren, actions);
+    return active ?? childOutcome ?? status('Completed', 'success', true);
+  }
 
   switch (state) {
     case 'waiting_for_approval': return status('Waiting for approval', 'review');
@@ -219,7 +279,11 @@ export function taskRunStatus(task: ServerRecord, records: ServerRecord[]): Task
   if (state === 'running' || state === 'reconciling') {
     const current = activeStatus(related, actions);
     if (current) return current;
+  } else {
+    const current = activeStatus(activeChildren, actions);
+    if (current) return current;
   }
+  if (childOutcome) return childOutcome;
   // Millisecond timestamps can tie. Without an event cursor, retain failure evidence
   // for that latest instant rather than arbitrarily treating a sibling as recovery.
   const latestTime = related[0] ? observationTime(related[0]) : undefined;

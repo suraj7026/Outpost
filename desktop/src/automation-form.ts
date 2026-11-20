@@ -1,11 +1,12 @@
 import type { Json, ServerRecord } from './types';
+import { modeBlocker, savedControlMode, type ControlCapabilities, type ControlMode } from './control-mode';
 
 export const profiles = ['code', 'browser', 'operations', 'research', 'cowork', 'chat'] as const;
-export const controlModes = ['ask_permission', 'auto', 'full_control'] as const;
-export type AutomationTask = { goal: string; profile: typeof profiles[number]; mode: typeof controlModes[number]; model?: string; modelRef?: { providerId: string; modelId: string } };
+const legacyControlModes = ['ask_permission', 'auto', 'full_control'] as const;
+export type AutomationTask = { goal: string; profile: typeof profiles[number]; mode: ControlMode; model?: string; modelRef?: { providerId: string; modelId: string } };
 export type AutomationSchedule = { name: string; timezone: string; nextAt: number; intervalMs: number | null; missed: 'skip' | 'coalesce'; paused: boolean; task: AutomationTask };
-export type AutomationDraft = { name: string; goal: string; profile: string; mode: string; start: string; timezone: string; frequency: 'once' | 'interval'; intervalMinutes: string; missed: string; model: string };
-export type AutomationAuthority = { connected: boolean; retired?: boolean; busy: boolean; info: { pending: boolean; pendingError?: string | null } | null };
+export type AutomationDraft = { name: string; goal: string; profile: string; mode: ControlMode; start: string; timezone: string; frequency: 'once' | 'interval'; intervalMinutes: string; missed: string; model: string };
+export type AutomationAuthority = { runtime?: ControlCapabilities | null; connected: boolean; retired?: boolean; busy: boolean; info: { pending: boolean; pendingError?: string | null } | null };
 
 export function automationBlocker(connection: AutomationAuthority | undefined, native: boolean, preview: boolean): string {
   if (!native || preview) return 'Schedules are read-only in browser previews. Open the desktop app to make changes.';
@@ -33,11 +34,11 @@ export function readSchedule(record: ServerRecord): AutomationSchedule | null {
       !['skip', 'coalesce'].includes(String(data.missed)) || !(data.paused === undefined || typeof data.paused === 'boolean') ||
       !isObject(task) || !onlyKeys(task, ['goal', 'profile', 'mode', 'model', 'modelRef']) ||
       typeof task.goal !== 'string' || !task.goal.trim() || task.goal.trim().length > 20000 ||
-      !profiles.some(value => value === task.profile) || !(task.mode === undefined || controlModes.some(value => value === task.mode)) ||
+      !profiles.some(value => value === task.profile) || !(task.mode === undefined || legacyControlModes.some(value => value === task.mode)) ||
       !(task.model === undefined || typeof task.model === 'string' && !!task.model.trim() && task.model.trim().length <= 200) ||
       !(task.modelRef === undefined || validModelRef(task.modelRef)) ||
       task.model !== undefined && task.modelRef !== undefined) return null;
-  return { ...data, paused: data.paused ?? false, task: { ...task, mode: task.mode ?? 'ask_permission' } } as AutomationSchedule;
+  return { ...data, paused: data.paused ?? false, task: { ...task, mode: task.mode === undefined ? 'full_control' : savedControlMode(task.mode) } } as AutomationSchedule;
 }
 
 export function localDateInput(epoch: number): string {
@@ -45,7 +46,7 @@ export function localDateInput(epoch: number): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}T${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 export function scheduleDraft(schedule?: AutomationSchedule): AutomationDraft {
-  return { name: schedule?.name ?? '', goal: schedule?.task.goal ?? '', profile: schedule?.task.profile ?? 'code', mode: schedule?.task.mode ?? 'ask_permission',
+  return { name: schedule?.name ?? '', goal: schedule?.task.goal ?? '', profile: schedule?.task.profile ?? 'code', mode: schedule?.task.mode ?? 'full_control',
     start: localDateInput(schedule?.nextAt ?? Date.now() + 3600000), timezone: schedule?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
     frequency: schedule?.intervalMs ? 'interval' : 'once', intervalMinutes: String((schedule?.intervalMs ?? 86400000) / 60000),
     missed: schedule?.missed ?? 'coalesce', model: schedule?.task.modelRef ? modelRefSelection(schedule.task.modelRef) : schedule?.task.model ? legacyModelSelection(schedule.task.model) : '' };
@@ -54,7 +55,8 @@ export function scheduleDraft(schedule?: AutomationSchedule): AutomationDraft {
 export function buildSchedule(draft: AutomationDraft, initial?: AutomationSchedule, now = Date.now()): AutomationSchedule {
   const name = draft.name.trim(), goal = draft.goal.trim();
   if (!name || !goal || goal.length > 20000) throw new Error('Enter a schedule name and a task of at most 20,000 characters.');
-  if (!profiles.some(value => value === draft.profile) || !controlModes.some(value => value === draft.mode)) throw new Error('Choose a supported profile and control mode.');
+  if (!profiles.some(value => value === draft.profile)) throw new Error('Choose a supported profile.');
+  if (draft.mode !== 'full_control' && draft.mode !== 'auto') throw new Error('Choose Full control or Auto.');
   if (!validZone(draft.timezone)) throw new Error('Enter a valid IANA display time zone, such as Europe/London.');
   const parsed = new Date(draft.start).getTime();
   // An untouched edit must preserve sub-minute precision and ambiguous DST offsets.
@@ -78,7 +80,7 @@ export function buildSchedule(draft: AutomationDraft, initial?: AutomationSchedu
     } else throw new Error('Choose a valid model.');
   }
   return { name, timezone: draft.timezone, nextAt, intervalMs, missed: draft.missed as AutomationSchedule['missed'], paused: initial?.paused ?? false,
-    task: { goal, profile: draft.profile as AutomationTask['profile'], mode: draft.mode as AutomationTask['mode'], ...model } };
+    task: { goal, profile: draft.profile as AutomationTask['profile'], mode: draft.mode, ...model } };
 }
 
 export function intervalLabel(intervalMs: number | null): string {
@@ -93,7 +95,7 @@ export function scheduleTime(schedule: AutomationSchedule): string {
 
 export type AutomationClient = AutomationAuthority & { records: ServerRecord[]; command: (kind: string, id: string, revision: number, payload: Record<string, Json>) => Promise<ServerRecord | undefined> };
 export async function saveAutomation(client: AutomationClient | undefined, id: string, revision: number, schedule: AutomationSchedule, native: boolean, preview: boolean) {
-  const blocked = automationBlocker(client, native, preview);
+  const blocked = automationBlocker(client, native, preview) || modeBlocker(schedule.task.mode, client?.runtime);
   if (blocked || !client) throw new Error(blocked);
   const current = client.records.find(record => record.kind === 'automation' && record.id === id);
   if (revision === 0 ? !!current : !current || current.revision !== revision) throw new Error('This schedule changed. Close and reopen it to review the latest version.');

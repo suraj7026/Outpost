@@ -14,6 +14,7 @@
 .runtime-update-dialog .ui-dialog-body > :last-child { margin-bottom:0; }
 .runtime-update-dialog .ui-dialog-body > :has(+ .runtime-update-actions) { margin-bottom:0; }
 .runtime-update-dialog .runtime-update-actions { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:24px; }
+:root dialog.runtime-update-dialog .runtime-update-actions { justify-content:space-between; }
 .runtime-update-dialog .runtime-update-actions-end { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; margin-left:auto; }
 .runtime-update-dialog .runtime-update-actions .ui-button { flex:none; margin:0; }
 @media(max-width:640px) { .runtime-update-dialog .ui-dialog-heading { padding-inline:20px; } }
@@ -49,3 +50,13 @@ button.runtime-update-check[aria-busy="true"] { opacity: 1; cursor: progress; }
 .provider-settings .provider-login p { font-size:12px; line-height:1.65; }
 @media(max-width:640px) { .provider-runtime-callout, .provider-runtime-footer { flex-wrap:wrap; } }
 @container settings (max-width:560px) { .provider-settings .ui-row { flex-wrap:wrap; }.provider-settings .ui-row-content { flex-basis:calc(100% - 48px); }.provider-settings .ui-row-actions { margin-left:48px; flex-wrap:wrap; } }
+
+.server-update-summary { display:flex; align-items:center; gap:16px; padding:12px 0 25px; }
+.server-update-summary > div { flex:1; }
+.server-update-summary h2 { margin:0 0 7px; font-size:19px; }
+.server-update-summary p { margin:0; color:var(--muted); }
+.server-update-indicator { display:inline-flex; align-items:center; gap:6px; color:var(--warning); margin-left:auto; }
+.server-update-indicator .environment-status { background:var(--warning); }
+.machine-update-link { display:inline-flex; align-items:center; gap:5px; padding:9px; color:var(--warning); border-radius:8px; }
+.machine-update-link:hover { background:var(--active); }
+.machine-update-link .server-update-indicator > svg { display:none; }

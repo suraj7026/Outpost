@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Outpost · Composer dropdown mock</title>
+<style>
+@font-face { font-family: 'Google Sans Flex'; src: url('../../desktop/src/assets/fonts/GoogleSansFlex.woff2') format('woff2'); font-weight: 1 1000; }
+:root { color-scheme: dark; font-family: 'Google Sans Flex', sans-serif; font-optical-sizing: auto; --bg: #1e1e1e; --strip: #131313; --composer: #262626; --menu: #292929; --selected: #363636; --line: #3b3b3b; --text: #e9e9e9; --muted: #adadad; --green: #abc1ae; --gold: #d1b78e; color: var(--text); background: var(--bg); }
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: default; }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid #b8c7bb; outline-offset: 3px; }
+[hidden] { display: none !important; }
+svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+main { max-width: 1180px; margin: auto; padding: 36px 40px 28px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; }
+h1 { font-size: 25px; font-weight: 550; letter-spacing: -.6px; margin: 0; }
+header p { margin: 0; color: var(--muted); font-size: 13px; }
+.stage { padding: 40px 20px 34px; }
+.tabs { display: flex; justify-content: center; gap: 12px; margin: 0 0 26px; }
+.tab { display: flex; align-items: center; gap: 9px; padding: 10px 15px; color: var(--muted); font-size: 16px; font-weight: 500; border-radius: 10px; }
+.tab.active { background: var(--composer); color: var(--text); }
+.strip { display: flex; align-items: center; gap: 12px; min-height: 70px; margin: 0 14px -14px; padding: 8px 16px 20px; background: var(--strip); border-radius: 29px 29px 0 0; }
+.trigger { display: inline-flex; align-items: center; gap: 9px; min-height: 38px; max-width: 100%; border: 0; border-radius: 9px; padding: 8px 10px; background: transparent; font-size: 15px; font-weight: 500; white-space: nowrap; }
+.trigger:hover, .trigger[aria-expanded="true"] { background: var(--selected); }
+.trigger .chevron { width: 14px; height: 14px; margin-left: 3px; color: var(--muted); }
+.trigger[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--green); }
+.dot.offline { background: #929292; }
+.connection { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 14px; color: var(--muted); }
+.terminal { margin-left: 8px; color: var(--muted); }
+.composer { position: relative; padding: 24px 22px 14px; background: var(--composer); border: 1px solid #363636; border-radius: 32px; }
+textarea { display: block; width: 100%; height: 86px; resize: none; background: transparent; border: 0; padding: 0 2px; font-size: 18px; line-height: 1.5; }
+textarea::placeholder { color: #a3a3a3; opacity: 1; }
+.toolbar { display: flex; align-items: center; gap: 12px; }
+.permission { color: var(--gold); }
+.permission[data-mode="Auto"] { color: var(--green); }
+.model { margin-left: auto; }
+.send { display: grid; place-items: center; flex: none; width: 44px; height: 44px; margin-left: 2px; border: 1px solid #3a3a3a; border-radius: 50%; color: #999; background: transparent; }
+.send svg { width: 23px; height: 23px; }
+.board-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 18px; }
+h2 { font-size: 17px; font-weight: 500; margin: 0; }
+.board-heading p { font-size: 12px; color: var(--muted); margin: 0; }
+.comparison { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: start; }
+.example-title { margin: 0 0 12px 10px; color: var(--muted); font-size: 13px; font-weight: 500; }
+.menu { padding: 7px; background: var(--menu); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 12px 36px #0003, 0 3px 8px #0002; }
+.menu-title { margin: 0; padding: 9px 10px 11px; font-size: 12px; font-weight: 450; color: var(--muted); }
+.row { display: flex; align-items: center; text-align: left; gap: 11px; width: 100%; min-height: 64px; padding: 11px 12px; border: 0; border-radius: 9px; background: transparent; }
+.row:hover:not(:disabled), .row:focus-visible { background: #323232; }
+.row[aria-checked="true"] { background: var(--selected); }
+.row > .dot { margin: 0 5px 0 4px; }
+.row-copy { min-width: 0; flex: 1; }
+.row strong { display: block; font-size: 14px; font-weight: 500; line-height: 21px; overflow-wrap: anywhere; }
+.row small { display: block; font-size: 12px; line-height: 19px; color: var(--muted); }
+.row > .check { width: 16px; height: 16px; margin-left: auto; color: var(--text); }
+.row:not([aria-checked="true"]) > .check { visibility: hidden; }
+.row:disabled strong { color: var(--muted); }
+.divider { height: 1px; background: var(--line); margin: 7px 4px; }
+.menu-action { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 39px; border: 0; border-radius: 9px; padding: 8px 12px; font-size: 13px; background: transparent; }
+.menu-action svg { width: 17px; height: 17px; color: var(--muted); }
+.menu-action:hover { background: var(--selected); }
+.control-row { align-items: flex-start; }
+.control-row > svg { margin-top: 3px; }
+.control-row > svg:first-child, .control-row strong { color: var(--gold); }
+.control-row[data-value="Auto"] > svg:first-child, .control-row[data-value="Auto"] strong { color: var(--green); }
+.control-row + .control-row { margin-top: 4px; }
+.control-row small { margin-top: 3px; }
+.menu-footnote { margin: 0; padding: 9px 12px 10px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.search { display: flex; align-items: center; gap: 9px; min-height: 38px; margin: 3px 3px 4px; padding: 0 10px; background: #222; border: 1px solid #3c3c3c; border-radius: 9px; }
+.search svg { color: var(--muted); width: 16px; height: 16px; }
+.search input { width: 100%; min-width: 0; background: transparent; border: 0; outline: 0; font-size: 13px; padding: 8px 0; }
+.search:focus-within { outline: 2px solid #b8c7bb; outline-offset: 2px; }
+.search input::placeholder { color: var(--muted); }
+.search input:focus-visible { outline: 0; }
+.provider-heading { display: flex; justify-content: space-between; padding: 10px 11px 6px; color: var(--muted); font-size: 12px; }
+.model-row { min-height: 54px; }
+.model-row small { font-size: 11px; }
+.model-row .row-copy { padding-left: 1px; }
+.example-note { color: var(--muted); font-size: 12px; line-height: 1.6; margin: 16px 10px 0; }
+footer { margin-top: 30px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+footer p { margin: 0; }
+#feedback { min-height: 20px; color: var(--green); }
+#floating { position: fixed; z-index: 10; width: 340px; max-height: calc(100vh - 24px); overflow: auto; }
+.empty { padding: 20px 12px; color: var(--muted); font-size: 13px; }
+body[data-view="focused"] header, body[data-view="focused"] .board-heading, body[data-view="focused"] .comparison, body[data-view="focused"] footer { display: none; }
+body[data-view="focused"] main { padding-top: 180px; }
+@media (max-width: 780px) {
+  main { padding: 24px 20px; }
+  header { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .stage { padding: 32px 0; }
+  .tabs { justify-content: flex-start; gap: 4px; overflow-x: auto; }
+  .tab { padding: 9px 11px; font-size: 14px; }
+  .comparison { grid-template-columns: 1fr; gap: 26px; }
+  .board-heading { flex-direction: column; gap: 6px; }
+  .composer { padding: 20px 14px 12px; border-radius: 26px; }
+  .strip { margin-inline: 8px; padding-inline: 7px; gap: 4px; }
+  .trigger { font-size: 13px; padding-inline: 7px; gap: 7px; }
+  .connection { font-size: 12px; }
+  .terminal { width: 18px; margin-left: 5px; }
+  textarea { font-size: 16px; height: 95px; }
+  .toolbar { display: grid; grid-template-columns: minmax(0, 1fr) 36px; gap: 4px; }
+  .permission { grid-column: 1 / -1; justify-self: start; }
+  .model { margin-left: 0; min-width: 0; width: 100%; justify-content: space-between; }
+  .model .trigger-label { overflow: hidden; text-overflow: ellipsis; }
+  .send { width: 36px; height: 36px; }
+  .example-note { margin-top: 12px; }
+  body[data-view="focused"] main { padding-top: 120px; }
+}
+</style>
+</head>
+<body>
+<svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"><defs>
+<symbol id="chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+<symbol id="shield" viewBox="0 0 24 24"><path d="M12 3c3 3 6 3 8 4v6c0 5-5 8-8 9-3-1-8-4-8-9V7c2-1 5-1 8-4Z"/></symbol>
+<symbol id="shield-auto" viewBox="0 0 24 24"><path d="M12 3c3 3 6 3 8 4v6c0 5-5 8-8 9-3-1-8-4-8-9V7c2-1 5-1 8-4Z"/><path d="m8 12 3 3 5-5"/></symbol>
+<symbol id="terminal" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="m7 8 4 4-4 4m7 0h3"/></symbol>
+<symbol id="code" viewBox="0 0 24 24"><path d="m7 7-5 5 5 5m10-10 5 5-5 5M14 4l-4 16"/></symbol>
+<symbol id="globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></symbol>
+<symbol id="server" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/></symbol>
+<symbol id="chat" viewBox="0 0 24 24"><path d="M21 4H3v17l5-4h13V4Z"/></symbol>
+<symbol id="arrow" viewBox="0 0 24 24"><path d="M12 20V4m-7 7 7-7 7 7"/></symbol>
+<symbol id="search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+<symbol id="settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="var(--menu)"/><circle cx="15" cy="17" r="2" fill="var(--menu)"/></symbol>
+</defs></svg>
+<main>
+<header><h1>One dropdown language.</h1><p>Outpost composer · design mock only</p></header>
+<section class="stage" aria-label="Interactive composer mock">
+<div class="tabs" aria-label="Task profiles">
+<span class="tab active"><svg><use href="#code"/></svg>Code</span><span class="tab"><svg><use href="#globe"/></svg>Browser</span><span class="tab"><svg><use href="#server"/></svg>Operations</span><span class="tab"><svg><use href="#globe"/></svg>Research</span><span class="tab"><svg><use href="#chat"/></svg>Chat</span>
+</div>
+<div class="strip">
+<button type="button" class="trigger" data-menu="outpost" aria-expanded="false" aria-haspopup="menu"><span class="dot"></span><span class="trigger-label">Outpost 1</span><svg class="chevron"><use href="#chevron"/></svg></button>
+<span class="connection"><span class="dot"></span>Connected</span><svg class="terminal" aria-label="Terminal"><use href="#terminal"/></svg>
+</div>
+<div class="composer">
+<textarea aria-label="Task goal mock" placeholder="Describe a change, a problem, or something to build…"></textarea>
+<div class="toolbar">
+<button type="button" class="trigger permission" data-menu="control" data-mode="Full control" aria-expanded="false" aria-haspopup="menu"><svg class="control-icon"><use href="#shield"/></svg><span class="trigger-label">Full control</span><svg class="chevron"><use href="#chevron"/></svg></button>
+<button type="button" class="trigger model" data-menu="model" aria-expanded="false" aria-haspopup="dialog"><span class="trigger-label">Ollama · deepseek-v4.1-flash</span><svg class="chevron"><use href="#chevron"/></svg></button>
+<button class="send" disabled aria-label="Send unavailable in mock"><svg><use href="#arrow"/></svg></button>
+</div>
+</div>
+</section>
+<div class="board-heading"><h2>The three open menus</h2><p>Shown together for comparison. Only one opens at a time in the composer.</p></div>
+<section class="comparison" aria-label="Dropdown design comparison">
+<article><h3 class="example-title">Outpost</h3><div class="example" data-example="outpost"></div><p class="example-note">Status dots, a quiet selected row, and a checkmark. Opens below the server name.</p></article>
+<article><h3 class="example-title">Control mode</h3><div class="example" data-example="control"></div><p class="example-note">Exactly two modes. The composer label and shield follow your selection.</p></article>
+<article><h3 class="example-title">Model</h3><div class="example" data-example="model"></div><p class="example-note">Search stays inside the dropdown. Opens above the model name, aligned to the right.</p></article>
+</section>
+<footer><p>Same surface, 16px corners, 7px inset, selected-row fill, and checkmark across all three.</p><p>Illustrative servers and models. Full control and Auto preview the planned policy; enforcement is not implemented by this mock.</p><p id="feedback" role="status">Click any of the three composer controls to try its menu.</p></footer>
+</main>
+<template id="outpost-template"><div class="menu" role="menu" aria-label="Choose Outpost">
+<p class="menu-title">Choose Outpost</p>
+<button class="row" role="menuitemradio" aria-checked="true" data-value="Outpost 1"><span class="dot"></span><span class="row-copy"><strong>Outpost 1</strong><small>Connected</small></span><svg class="check"><use href="#check"/></svg></button>
+<button class="row" role="menuitemradio" aria-checked="false" data-value="Outpost 2"><span class="dot"></span><span class="row-copy"><strong>Outpost 2</strong><small>Connected</small></span><svg class="check"><use href="#check"/></svg></button>
+<button class="row" role="menuitemradio" aria-checked="false" data-value="Outpost 3" disabled><span class="dot offline"></span><span class="row-copy"><strong>Outpost 3</strong><small>Offline</small></span><svg class="check"><use href="#check"/></svg></button>
+<div class="divider" role="separator"></div><button class="menu-action" role="menuitem" data-action="outposts"><svg><use href="#settings"/></svg>Manage outposts</button>
+</div></template>
+<template id="control-template"><div class="menu" role="menu" aria-label="Control mode">
+<p class="menu-title">Control mode</p>
+<button class="row control-row" role="menuitemradio" aria-checked="true" data-value="Full control"><svg><use href="#shield"/></svg><span class="row-copy"><strong>Full control</strong><small>Actions run without individual approval</small></span><svg class="check"><use href="#check"/></svg></button>
+<button class="row control-row" role="menuitemradio" aria-checked="false" data-value="Auto"><svg><use href="#shield-auto"/></svg><span class="row-copy"><strong>Auto</strong><small>Runs routine actions. Pauses for approval on financial, destructive, security-sensitive, or unclassified actions.</small></span><svg class="check"><use href="#check"/></svg></button>
+<div class="divider" role="separator"></div><p class="menu-footnote">Auto checks apply across shell, browser, and extension tools.</p><p class="menu-footnote">Recovery and maintenance holds still apply in both modes.</p>
+</div></template>
+<template id="model-template"><div class="menu" role="dialog" aria-label="Choose model">
+<label class="search"><svg><use href="#search"/></svg><input type="search" aria-label="Search models" placeholder="Search models…"></label>
+<div class="provider-heading"><span>Ollama</span><span class="model-count">3 models</span></div>
+<div class="model-list" role="menu" aria-label="Available models">
+<button class="row model-row" role="menuitemradio" aria-checked="true" data-value="deepseek-v4.1-flash"><span class="row-copy"><strong>deepseek-v4.1-flash</strong><small>Ollama</small></span><svg class="check"><use href="#check"/></svg></button>
+<button class="row model-row" role="menuitemradio" aria-checked="false" data-value="qwen3-coder"><span class="row-copy"><strong>qwen3-coder</strong><small>Ollama</small></span><svg class="check"><use href="#check"/></svg></button>
+<button class="row model-row" role="menuitemradio" aria-checked="false" data-value="gpt-oss:120b"><span class="row-copy"><strong>gpt-oss:120b</strong><small>Ollama</small></span><svg class="check"><use href="#check"/></svg></button>
+</div><p class="empty" hidden>No matching models.</p>
+<div class="divider" role="separator"></div><button class="menu-action" data-action="providers"><svg><use href="#settings"/></svg>Manage providers</button>
+</div></template>
+<div id="floating" hidden></div>
+<script>
+const floating = document.querySelector('#floating');
+let activeTrigger = null;
+const selection = { outpost: 'Outpost 1', control: 'Full control', model: 'deepseek-v4.1-flash' };
+if (new URLSearchParams(location.search).get('view') === 'focused') document.body.dataset.view = 'focused';
+function closeMenu(restoreFocus = true) {
+  if (!activeTrigger) return;
+  const previous = activeTrigger;
+  previous.setAttribute('aria-expanded', 'false');
+  floating.hidden = true;
+  floating.replaceChildren();
+  activeTrigger = null;
+  if (restoreFocus) previous.focus({ preventScroll: true });
+}
+function positionMenu() {
+  if (!activeTrigger) return;
+  const rect = activeTrigger.getBoundingClientRect();
+  const width = Math.min(340, innerWidth - 24);
+  floating.style.width = width + 'px';
+  const height = floating.getBoundingClientRect().height;
+  const left = activeTrigger.dataset.menu === 'model' ? rect.right - width : rect.left;
+  const below = rect.bottom + 8;
+  const above = rect.top - height - 8;
+  let top = activeTrigger.dataset.menu === 'outpost' ? below : above;
+  if (top < 12) top = below;
+  if (top + height > innerHeight - 12 && above >= 12) top = above;
+  floating.style.left = Math.max(12, Math.min(left, innerWidth - width - 12)) + 'px';
+  floating.style.top = Math.max(12, Math.min(top, innerHeight - height - 12)) + 'px';
+}
+function mountMenu(container, kind, isFloating = false) {
+  container.replaceChildren(document.querySelector('#' + kind + '-template').content.cloneNode(true));
+  container.querySelectorAll('[data-value]').forEach(button => {
+    button.setAttribute('aria-checked', String(button.dataset.value === selection[kind]));
+    button.addEventListener('click', () => {
+      selection[kind] = button.dataset.value;
+      const trigger = document.querySelector('[data-menu="' + kind + '"]');
+      trigger.querySelector('.trigger-label').textContent = (kind === 'model' ? 'Ollama · ' : '') + selection[kind];
+      if (kind === 'control') {
+        trigger.dataset.mode = selection.control;
+        trigger.querySelector('.control-icon use').setAttribute('href', selection.control === 'Auto' ? '#shield-auto' : '#shield');
+      }
+      if (isFloating) closeMenu();
+      renderExamples();
+      document.querySelector('#feedback').textContent = 'Preview selection: ' + selection[kind] + '. No app settings were changed.';
+    });
+  });
+  container.querySelectorAll('[data-action]').forEach(button => button.addEventListener('click', () => {
+    document.querySelector('#feedback').textContent = 'Mock only — this would open ' + (button.dataset.action === 'providers' ? 'provider settings.' : 'Outpost management.');
+    if (isFloating) closeMenu();
+  }));
+  const search = container.querySelector('input');
+  if (search) search.addEventListener('input', () => {
+    let count = 0;
+    container.querySelectorAll('.model-row').forEach(row => {
+      row.hidden = !('Ollama ' + row.dataset.value).toLowerCase().includes(search.value.toLowerCase());
+      if (!row.hidden) count++;
+    });
+    container.querySelector('.empty').hidden = count !== 0;
+    container.querySelector('.model-count').textContent = count + (count === 1 ? ' model' : ' models');
+    if (isFloating) positionMenu();
+  });
+  container.addEventListener('keydown', menuKeydown);
+}
+function menuKeydown(event) {
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+  if (event.target.tagName === 'INPUT' && ['Home', 'End'].includes(event.key)) return;
+  const items = [...event.currentTarget.querySelectorAll('button:not(:disabled)')].filter(item => !item.hidden);
+  if (!items.length) return;
+  event.preventDefault();
+  const current = items.indexOf(document.activeElement);
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : event.key === 'ArrowDown' ? (current + 1) % items.length : (current <= 0 ? items.length : current) - 1;
+  items[next].focus();
+}
+function renderExamples() { document.querySelectorAll('[data-example]').forEach(container => mountMenu(container, container.dataset.example)); }
+renderExamples();
+document.querySelectorAll('[data-menu]').forEach(trigger => trigger.addEventListener('click', () => {
+  if (activeTrigger === trigger) return closeMenu();
+  closeMenu(false);
+  activeTrigger = trigger;
+  trigger.setAttribute('aria-expanded', 'true');
+  mountMenu(floating, trigger.dataset.menu, true);
+  floating.hidden = false;
+  positionMenu();
+  (floating.querySelector('input') || floating.querySelector('[aria-checked="true"]')).focus({ preventScroll: true });
+}));
+document.addEventListener('pointerdown', event => {
+  if (activeTrigger && !floating.contains(event.target) && !activeTrigger.contains(event.target)) closeMenu(false);
+});
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && activeTrigger) { event.preventDefault(); closeMenu(); } });
+document.addEventListener('focusin', event => { if (activeTrigger && !floating.contains(event.target) && !activeTrigger.contains(event.target)) closeMenu(false); });
+window.addEventListener('resize', positionMenu);
+window.addEventListener('scroll', positionMenu, { passive: true });
+</script>
+</body>
+</html>

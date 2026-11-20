@@ -328,7 +328,8 @@ test('global provider and shared settings use the existing UI primitives and exp
   const settings = readFileSync(new URL('./src/RuntimeSettings.tsx', import.meta.url), 'utf8');
   const ui = readFileSync(new URL('./src/AutomaticUpdates.tsx', import.meta.url), 'utf8');
   assert.match(environments, /return <AutomaticUpdatesProvider registry=\{registry\} connections=\{connections\}>/);
-  assert.match(settings, /<AutomaticUpdatesSection \/>/);
+  assert.doesNotMatch(settings, /<AutomaticUpdatesSection \/>/);
+  assert.match(readFileSync(new URL('./src/SettingsWorkspace.tsx', import.meta.url), 'utf8'), /<AutomaticUpdatesSection \/>/);
   assert.match(ui, /const working = useRef\(false\)/);
   for (const primitive of ['Section', 'SettingRow', 'Button', 'Dialog']) assert.ok(ui.includes(`<${primitive}`));
   assert.match(ui, /useState\(false\), \[password, setPassword\] = useState\(true\)/);
@@ -346,4 +347,42 @@ test('global provider and shared settings use the existing UI primitives and exp
   assert.match(ui, /dialog === 'enable' && enrollmentNotice/);
   assert.match(ui, /enable\(approved, password, reviewedIds\)\.then\(confirmed => \{ if \(confirmed\) close\(\); \}\)/);
   assert.doesNotMatch(ui, /type="password"|environment_update_start|localStorage/);
+});
+
+
+test('explicit update checks and launches only the selected connected server', async () => {
+  const h = harness(input(), async () => status({ enabled: true, targets: ['alpha', 'beta'], servers: [{ environmentId: 'beta', state: 'checked', message: 'Ready' }] }));
+  await h.start();
+  assert.equal(await h.controller.updateServer('missing'), false);
+  assert.equal(await h.controller.updateServer('beta'), true);
+  assert.deepEqual(h.calls.slice(1), [
+    { command: 'automatic_updates_tick', args: { connectedEnvironmentIds: ['beta'] } },
+    { command: 'automatic_updates_tick', args: { connectedEnvironmentIds: ['beta'] } },
+  ]);
+  h.controller.stop();
+});
+
+test('explicit update never repeats a failed or uncertain launch', async () => {
+  for (const state of ['failed', 'unknown', 'needs_attention']) {
+    const h = harness(input(), async () => status({ enabled: true, targets: ['alpha'], servers: [{ environmentId: 'alpha', state, message: 'Inspect existing operation' }] }));
+    await h.start();
+    await h.controller.updateServer('alpha');
+    assert.equal(h.calls.filter(call => call.command === 'automatic_updates_tick').length, 1);
+    h.controller.stop();
+  }
+});
+
+test('recovery is explicit, scoped, connected and never repeated after a lost reply', async () => {
+  const h = harness(input(), async command => {
+    if (command === 'automatic_updates_recover') throw new Error('Lost reply');
+    return status();
+  });
+  await h.start();
+  assert.equal(await h.controller.recoverServer('alpha', false), false);
+  assert.equal(await h.controller.recoverServer('missing', true), false);
+  assert.equal(await h.controller.recoverServer('alpha', true), false);
+  await h.fire();
+  const recoveries = h.calls.filter(call => call.command === 'automatic_updates_recover');
+  assert.deepEqual(recoveries, [{ command: 'automatic_updates_recover', args: { environmentId: 'alpha', approved: true, password: true } }]);
+  h.controller.stop();
 });

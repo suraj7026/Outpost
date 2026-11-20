@@ -251,6 +251,63 @@ fn release_review_message(resource: ArtifactResource, artifact: &Value) -> &'sta
         "Review the bundled Pi and extension changes. Existing credentials, browser runtime and history are preserved."
     }
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum CheckOutcome {
+    UpdateAvailable,
+    UpToDate,
+    Blocked,
+}
+
+fn release_check(
+    installed: &Value,
+    resource: ArtifactResource,
+    artifact: &Value,
+    pinned_ssh: bool,
+    compatible: bool,
+) -> (CheckOutcome, &'static str) {
+    let source = &installed["manifest"];
+    let target = &artifact["manifest"];
+    if source["schema"] != 2
+        || source["compatibility"] != "native-v1"
+        || target["schema"] != 2
+        || target["compatibility"] != "native-v1"
+    {
+        return (CheckOutcome::Blocked, "This installation needs a qualified native maintenance release. Ask the server administrator to qualify a supported installation; legacy/container installations are not reinstalled automatically.");
+    }
+    if !pinned_ssh {
+        return (CheckOutcome::Blocked, "Save and verify a pinned SSH connection for this server in Server Settings before checking for a native update. No update was started.");
+    }
+    if !compatible {
+        return (CheckOutcome::Blocked, "No bundled release matches this server's runtime pins. Use an Outpost app release qualified for this runtime family, or ask the administrator to qualify a browser/runtime migration separately. No update was started.");
+    }
+    if newer_artifact(installed, artifact) {
+        let message = if artifact.get("authorization").is_some() {
+            "Review the complete publisher-signed native release. Coordinator, worker and required tools are updated together; browser/runtime pins, credentials and history are preserved."
+        } else {
+            release_review_message(resource, artifact)
+        };
+        return (CheckOutcome::UpdateAvailable, message);
+    }
+    if installed["releaseId"]
+        .as_str()
+        .is_some_and(|id| !id.is_empty() && artifact["id"] == id && target["id"] == id)
+        && source == target
+        && target["sequence"].as_u64().is_some()
+    {
+        return (CheckOutcome::UpToDate, "This server exactly matches the compatible release bundled with this app. This does not check for newer releases outside this app.");
+    }
+    let message = match source["sequence"].as_u64().zip(target["sequence"].as_u64()) {
+        Some((current, bundled)) if bundled < current =>
+            "This app bundles an older release than this server. Update the Outpost app to obtain a newer qualified release; downgrades are blocked. No update was started.",
+        Some((current, bundled)) if bundled == current =>
+            "The installed and bundled releases have the same sequence but different release identities or manifests. Obtain a newer qualified Outpost app release or ask the administrator to verify the release metadata. No update was started.",
+        _ =>
+            "The installed and bundled release identities or sequences do not permit a verified forward update. Ask the administrator to verify the release metadata and use a newer qualified Outpost app release. No update was started.",
+    };
+    (CheckOutcome::Blocked, message)
+}
+
 fn select_artifact<'a>(
     installed: &Value,
     probe: &Value,
@@ -843,6 +900,166 @@ mod tests {
 
     fn pins_fixture() -> Value {
         json!({"releaseId":SOURCE_RELEASE,"runtimePinsSha256":"b".repeat(64)})
+    }
+
+    #[test]
+    fn release_check_serializes_the_public_outcomes() {
+        for (outcome, expected) in [
+            (CheckOutcome::UpdateAvailable, "update_available"),
+            (CheckOutcome::UpToDate, "up_to_date"),
+            (CheckOutcome::Blocked, "blocked"),
+        ] {
+            assert_eq!(serde_json::to_value(outcome).unwrap(), json!(expected));
+        }
+    }
+
+    #[test]
+    fn release_check_update_available_does_not_require_a_pi_version_change() {
+        let mut installed = installed_fixture();
+        let mut host = artifact_fixture(ArtifactResource::Host, &"b".repeat(64));
+        installed["manifest"]["piVersion"] = json!("1.0.0");
+        host["manifest"]["piVersion"] = json!("1.0.0");
+        let (outcome, _) = release_check(&installed, ArtifactResource::Host, &host, true, true);
+        assert_eq!(outcome, CheckOutcome::UpdateAvailable);
+        assert!(newer_artifact(&installed, &host));
+    }
+
+    #[test]
+    fn release_check_up_to_date_requires_an_exact_compatible_release() {
+        let host = artifact_fixture(ArtifactResource::Host, &"b".repeat(64));
+        let installed = json!({"releaseId":host["id"],"manifest":host["manifest"]});
+        let probe = json!({"releaseId":host["id"],"runtimePinsSha256":host["runtimePinsSha256"]});
+        let (resource, artifact) = select_artifact(&installed, &probe, &host, None)
+            .unwrap()
+            .unwrap();
+        let (outcome, _) = release_check(&installed, resource, artifact, true, true);
+        assert_eq!(outcome, CheckOutcome::UpToDate);
+        assert!(!newer_artifact(&installed, artifact));
+    }
+
+    #[test]
+    fn release_check_blocks_non_native_or_unpinned_installations() {
+        let host = artifact_fixture(ArtifactResource::Host, &"b".repeat(64));
+        for (field, value) in [("schema", json!(1)), ("compatibility", json!("legacy"))] {
+            let mut installed = installed_fixture();
+            installed["manifest"][field] = value;
+            let (outcome, message) =
+                release_check(&installed, ArtifactResource::Host, &host, true, false);
+            assert_eq!(outcome, CheckOutcome::Blocked);
+            assert!(message.contains("qualify a supported installation"));
+        }
+        let (outcome, message) = release_check(
+            &installed_fixture(),
+            ArtifactResource::Host,
+            &host,
+            false,
+            false,
+        );
+        assert_eq!(outcome, CheckOutcome::Blocked);
+        assert!(message.contains("pinned SSH connection"));
+    }
+
+    #[test]
+    fn release_check_blocks_incompatible_bundles_even_with_matching_identity() {
+        let host = artifact_fixture(ArtifactResource::Host, &"c".repeat(64));
+        let installed = json!({"releaseId":host["id"],"manifest":host["manifest"]});
+        let probe = json!({"releaseId":host["id"],"runtimePinsSha256":"b".repeat(64)});
+        let selected = select_artifact(&installed, &probe, &host, None).unwrap();
+        assert!(selected.is_none());
+        let (outcome, message) = release_check(
+            &installed,
+            ArtifactResource::Host,
+            &host,
+            true,
+            selected.is_some(),
+        );
+        assert_eq!(outcome, CheckOutcome::Blocked);
+        assert!(message.contains("qualified for this runtime family"));
+    }
+
+    #[test]
+    fn release_check_blocks_equal_sequences_with_different_identity_or_content() {
+        let host = artifact_fixture(ArtifactResource::Host, &"b".repeat(64));
+        let exact = json!({"releaseId":host["id"],"manifest":host["manifest"]});
+        let mut different_id = exact.clone();
+        different_id["releaseId"] = json!(SOURCE_RELEASE);
+        different_id["manifest"]["id"] = json!(SOURCE_RELEASE);
+        let mut different_content = exact.clone();
+        different_content["manifest"]["piVersion"] = json!("different");
+        let mut unbound_id = exact;
+        unbound_id["releaseId"] = json!(SOURCE_RELEASE);
+        for installed in [different_id, different_content, unbound_id] {
+            let (outcome, message) =
+                release_check(&installed, ArtifactResource::Host, &host, true, true);
+            assert_eq!(outcome, CheckOutcome::Blocked);
+            assert!(message.contains("same sequence but different"));
+        }
+    }
+
+    #[test]
+    fn release_check_blocks_downgrades_reused_ids_and_invalid_sequences() {
+        let host = artifact_fixture(ArtifactResource::Host, &"b".repeat(64));
+        let mut newer = installed_fixture();
+        newer["manifest"]["sequence"] = json!(3);
+        let (outcome, message) = release_check(&newer, ArtifactResource::Host, &host, true, true);
+        assert_eq!(outcome, CheckOutcome::Blocked);
+        assert!(message.contains("downgrades are blocked"));
+
+        let mut reused_id = installed_fixture();
+        reused_id["releaseId"] = host["id"].clone();
+        reused_id["manifest"]["id"] = host["id"].clone();
+        assert_eq!(
+            release_check(&reused_id, ArtifactResource::Host, &host, true, true).0,
+            CheckOutcome::Blocked
+        );
+        for sequence in [Value::Null, json!("2"), json!(-1)] {
+            let mut invalid = host.clone();
+            invalid["manifest"]["sequence"] = sequence;
+            let installed = json!({"releaseId":invalid["id"],"manifest":invalid["manifest"]});
+            assert_eq!(
+                release_check(&installed, ArtifactResource::Host, &invalid, true, true).0,
+                CheckOutcome::Blocked
+            );
+        }
+    }
+
+    #[test]
+    fn release_check_preserves_existing_availability_admission() {
+        for source_schema in [1, 2] {
+            for target_schema in [1, 2] {
+                for pinned_ssh in [false, true] {
+                    for compatible in [false, true] {
+                        for sequence in [0, 1, 2, 3] {
+                            for same_id in [false, true] {
+                                let mut installed = installed_fixture();
+                                let mut host =
+                                    artifact_fixture(ArtifactResource::Host, &"b".repeat(64));
+                                installed["manifest"]["schema"] = json!(source_schema);
+                                installed["manifest"]["sequence"] = json!(sequence);
+                                host["manifest"]["schema"] = json!(target_schema);
+                                if same_id {
+                                    installed["releaseId"] = host["id"].clone();
+                                    installed["manifest"]["id"] = host["id"].clone();
+                                }
+                                let available = pinned_ssh
+                                    && source_schema == 2
+                                    && target_schema == 2
+                                    && compatible
+                                    && newer_artifact(&installed, &host);
+                                let (outcome, _) = release_check(
+                                    &installed,
+                                    ArtifactResource::Host,
+                                    &host,
+                                    pinned_ssh,
+                                    compatible,
+                                );
+                                assert_eq!(outcome == CheckOutcome::UpdateAvailable, available);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]
@@ -1904,23 +2121,17 @@ async fn check_inner(
         None
     };
     let (artifact_resource, artifact) = selected.unwrap_or((ArtifactResource::Host, &host));
-    let target = &artifact["manifest"];
-    let supported = native && target["schema"] == 2 && target["compatibility"] == "native-v1";
-    let available = supported && selected.is_some() && newer_artifact(&installed, artifact);
-    let message = if !supported {
-        "This installation needs a qualified native maintenance release and a saved SSH route. Legacy/container installations are not reinstalled automatically."
-    } else if selected.is_none() {
-        "No bundled update matches this server's runtime pins. Browser/runtime migration requires separate qualification; no update is available."
-    } else if !available {
-        "No newer qualified release is bundled with this app. Equal or older release sequences cannot update this server."
-    } else if artifact.get("authorization").is_some() {
-        "Review the complete publisher-signed native release. Coordinator, worker and required tools are updated together; browser/runtime pins, credentials and history are preserved."
-    } else {
-        release_review_message(artifact_resource, artifact)
-    };
+    let (check_outcome, message) = release_check(
+        &installed,
+        artifact_resource,
+        artifact,
+        binding.is_some(),
+        selected.is_some(),
+    );
+    let available = check_outcome == CheckOutcome::UpdateAvailable;
     let review = json!({"reviewId":Uuid::new_v4().to_string(),"operationId":Uuid::new_v4().to_string(),"environmentId":environment_id,
         "setupId":binding.map(|(_,b)|b.setup_id),"installed":installed,"runtimePinsProbe":runtime_pins_probe,"artifact":artifact,"artifactResource":artifact_resource.name(),
-        "available":available,"state":"review","expiresAt":now()+300000,"message":message});
+        "available":available,"checkOutcome":check_outcome,"state":"review","expiresAt":now()+300000,"message":message});
     save(&setup, &environment_id, &review)?;
     Ok(review)
 }

@@ -19,6 +19,7 @@ import SharedMemory, { ServerNotes } from './src/SharedMemory';
 import ModelPicker from './src/agent/ModelPicker';
 import { Button, Dialog } from './src/Interface';
 import './src/focus.css';
+import './src/anchor-menu/anchor-menu.css';
 import './src/dialog-consistency.css';
 window.isTauri = true;
 const calls = [];
@@ -149,16 +150,14 @@ try {
   await change('setView', 'model');
   const modelTrigger = page.locator('.model-picker-trigger');
   await modelTrigger.click();
-  assert.equal(await button('Done').count(), 0);
-  assert.equal(await dialog.getByLabel('Search models').evaluate(element => element === document.activeElement), true);
-  await button('Close model picker').click(); await checkFocus(modelTrigger);
-  assert.equal(await page.evaluate(() => window.fixture.model), null);
-  await modelTrigger.click();
-  await dialog.getByLabel('Search models').fill('Second');
-  await dialog.getByRole('button', { name: /Second model/ }).click();
-  await dialog.waitFor({ state: 'hidden' }); await checkFocus(modelTrigger);
+  const menu = page.getByRole('dialog', { name: 'Model', exact: true });
+  await menu.waitFor();
+  assert.equal(await menu.getByLabel('Search models').evaluate(element => element === document.activeElement), true);
+  await menu.getByLabel('Search models').fill('Second');
+  await menu.getByRole('option', { name: /Second model/ }).click();
+  await menu.waitFor({ state: 'hidden' }); await checkFocus(modelTrigger);
   assert.deepEqual(await page.evaluate(() => window.fixture.model), { providerId: 'fixture', modelId: 'two' });
-  await modelTrigger.click(); await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'hidden' }); await checkFocus(modelTrigger);
+  await modelTrigger.click(); await page.keyboard.press('Escape'); await menu.waitFor({ state: 'hidden' }); await checkFocus(modelTrigger);
 
   for (const view of ['legacy', 'footer']) {
     await change('setView', view); await button('Open contract').click();

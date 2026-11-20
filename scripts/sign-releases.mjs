@@ -82,7 +82,7 @@ export function signArtifact(metadata, bytes, key, contents) {
   assert.ok(/^[a-f0-9]{64}$/.test(metadata.runtimePinsSha256));
   const required = ['package.json', 'package-lock.json', 'server/main.ts', 'server/pi-worker/main.ts', 'deploy/agent/host-executor.mjs',
     'server/environment/update-checkpoint.ts', 'server/environment/qualify-runtime.ts', 'server/gateway/coordinator.ts',
-    'server/policy/trust.ts', 'server/core/ledger.ts', 'server/scheduler/tools.ts', 'deploy/environment/auto_update.py'];
+    'server/gateway/http.ts', 'server/artifacts/workspace-review.ts', 'server/policy/trust.ts', 'server/core/ledger.ts', 'server/scheduler/tools.ts', 'deploy/environment/auto_update.py'];
   for (const path of required) assert.ok(contents.files.includes(path), `Incomplete release: ${path}`);
   assert.deepEqual(metadata.requiredTools, requiredTools);
   const payload = Buffer.from(JSON.stringify({ schema: 1, manifest, sha256: metadata.sha256, size: bytes.length,

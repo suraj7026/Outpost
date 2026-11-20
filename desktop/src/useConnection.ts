@@ -3,6 +3,7 @@ import { environmentApi, nativeApp, recordedPreview, type EnvironmentId } from "
 import type { Catalogue } from "./agent/types";
 import { Channel } from "@tauri-apps/api/core";
 import { ollamaCloudModels } from "./models";
+import { controlCommandBlocker } from './control-mode';
 import { mergeRecords, overlayLive, type LiveFrame } from "./live";
 import type { ConnectionInfo, EventPage, Json, ModelCatalogue, RuntimeInfo, ServerRecord, Snapshot } from "./types";
 
@@ -185,9 +186,16 @@ export function useConnection(environmentId: EnvironmentId = null, route = "", r
       if (alive.current) setBusy(false);
     }
   }, [current, refresh, refreshInfo]);
-  const command = useCallback((kind: string, id: string, revision: number, payload: Record<string, Json> = {}) =>
-    perform(() => api.send(kind, id, revision, payload)), [api, perform]);
   const combinedRecords = useMemo(() => overlayLive(records, liveRecords), [records, liveRecords]);
+  const controlAuthority = useRef({ runtime, records: combinedRecords });
+  controlAuthority.current = { runtime, records: combinedRecords };
+  const command = useCallback((kind: string, id: string, revision: number, payload: Record<string, Json> = {}) =>
+    perform(() => {
+      const current = controlAuthority.current;
+      const blocked = controlCommandBlocker(current.runtime, current.records, kind, id, payload);
+      if (blocked) throw new Error(blocked);
+      return api.send(kind, id, revision, payload);
+    }), [api, perform]);
   const reconnecting = !!info?.lifecycle && !connected && !["paused", "needs_attention"].includes(info.lifecycle.state);
   const resume = useCallback(() => connect(true), [connect]);
   return useMemo(() => ({ environmentId, api, retired, records: combinedRecords, streaming, info, runtime, models, agentCatalogue,

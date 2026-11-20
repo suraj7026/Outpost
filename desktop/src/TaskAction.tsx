@@ -1,24 +1,37 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ChevronRight, Globe, Shield, SquareTerminal as Terminal } from "lucide-react";
 import { recordedPreview } from "./api";
 import { EvidenceTime } from "./LiveContent";
 import OutcomeDot from "./OutcomeDot";
 import { actionNeedsReview, object, text, type ServerRecord } from "./types";
 import type { Connection } from "./useConnection";
+import ActionReviewReason from './ActionReviewReason';
+import { taskModeBlocker } from './control-mode';
+import { unchangedReviewedAction } from './action-review';
 
 export function ActionDecisions({ record, connection }: { record: ServerRecord; connection: Connection }) {
-  const blocked = connection.retired || !!connection.info?.pendingError || connection.busy || !connection.connected || Boolean(connection.info?.pending) || recordedPreview();
+  const working = useRef(false);
+  const [busy, setBusy] = useState(false), [attempted, setAttempted] = useState<number | null>(null), [error, setError] = useState('');
+  const blocked = busy || attempted === record.revision || connection.retired || !!connection.info?.pendingError || connection.busy || !connection.connected || Boolean(connection.info?.pending) || recordedPreview();
+  const safety = taskModeBlocker(connection.records, text(record, 'taskId'), connection.runtime);
   const state = text(record, 'state');
-  const decide = (decision: 'approve' | 'deny') => {
-    if (blocked) return;
-    void connection.command('approval.decide', record.id, record.revision, { nonce: text(record, 'nonce'), actionDigest: text(record, 'actionDigest'), decision });
+  const decide = async (decision: 'approve' | 'deny') => {
+    if (blocked || working.current || state !== 'pending' || decision === 'approve' && safety) return;
+    if (!unchangedReviewedAction(record, connection.records.find(row => row.kind === 'action' && row.id === record.id))) return;
+    working.current = true; setBusy(true); setAttempted(record.revision);
+    try {
+      const result = await connection.command('approval.decide', record.id, record.revision, { nonce: text(record, 'nonce'), actionDigest: text(record, 'actionDigest'), decision });
+      if (!result || result.kind !== 'action' || result.id !== record.id || result.revision <= record.revision)
+        setError('Could not confirm the outcome. Check server recovery before trying again.');
+    } catch { setError('Could not confirm the outcome. Check server recovery before trying again.'); }
+    finally { working.current = false; setBusy(false); }
   };
   return state === 'pending' ? <>
-    <button type="button" className="action-deny" disabled={blocked} onClick={() => decide('deny')}>Deny</button>
-    <button type="button" className="primary" disabled={blocked} onClick={() => decide('approve')}>Approve</button>
-  </> : state === 'authorized' ? <button type="button" className="primary" disabled={blocked} onClick={() => {
-    if (!blocked) void connection.command('action.dispatch', record.id, record.revision);
-  }}>Run approved action</button> : null;
+    <button type="button" className="action-deny" disabled={blocked} onClick={() => void decide('deny')}>Deny</button>
+    <button type="button" className="primary" disabled={blocked || !!safety} title={safety || undefined} onClick={() => void decide('approve')}>Approve</button>
+    {safety && <p className="small" role="status">{safety}</p>}
+    {error && <p className="error-text" role="alert">{error}</p>}
+  </> : null;
 }
 
 export function Action({
@@ -33,7 +46,7 @@ export function Action({
   const result = object(record.data.result),
     args = object(record.data.arguments),
     state = text(record, "state");
-  const [open, setOpen] = useState(() => state === "pending" || state === "authorized");
+  const [open, setOpen] = useState(() => state === "pending");
   const failed = actionNeedsReview(record);
   const warnings = Array.isArray(result.errors) ? result.errors.length : 0;
   const name = text(record, "tool");
@@ -67,14 +80,16 @@ export function Action({
           {failed || state === 'succeeded' ? (
             <OutcomeDot failed={failed} label={failed ? 'Needs review' : 'Succeeded'} />
           ) : (
-            state === 'dispatching' ? 'Running' : state
+            state === 'authorized' ? 'Queued' : state === 'dispatching' ? 'Running' : state
           )}
         </span>
       </summary>
       <div className="action-body">
         <p className="small">{text(record, "target")}</p>
         <pre>{JSON.stringify(record.data.arguments, null, 2)}</pre>
-        {showDecisions && ['pending', 'authorized'].includes(state) && <div className="button-row"><ActionDecisions record={record} connection={connection} /></div>}
+        <ActionReviewReason record={record} />
+        {state === 'authorized' && !failed && <p className="small">Queued for automatic execution.</p>}
+        {showDecisions && state === 'pending' && <div className="button-row"><ActionDecisions record={record} connection={connection} /></div>}
         {typeof result.stdout === "string" && (
           <pre>{result.stdout || "(no output)"}</pre>
         )}

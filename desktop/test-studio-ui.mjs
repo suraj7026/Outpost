@@ -305,8 +305,10 @@ try {
       await page.getByRole('dialog').getByRole('status').waitFor();
       check(await page.getByRole('dialog').getByRole('button', { name: 'Approve', exact: true }).count() === 0, 'Changed action revision cannot be approved from stale review');
       await page.getByRole('button', { name: 'Close review' }).click();
-      await page.getByRole('tab', { name: 'Activity', exact: true }).click();
-      check(await page.getByRole('button', { name: 'Run approved action' }).isVisible(), 'Explicit dispatch preserved');
+      check(await page.getByRole('button', { name: 'Run approved action', exact: true }).count() === 0, 'Authorized work has no manual dispatch control');
+      check(await page.locator('.action[data-record-id="pending"] .action-state').textContent() === 'Queued', 'Authorized work is queued for automatic execution');
+      check(await page.locator('.review-shortcut, .task-attention-indicator').count() === 0, 'Authorized work no longer requests approval attention');
+      assert.deepEqual(await page.evaluate(() => window.__requests), requests); checks++;
       check(await page.locator('.review-handoff').count() === 0, 'Review banner disappears only after state update');
     }
     await page.keyboard.press('Meta+n');
@@ -328,7 +330,7 @@ try {
     check(await page.getByRole('button', { name: 'Deny', exact: true }).isDisabled(), `${scenario}: denial blocked`);
     await page.getByRole('button', { name: 'Close review' }).click();
     check(await page.getByRole('button', { name: 'Resume task', exact: true }).isDisabled(), `${scenario}: resume blocked`);
-    check(await page.getByRole('combobox', { name: 'Task control mode' }).isDisabled(), `${scenario}: policy change blocked`);
+    check(await page.getByRole('combobox', { name: 'Task control mode' }).isDisabled(), `${scenario}: control mode changes blocked`);
     await page.getByRole('textbox', { name: 'Message Outpost' }).fill('Must not dispatch');
     await page.getByRole('textbox', { name: 'Message Outpost' }).press('Meta+Enter');
     check((await page.evaluate(() => window.__requests)).length === 0, `${scenario}: shortcut dispatch blocked`);

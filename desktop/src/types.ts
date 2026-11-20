@@ -27,6 +27,8 @@ export interface ConnectionInfo {
   lifecycle?: { state: "connecting" | "connected" | "retrying" | "paused" | "needs_attention"; error: string | null } | null;
 }
 export interface RuntimeInfo {
+  controlModes?: string[];
+  autoPolicyVersion?: number;
   sharedMemory?: boolean;
   piManagement?: boolean;
   configured: boolean;

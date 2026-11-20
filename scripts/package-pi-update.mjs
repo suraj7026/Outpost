@@ -18,17 +18,32 @@ const compatibleSourceReleases = Object.freeze([
   'host-41cd62017ed6c74b5248',
 ]);
 const extensionPolicy = 'native-installed';
-const sequence = 6;
+const policyPath = 'deploy/environment/release-policy.json';
 const requiredTools = Object.freeze(['automation.list', 'automation.save', 'automation.set_paused']);
 const coordinatorPath = 'server/gateway/coordinator.ts';
+const mainPath = 'server/main.ts';
 const serviceEntrypoints = ['server/main.ts', 'server/pi-worker/main.ts', 'deploy/agent/host-executor.mjs'];
 const piVersion = '1.5.2';
 const overlays = Object.freeze([
   'deploy/environment/auto_update.py',
   'deploy/environment/host_install.py',
   'deploy/environment/host_update.py',
+  'server/artifacts/files.ts',
+  'server/artifacts/workspace-review.ts',
+  'server/core/contracts.ts',
+  'server/diagnostics/recovery.ts',
   'server/environment/qualify-runtime.ts',
+  'server/gateway/live.ts',
+  'server/models/cloud.ts',
+  'server/operations/hosts.ts',
+  'server/operations/machine.ts',
+  'server/pi-adapter/live-events.ts',
+  'server/pi-adapter/remote-runtime.ts',
   'server/pi-adapter/runtime.ts',
+  'server/pi-adapter/subagent-contract.ts',
+  'server/pi-adapter/subagent-privacy.ts',
+  'server/pi-adapter/subagent-runs.ts',
+  'server/pi-adapter/subagent-transcript.ts',
   'server/pi-adapter/system-prompt.ts',
   'server/pi-management/bundled-extensions.ts',
   'server/pi-management/child-provider-bootstrap.ts',
@@ -37,9 +52,17 @@ const overlays = Object.freeze([
   'server/pi-management/session-background.ts',
   'server/pi-management/session-extensions.ts',
   'server/pi-management/subscription-models.ts',
+  'server/pi-worker/client.ts',
+  'server/pi-worker/contracts.ts',
   'server/pi-worker/main.ts',
   'server/pi-worker/runs.ts',
+  'server/policy/auto-policy.ts',
+  'server/policy/migration.ts',
+  'server/policy/trust.ts',
+  'server/processes/runner.ts',
+  'server/scheduler/scheduler.ts',
   'server/scheduler/tools.ts',
+  'server/tasks/tasks.ts',
 ]);
 const pinsPath = 'deploy/environment/runtime-pins.json';
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -84,7 +107,7 @@ with tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()), mode='r:gz') as a
         target = root / member.name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(archive.extractfile(member).read())
-`, stage], { input: bytes, timeout: 30000 });
+`, stage], { input: bytes, timeout: 120000 });
   const manifest = json(readFileSync(join(stage, 'host-manifest.json')));
   assert.deepStrictEqual(manifest, {
     schema: 2, id: sourceRelease, protocolVersion: 2, layoutVersion: 1,
@@ -115,23 +138,116 @@ function validatePackages(baseline, baselineLock, packageBytes, lockBytes) {
   }
 }
 
-function registerBaselineAutomation(bytes) {
+function patchBaselineCoordinator(bytes) {
   let source = bytes.toString('utf8');
   const insertions = [
+    ["import type { EnvironmentOptions } from '../environment/contracts.js';\n",
+      "import { recoveryAllowsDispatch, recoveryStatus } from '../diagnostics/recovery.js';\n"],
+    ["'deployment_evidence','operation','device','recovery','tool_stream'", ",'subagent_run'"],
+    ["import { LiveFeed } from './live.js';\n",
+      "import { interruptedSubagent } from '../pi-adapter/subagent-contract.js';\n"],
+    ["    for (const kind of ['message','tool_stream']) for (const record of db.list(kind)) if (record.data.streaming) db.put(kind,record.id,record.revision,{ ...record.data,streaming: false,interrupted: true });\n",
+      `    for (const record of db.list('subagent_run')) if (record.data.streaming) db.put('subagent_run', record.id, record.revision,
+      { ...record.data, ...interruptedSubagent(record.data), streaming: false, interrupted: true });
+`],
+    ["import { Workspace, Artifacts } from '../artifacts/files.js';\n",
+      "import { WorkspaceReview, WorkspaceFilesInput, WorkspaceReadInput } from '../artifacts/workspace-review.js';\n"],
+    ['  query(type: string, payload: Record<string,Json>) {\n',
+      `    if (type === 'workspace.files' || type === 'workspace.read') {
+      const input = type === 'workspace.files' ? { ...WorkspaceFilesInput.parse(payload), path: undefined } : WorkspaceReadInput.parse(payload);
+      this.db.need('task',input.taskId);
+      const workspace = new WorkspaceReview(join(this.options.workspaceRoot ?? join(this.root,'workspaces'),input.taskId));
+      return (input.path === undefined ? workspace.files() : workspace.read(input.path)).then(wire);
+    }
+`],
     ["import { Scheduler } from '../scheduler/scheduler.js';\n",
       "import { registerAutomationTools } from '../scheduler/tools.js';\n"],
     ['    workspace.register(gate); registerInventory(gate); registerCommands(gate,workspace,new Set(this.options.executables ?? []),this.options.unrestrictedCommands);\n',
-      `    registerAutomationTools(gate,this.scheduler,taskId,{ workerAvailable: !!this.options.worker, assertWritable: () => {
+      `    registerAutomationTools(gate,this.scheduler,{ workerAvailable: !!this.options.worker, assertWritable: () => {
       requireThat(!this.maintenance.holding,'maintenance_in_progress');
       requireThat(this.dispatchEnabled,'recovery_dispatch_disabled');
     } });
 `],
   ];
   for (const [anchor, addition] of insertions) {
-    assert.equal(source.split(anchor).length, 2, 'Baseline coordinator registration anchor must be unique');
+    assert.equal(source.split(anchor).length, 2, 'Baseline coordinator patch anchor must be unique');
     source = source.replace(anchor, anchor + addition);
   }
+  // This pinned coordinator predates recovery.inspect/investigate. Preserve its API and
+  // legacy browser wiring. Approval, lifecycle and dispatch fences ship together.
+  const replacements = [
+    ["import { ClientCommand, Fault, id, requireThat } from '../core/contracts.js';",
+      "import { ClientCommand, Fault, id, requireThat, controlModes, autoPolicyVersion } from '../core/contracts.js';\nimport { registerBuiltin, securityPath } from '../policy/auto-policy.js';"],
+    ["import { ManagementRequest, ModelRef } from '../pi-management/contracts.js';\nimport { cloudReviewer } from '../models/cloud.js';\n",
+      "import { ManagementRequest, ModelRef } from '../pi-management/contracts.js';\n"],
+    ["    const reviewer = this.options.apiKey && this.options.roles ? cloudReviewer(this.options.apiKey,this.options.roles) : undefined;\n    gate = new Gate(this.db,reviewer,!!this.options.hosts);",
+      `    gate = new Gate(this.db,!!this.options.hosts, () => {
+      requireThat(!this.closing, 'coordinator_stopping');
+      requireThat(!this.maintenance.holding, 'maintenance_in_progress');
+      requireThat(this.dispatchEnabled, 'recovery_dispatch_disabled');
+    }, key => !!this.runtimes.get(key)?.isActive(key));`],
+    ["['task.pause', 'task.cancel', 'approval.decide']", "['task.pause', 'task.cancel']"],
+    [`        case 'policy.change': return wire(this.gate(key).changePolicy(key,expected,payload.mode));
+        case 'approval.decide': {
+          const action = this.db.need<Action>('action',key);
+          return wire(this.gate(action.data.taskId).decide(key,expected,z.string().parse(payload.nonce),z.string().parse(payload.actionDigest),z.enum(['approve','deny']).parse(payload.decision),command.deviceId));
+        }
+`, `        case 'policy.change': return wire(this.gate(key).changePolicy(key,expected,payload.mode));
+        case 'approval.decide': {
+          const action = this.db.need<Action>('action',key);
+          return wire(this.gate(action.data.taskId).decide(key, expected, command.deviceId, payload));
+        }
+`],
+    ["  get dispatchEnabled() { return this.db.get('recovery','server')?.data.dispatchEnabled !== false; }",
+      "  get dispatchEnabled() { return recoveryAllowsDispatch(recoveryStatus(this.db)); }"],
+    ["  private gates = new Map<string,Gate>(); private runtimes = new Map<string,PiRuntime | RemotePiRuntime>(); private jobs = new Set<string>();",
+      "  private gates = new Map<string,Gate>(); private runtimes = new Map<string,PiRuntime | RemotePiRuntime>(); private jobs = new Set<string>();\n  private runtimeJobs = new Set<Promise<void>>();\n  private drains = new Set<Promise<void>>();\n  private closing = false;"],
+    ["  command(input: unknown) {\n    const command = ClientCommand.parse(input);",
+      "  command(input: unknown) {\n    requireThat(!this.closing, 'coordinator_stopping');\n    const command = ClientCommand.parse(input);"],
+    ["gate.register('artifact.read_text',", "registerBuiltin(gate, 'artifact.read_text',"],
+    ["gate.register('data.profile',", "registerBuiltin(gate, 'data.profile',"],
+    ["execute: async args => profileCSV(workspace.read(String(args.path))) });",
+      "execute: async args => profileCSV(workspace.read(String(args.path))) }, args => securityPath(String(args.path)) ? 'security' : 'routine');"],
+    ["  runtimeStatus() {\n    return { piManagement:",
+      "  runtimeStatus() {\n    return { controlModes: [...controlModes], autoPolicyVersion, piManagement:"],
+    ["  async closeBrowsers() {", `  async close() {
+    this.closing = true;
+    for (const [taskId, gate] of this.gates) gate.stop(taskId);
+    await Promise.allSettled([...this.runtimes].map(([taskId, runtime]) => runtime.abort(taskId)));
+    await Promise.allSettled([...this.runtimeJobs, ...this.drains]);
+    await this.closeBrowsers();
+    this.live.close();
+  }
+  async closeBrowsers() {`],
+    ["    void pending.catch(error => {", "    this.runtimeJobs.add(pending);\n    void pending.catch(error => {"],
+    ["    });\n  }\n  async drain() {\n    if (!this.dispatchEnabled) return;", `    }).finally(() => this.runtimeJobs.delete(pending));
+  }
+  drain() {
+    const pending = this.drainWork();
+    this.drains.add(pending);
+    void pending.then(() => this.drains.delete(pending), () => this.drains.delete(pending));
+    return pending;
+  }
+  private async drainWork() {
+    if (this.closing || !this.dispatchEnabled || this.maintenance.holding) return;`],
+    ["        if (blockedTasks.has(taskId)) continue;",
+      "        if (blockedTasks.has(taskId)) continue;\n        if (!runtime?.isActive(taskId) && this.db.need<Task>('task', taskId).data.state === 'waiting_for_approval') { blockedTasks.add(taskId); continue; }"],
+    ["      this.db.db.prepare(\"UPDATE outbox SET state='claimed' WHERE id=? AND state='pending'\").run(key); this.jobs.add(key);",
+      "      if (!this.db.db.prepare(\"UPDATE outbox SET state='claimed' WHERE id=? AND state='pending'\").run(key).changes) continue;\n      this.jobs.add(key);"],
+  ];
+  for (const [before, after] of replacements) {
+    assert.equal(source.split(before).length, 2, 'Baseline coordinator replacement must be unique');
+    source = source.replace(before, after);
+    assert.equal(source.split(after).length, 2, 'Patched coordinator replacement must be reversible');
+  }
   return Buffer.from(source);
+}
+
+function patchBaselineMain(bytes) {
+  const source = bytes.toString('utf8');
+  const before = '  if (coordinator.browsers) void coordinator.closeBrowsers().finally(finish);\n  else finish();';
+  assert.equal(source.split(before).length, 2, 'Baseline shutdown patch must be unique');
+  return Buffer.from(source.replace(before, '  void coordinator.close().finally(finish);'));
 }
 
 function verifyRelativeImports(stage, files) {
@@ -199,6 +315,9 @@ with open(sys.argv[2], 'wb') as output:
 export function buildPiUpdate({ outputDir = join(root, 'desktop/src-tauri/resources'), sourceRoot = root } = {}) {
   sourceRoot = resolve(sourceRoot);
   outputDir = resolve(outputDir);
+  const policy = json(sourceBytes(sourceRoot, policyPath));
+  const sequence = policy.legacySequence;
+  if (!Number.isSafeInteger(sequence) || sequence < 1 || policy.compatibility !== 'native-v1') throw new Error('Invalid qualified legacy release policy');
   const temporary = mkdtempSync(join(tmpdir(), 'outpost-pi-update-'));
   const stage = join(temporary, 'source');
   mkdirSync(stage);
@@ -212,10 +331,11 @@ export function buildPiUpdate({ outputDir = join(root, 'desktop/src-tauri/resour
       mkdirSync(dirname(join(stage, path)), { recursive: true });
       writeFileSync(join(stage, path), sourceBytes(sourceRoot, path));
     }
-    writeFileSync(join(stage, coordinatorPath), registerBaselineAutomation(original.get(coordinatorPath)));
+    writeFileSync(join(stage, coordinatorPath), patchBaselineCoordinator(original.get(coordinatorPath)));
+    writeFileSync(join(stage, mainPath), patchBaselineMain(original.get(mainPath)));
     writeFileSync(join(stage, 'package.json'), packageBytes);
     writeFileSync(join(stage, 'package-lock.json'), lockBytes);
-    const allowed = new Set([...overlays, coordinatorPath, 'package.json', 'package-lock.json', 'host-manifest.json']);
+    const allowed = new Set([...overlays, coordinatorPath, mainPath, 'package.json', 'package-lock.json', 'host-manifest.json']);
     for (const [path, bytes] of original) {
       if (!allowed.has(path)) assert.deepStrictEqual(readFileSync(join(stage, path)), bytes, `Nonallowlisted file changed: ${path}`);
     }
@@ -230,7 +350,7 @@ export function buildPiUpdate({ outputDir = join(root, 'desktop/src-tauri/resour
     verifyPythonImports(stage);
     const changedFiles = stagedFiles.filter(path => path !== 'host-manifest.json' && !readFileSync(join(stage, path)).equals(original.get(path) ?? Buffer.alloc(0))).sort();
     const provenance = { schema: 1, sourceRelease, baselineSha256, compatibleSourceReleases,
-      extensionPolicy, requiredTools, targetSequence: sequence, overlayPaths: overlays, patchedPaths: [coordinatorPath], changedFiles };
+      extensionPolicy, requiredTools, targetSequence: sequence, overlayPaths: overlays, patchedPaths: [coordinatorPath, mainPath], changedFiles };
     writeFileSync(join(stage, 'pi-update-source.json'), serialized(provenance));
     const hash = createHash('sha256');
     for (const path of filesAt(stage).filter(path => path !== 'host-manifest.json').sort()) {

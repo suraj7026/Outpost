@@ -153,7 +153,7 @@ test('authenticated worker: add providers, log in, select each model and execute
   }
 });
 
-test('worker runs the installed upstream subagent with its native profile and no action bridge', { timeout: 45000 }, async () => {
+for (const background of [false, true]) test(`worker observes ${background ? 'async' : 'foreground'} native child metadata without an action bridge`, { timeout: 45000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), 'outpost-worker-child-'));
   const profile = new PiProfile(process.env.PI_CODING_AGENT_DIR!);
   const agents = join(profile.directory, 'agents'), proof = join(root, 'native-child.txt');
@@ -168,7 +168,7 @@ test('worker runs the installed upstream subagent with its native profile and no
     const parent = body.tools.some(tool => tool.function.name === 'outpost_action');
     received.push({ parent, model: body.model, authorization: request.headers.authorization });
     const call = body.messages.some(message => message.role === 'tool') ? undefined : parent
-      ? { name: 'subagent', arguments: { agent: 'worker-fixture', task: 'Write the native proof file. Delegation is authorized.', async: false, options: { context: 'fresh' } } }
+      ? { name: 'subagent', arguments: { agent: 'worker-fixture', task: 'Write the native proof file. Delegation is authorized.', async: background, options: { context: 'fresh' } } }
       : { name: 'write', arguments: { path: proof, content: 'WORKER_NATIVE_CHILD' } };
     const delta = call ? { role: 'assistant', tool_calls: [{ index: 0, id: `worker_native_${received.length}`, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.arguments) } }] }
       : { role: 'assistant', content: 'Native worker child finished.' };
@@ -185,8 +185,10 @@ test('worker runs the installed upstream subagent with its native profile and no
     runs.start({ type: 'run.start', runId, taskId: randomUUID(), model: { providerId: 'alpha', modelId: 'worker-native-model' },
       prompt: 'Delegate the native write to worker-fixture.', systemPrompt: 'Fixture: use outpost_action for coordinator actions.' });
     let state: RunPoll | undefined, cursor = 0;
+    const projections = new Map<string, RunPoll['projections'][number]>();
     for (let i = 0; i < 1500; i++) {
-      state = runs.poll(runId, cursor); cursor = state.cursor;
+      state = RunPoll.parse(runs.poll(runId, cursor)); cursor = state.cursor;
+      for (const projection of state.projections) projections.set(`${projection.kind}:${projection.id}`, projection);
       assert.equal(state.actions.length, 0, 'Native extension execution must not enter Outpost approvals');
       if (['finished', 'failed', 'cancelled'].includes(state.state)) break;
       await new Promise(resolve => setTimeout(resolve, 20));
@@ -195,6 +197,14 @@ test('worker runs the installed upstream subagent with its native profile and no
     assert.ok(received.some(request => !request.parent), JSON.stringify(state));
     assert.equal(readFileSync(proof, 'utf8'), 'WORKER_NATIVE_CHILD');
     assert.ok(received.every(request => request.model === 'worker-native-model' && request.authorization === 'Bearer worker-child-private-key'));
+    const children = [...projections.values()].filter(projection => projection.kind === 'subagent_run');
+    assert.equal(children.length, 1);
+    const child = children[0]!;
+    assert.equal(child.final, true); assert.equal(child.data.state, 'completed', JSON.stringify(child));
+    assert.equal(child.data.parentSessionId, state?.session?.id); assert.equal(child.data.stopSupported, false);
+    assert.equal(child.data.executionMode, background ? 'background' : 'foreground');
+    assert.ok(z.array(z.object({ tool: z.string().optional() })).parse(child.data.activity).some(entry => entry.tool === 'write'), JSON.stringify(child));
+    assert.doesNotMatch(JSON.stringify(children), /worker-child-private-key|capabilityToken|controlInbox|transcriptPath/);
     assert.equal(runs.active, false);
   } finally { await runs.close(); await close(upstream); rmSync(root, { recursive: true, force: true }); }
 });

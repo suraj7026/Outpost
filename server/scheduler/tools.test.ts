@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { Ledger } from '../core/ledger.js';
 import { Coordinator } from '../gateway/coordinator.js';
-import type { Action, Policy } from '../policy/trust.js';
+import type { Action } from '../policy/trust.js';
 import type { RecordValue } from '../core/contracts.js';
 import { WorkerClient } from '../pi-worker/client.js';
 import { outpostSystemPrompt } from '../pi-adapter/system-prompt.js';
@@ -16,25 +16,26 @@ import { Schedule } from './scheduler.js';
 const names = ['automation.list', 'automation.save', 'automation.set_paused'] as const;
 const AutomationRecord = z.strictObject({ kind: z.literal('automation'), id: z.string(), revision: z.number().int().positive(), data: Schedule, updatedAt: z.string() });
 const AutomationPage = z.strictObject({ serverTime: z.number(), automations: z.array(AutomationRecord), total: z.number().int().nonnegative(), hasMore: z.boolean() });
-const schedule = (overrides: Partial<Schedule> = {}) => ({
+const schedule = (overrides: Partial<z.input<typeof Schedule>> = {}) => ({
   name: 'Inspect service', timezone: 'UTC', nextAt: 1000, intervalMs: 60000, missed: 'coalesce' as const,
   task: { goal: 'Inspect service health', profile: 'operations' as const }, ...overrides,
 });
 
-function fixture(mode: Policy['mode'] = 'full_control', options: ConstructorParameters<typeof Coordinator>[2] = {}) {
+function fixture(mode: 'full_control' | 'auto' | 'ask_permission' = 'full_control', options: ConstructorParameters<typeof Coordinator>[2] = {}) {
   const root = mkdtempSync(join(tmpdir(), 'outpost-automation-tools-'));
   const db = new Ledger(join(root, 'ledger.sqlite'));
   const coordinator = new Coordinator(db, root, options);
   const task = coordinator.tasks.create(randomUUID(), { goal: 'Manage service automations', profile: 'operations', mode });
   const gate = coordinator.gate(task.id);
+  db.put('device', 'reviewer', 0, { revoked: false });
+  const approve = (action: RecordValue<Action>) => gate.decide(action.id, action.revision, 'reviewer', { nonce: action.data.nonce, actionDigest: action.data.actionDigest, decision: 'approve' });
   return {
+    approve,
     db, coordinator, task, gate,
     propose: (name: string, input: unknown) => gate.propose(task.id, name, input),
-    approve(action: RecordValue<Action>) {
-      return gate.decide(action.id, action.revision, action.data.nonce, action.data.actionDigest, 'approve', randomUUID());
-    },
     async run(name: string, input: unknown) {
       const action = await gate.propose(task.id, name, input);
+      if (action.data.state === 'pending') approve(action);
       const observed = await gate.dispatch(action.id);
       assert.equal(observed.data.state, 'succeeded', JSON.stringify(observed.data.result));
       return observed.data.result;
@@ -54,6 +55,8 @@ test('automation tools expose descriptions, effects and authoritative JSON input
   try {
     const catalogue = f.gate.catalogue();
     assert.deepEqual(f.coordinator.query('tools', { taskId: f.task.id }), catalogue);
+    assert.doesNotMatch(JSON.stringify(catalogue), /ask_permission/);
+        assert.match(JSON.stringify(catalogue), /\"auto\"/);
     for (const name of names) {
       const tool = catalogue.find(item => item.name === name);
       assert.ok(tool, `${name} must be registered`);
@@ -93,6 +96,8 @@ test('system prompt explicitly teaches automation tools and fixed-interval rathe
   assert.match(prompt, /cron/i);
   assert.match(prompt, /(?:OS|operating.system|system)[^\n]*cron|crontab/i);
   assert.match(prompt, /explicit/i);
+  assert.match(prompt, /full_control without per-action approval/);
+  assert.doesNotMatch(prompt, /ask_permission|Request permission|Stop and explain pending approvals|normal permission and evidence gates/);
 });
 
 test('save, list, update, pause and resume reuse the UI automation records and preserve a non-UUID id', async () => {
@@ -101,7 +106,7 @@ test('save, list, update, pause and resume reuse the UI automation records and p
     const automationId = 'service-health/every-minute';
     const saved = AutomationRecord.parse(await f.run('automation.save', { automationId, expectedRevision: 0, schedule: schedule() }));
     assert.equal(saved.id, automationId); assert.equal(saved.revision, 1);
-    assert.equal(saved.data.task.mode, 'ask_permission'); assert.equal(saved.data.paused, false);
+    assert.equal(saved.data.task.mode, 'full_control'); assert.equal(saved.data.paused, false);
     assert.deepEqual(saved, f.db.need('automation', automationId));
     const snapshot = z.object({ records: z.array(z.object({ kind: z.string() }).passthrough()) }).parse(f.coordinator.query('snapshot', {}));
     assert.deepEqual(snapshot.records.filter(record => record.kind === 'automation'), [saved]);
@@ -161,7 +166,7 @@ test('list defaults to 50 records, paginates without overlap, filters by id and 
   } finally { f.close(); }
 });
 
-test('tool-created automations run through the existing Scheduler, inherit ask_permission and honor pause/resume', async () => {
+test('tool-created automations run through the existing Scheduler with full_control and honor pause/resume', async () => {
   const f = fixture();
   try {
     const automationId = 'scheduled-health';
@@ -172,7 +177,7 @@ test('tool-created automations run through the existing Scheduler, inherit ask_p
     assert.equal(started.length, 1); assert.deepEqual(f.coordinator.scheduler.tick(181000), []);
     const child = f.db.need('task', started[0]!);
     assert.equal(child.data.goal, 'Inspect service health'); assert.equal(child.data.profile, 'operations');
-    assert.equal(f.db.need('policy', child.id).data.mode, 'ask_permission');
+    assert.equal(f.db.need('policy', child.id).data.mode, 'full_control');
     assert.equal(f.db.list('task').length, 2);
     assert.equal(f.db.list('occurrence')[0]?.data.automationId, automationId);
     const stored = f.db.need<Schedule>('automation', automationId);
@@ -182,7 +187,7 @@ test('tool-created automations run through the existing Scheduler, inherit ask_p
   } finally { f.close(); }
 });
 
-test('ask_permission save, pause and resume stay pending and cannot write until approved', async () => {
+test('legacy ask_permission save, pause and resume require exact approvals', async () => {
   const f = fixture('ask_permission');
   try {
     const automationId = 'owner-approved';
@@ -194,11 +199,10 @@ test('ask_permission save, pause and resume stay pending and cannot write until 
       const before = f.db.list('automation');
       const action = await f.propose(name, input);
       assert.equal(action.data.state, 'pending'); assert.deepEqual(action.data.effects, ['automation.write']);
-      assert.deepEqual(f.db.list('automation'), before);
-      await assert.rejects(f.gate.dispatch(action.id), { code: 'not_authorized' });
-      assert.deepEqual(f.db.list('automation'), before);
+      assert.deepEqual(f.db.list('automation'), before, 'Proposal alone must not write the schedule');
+      assert.equal(f.db.need('inbox', action.id).data.state, 'pending');
+      await assert.rejects(f.gate.dispatch(action.id), /not_authorized/);
       f.approve(action);
-      assert.deepEqual(f.db.list('automation'), before, 'Approval alone must not write the schedule');
       const observed = await f.gate.dispatch(action.id);
       assert.equal(observed.data.state, 'succeeded');
       assert.equal(AutomationRecord.parse(observed.data.result).revision, input.expectedRevision + 1);
@@ -220,8 +224,8 @@ test('stale save and pause revisions, and updates to missing ids, are rejected b
 });
 
 for (const operation of ['create', 'update', 'pause', 'resume'] as const) {
-  for (const phase of ['after proposal', 'after approval'] as const) test(`${operation} revalidates revisions ${phase}; dispatch becomes unknown without overwriting newer data`, async () => {
-    const f = fixture(phase === 'after approval' ? 'ask_permission' : 'full_control');
+  for (const mode of ['full_control', 'ask_permission'] as const) test(`${operation} revalidates revisions for ${mode}; stale dispatch is rejected before execution without overwriting newer data`, async () => {
+    const f = fixture(mode);
     try {
       const automationId = 'concurrent-schedule';
       const existing = operation === 'create' ? undefined : f.coordinator.scheduler.save(automationId, 0, schedule({ paused: operation === 'resume' }));
@@ -230,10 +234,9 @@ for (const operation of ['create', 'update', 'pause', 'resume'] as const) {
         ? { automationId, expectedRevision: existing?.revision ?? 0, schedule: schedule({ name: 'Proposed value' }) }
         : { automationId, expectedRevision: existing!.revision, paused: operation === 'pause' };
       const action = await f.propose(name, input);
-      if (phase === 'after approval') f.approve(action);
+      if (action.data.state === 'pending') f.approve(action);
       const concurrent = f.coordinator.scheduler.save(automationId, existing?.revision ?? 0, schedule({ name: 'Concurrent owner edit', paused: operation === 'resume' }));
-      const observed = await f.gate.dispatch(action.id);
-      assert.equal(observed.data.state, 'unknown');
+      await assert.rejects(f.gate.dispatch(action.id), /stale_revision/);
       assert.deepEqual(f.db.need('automation', automationId), concurrent);
       assert.equal(f.db.list('automation').length, 1);
     } finally { f.close(); }
@@ -272,46 +275,33 @@ test('valid boundary ids, one-shot schedules and IANA timezones are accepted', a
   } finally { f.close(); }
 });
 
-for (const sourceMode of ['ask_permission', 'auto', 'full_control'] as const) test(`${sourceMode} cannot save or resume a more permissive child, but can pause it`, async () => {
+for (const sourceMode of ['ask_permission', 'auto', 'full_control'] as const) test(`${sourceMode} can save, pause and resume after required review, preserving each child mode`, async () => {
   const f = fixture(sourceMode);
-  const rank = { ask_permission: 0, auto: 1, full_control: 2 };
   try {
     for (const childMode of ['ask_permission', 'auto', 'full_control'] as const) {
       const automationId = `child-${childMode}`;
       const child = schedule({ task: { goal: 'Inspect', profile: 'operations', mode: childMode } });
-      if (rank[childMode] > rank[sourceMode]) {
-        await f.rejects('automation.save', { automationId, expectedRevision: 0, schedule: child });
-        await f.rejects('automation.save', { automationId, expectedRevision: 0, schedule: { ...child, paused: true } });
-        f.coordinator.scheduler.save(automationId, 0, child);
-        await f.rejects('automation.save', { automationId, expectedRevision: 1, schedule: child });
-      } else {
-        const action = await f.propose('automation.save', { automationId, expectedRevision: 0, schedule: child });
-        if (action.data.state === 'pending') f.approve(action);
-        assert.equal((await f.gate.dispatch(action.id)).data.state, 'succeeded');
-      }
-      const pause = await f.propose('automation.set_paused', { automationId, expectedRevision: 1, paused: true });
-      if (pause.data.state === 'pending') f.approve(pause);
-      assert.equal((await f.gate.dispatch(pause.id)).data.state, 'succeeded');
+      const saved = AutomationRecord.parse(await f.run('automation.save', { automationId, expectedRevision: 0, schedule: child }));
+      assert.equal(saved.data.task.mode, childMode === 'full_control' ? 'full_control' : 'auto');
+      await f.run('automation.set_paused', { automationId, expectedRevision: 1, paused: true });
       assert.equal(f.db.need<Schedule>('automation', automationId).data.paused, true);
-      const resume = { automationId, expectedRevision: 2, paused: false };
-      if (rank[childMode] > rank[sourceMode]) await f.rejects('automation.set_paused', resume);
-      else {
-        const action = await f.propose('automation.set_paused', resume);
-        if (action.data.state === 'pending') f.approve(action);
-        assert.equal((await f.gate.dispatch(action.id)).data.state, 'succeeded');
-      }
+      await f.run('automation.set_paused', { automationId, expectedRevision: 2, paused: false });
+      assert.equal(f.db.need<Schedule>('automation', automationId).data.paused, false);
     }
+    assert.equal(f.db.list('inbox').filter(row => row.data.state === 'pending').length, 0);
   } finally { f.close(); }
 });
 
-test('omitting child mode defaults to ask_permission even for an ask_permission source', async () => {
+test('omitting child mode uses full_control even for a legacy ask_permission source', async () => {
   const f = fixture('ask_permission');
   try {
     const action = await f.propose('automation.save', { automationId: 'default-mode', expectedRevision: 0, schedule: schedule() });
+    assert.equal(action.data.state, 'pending');
+    assert.equal(f.db.list('automation').length, 0);
     f.approve(action);
     const observed = await f.gate.dispatch(action.id);
     assert.equal(observed.data.state, 'succeeded');
-    assert.equal(AutomationRecord.parse(observed.data.result).data.task.mode, 'ask_permission');
+    assert.equal(AutomationRecord.parse(observed.data.result).data.task.mode, 'full_control');
   } finally { f.close(); }
 });
 
@@ -352,13 +342,12 @@ for (const hold of ['recovery', 'invalid recovery', 'draining', 'holding', 'prep
       const before = f.db.list('automation');
       if (phase === 'before proposal') for (const [name, input] of writes) await f.rejects(name, input);
       else for (const action of proposals) {
-        const observed = await f.gate.dispatch(action.id);
-        assert.equal(observed.data.state, 'unknown');
+        await assert.rejects(f.gate.dispatch(action.id), /recovery_dispatch_disabled|maintenance_in_progress/);
         assert.deepEqual(f.db.list('automation'), before);
       }
       assert.deepEqual(f.db.list('automation'), before);
-      const listed = AutomationPage.parse(await f.run('automation.list', {}));
-      assert.deepEqual(listed.automations, before, 'Inspection remains available during a write hold');
+      await assert.rejects(f.run('automation.list', {}), /recovery_dispatch_disabled|maintenance_in_progress/);
+      assert.deepEqual(f.db.list('automation'), before, 'Read-only ledger queries remain available without dispatch');
     } finally { f.close(); }
   });
 }

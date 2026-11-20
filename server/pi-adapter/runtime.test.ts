@@ -1,5 +1,6 @@
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { z } from 'zod';
 import { createServer } from 'node:http';
 import { createConnection } from 'node:net';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -195,6 +196,9 @@ for (const background of [false, true]) test(`native upstream subagent ${backgro
     if (background) {
       for (let i = 0; i < 500 && !requests.some(request => !request.parent); i++) await new Promise(resolve => setTimeout(resolve, 10));
       assert.ok(requests.some(request => !request.parent)); assert.equal(runtime.isActive(task.id), true);
+      const liveChild = coordinator.live.snapshot().find(record => record.kind === 'subagent_run');
+      assert.ok(liveChild); assert.equal(liveChild.data.state, 'running');
+      assert.equal(liveChild.data.executionMode, 'background'); assert.equal(liveChild.data.endedAt, undefined);
       release();
     }
     await running;
@@ -206,6 +210,18 @@ for (const background of [false, true]) test(`native upstream subagent ${backgro
     assert.equal(db.list('action').length,0, 'Native child actions are not routed through the coordinator');
     assert.ok(db.list('tool_stream').some(record => JSON.stringify(record.data).includes('subagent')));
     assert.ok(!JSON.stringify(db.snapshot(['message','tool_stream','pi_session'])).includes(apiKey));
+    const children = db.list('subagent_run');
+    assert.equal(children.length, 1, 'One public record per parent launch');
+    const child = children[0]!.data;
+    assert.equal(child.state, 'completed', JSON.stringify(child));
+    assert.equal(child.executionMode, background ? 'background' : 'foreground');
+    assert.equal(child.stopSupported, false); assert.equal(child.streaming, false);
+    assert.equal(child.parentSessionId, db.need('pi_session', task.id).data.sessionId);
+    assert.equal(child.model, `outpost-ollama/${inference.model}`);
+    const activity = z.array(z.object({ kind: z.string(), tool: z.string().optional(), output: z.string().optional() })).parse(child.activity);
+    for (const tool of ['read', 'write', 'bash']) assert.ok(activity.some(entry => entry.kind === 'tool' && entry.tool === tool), `${tool} is observed: ${JSON.stringify(child)}`);
+    assert.ok(activity.some(entry => entry.output?.includes('NATIVE_CHILD_WRITE')));
+    assert.doesNotMatch(JSON.stringify(children), /native-private-test-key|capabilityToken|controlInbox|transcriptPath/);
     assert.equal(runtime.isActive(task.id),false);
   } finally {
     release(); await runtime.abort(task.id); coordinator.live.close();

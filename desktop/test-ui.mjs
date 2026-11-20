@@ -33,7 +33,7 @@ try {
     await page.getByRole('button', { name: /New task/ }).click();
     await page.getByRole('heading', { name: 'What should run next?' }).waitFor(); checks++;
     assert.equal(await page.locator('.session-row').count(), Math.min(8, preview.snapshot.records.filter(record => record.kind === 'task').length)); checks++;
-    assert.equal(await page.getByRole('combobox', { name: 'Control mode', exact: true }).inputValue(), 'full_control'); checks++;
+    assert.equal(await page.getByRole('combobox', { name: 'New task control mode', exact: true }).inputValue(), 'full_control'); checks++;
     assert.ok(await page.getByRole('button', { name: 'Start task', exact: true }).isDisabled()); checks++;
     await page.screenshot({ path: `${out}/home-${width}.png`, fullPage: true });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)); checks++;

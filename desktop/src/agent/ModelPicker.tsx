@@ -1,34 +1,29 @@
-import { useRef, useState } from 'react';
-import { ChevronDown, X } from 'lucide-react';
+import { useState } from 'react';
+import { AnchorMenu, AnchorMenuTrigger, type AnchorMenuItem } from '../anchor-menu/AnchorMenu';
 import type { Catalogue, ModelRef } from './types';
 import { sameModel, providerLabel } from './types';
-import './agent.css';
 
 export default function ModelPicker({ catalogue, value, onChange, disabled = false }: {
   catalogue: Catalogue | null; value: ModelRef | null; onChange: (model: ModelRef) => void; disabled?: boolean;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null), trigger = useRef<HTMLButtonElement>(null);
-  const searchInput = useRef<HTMLInputElement>(null);
-  const [search, setSearch] = useState('');
-  const close = () => { dialog.current?.close(); trigger.current?.focus(); };
-  const models = catalogue?.models.filter(model => `${model.providerId} ${model.name} ${model.modelId}`.toLowerCase().includes(search.toLowerCase())) ?? [];
+  const [open, setOpen] = useState(false);
+  const models = catalogue?.models ?? [];
+  const items: AnchorMenuItem[] = models.map(model => ({
+    key: JSON.stringify([model.providerId, model.modelId]),
+    label: model.name,
+    description: providerLabel(model.providerId),
+    selected: sameModel(model, value),
+  }));
+  const label = value ? `${providerLabel(value.providerId)} · ${value.modelId}` : catalogue ? 'Choose model' : 'Models unavailable';
   return <>
-    <button ref={trigger} type="button" className="model-picker-trigger" aria-haspopup="dialog" disabled={disabled || !catalogue}
-      title={value ? `${providerLabel(value.providerId)} · ${value.modelId}` : 'Choose a provider and model'}
-      onClick={() => { setSearch(''); dialog.current?.showModal(); searchInput.current?.focus({ preventScroll: true }); }}>
-      <span>{value ? `${providerLabel(value.providerId)} · ${value.modelId}` : catalogue ? 'Choose model' : 'Models unavailable'}</span><ChevronDown size={12} />
-    </button>
-    <dialog ref={dialog} className="agent-dialog" aria-labelledby="model-picker-title" onCancel={close} onClose={() => trigger.current?.focus()}>
-      <header className="agent-dialog-heading"><h2 id="model-picker-title">Model for the next instruction</h2><button type="button" className="ui-close" aria-label="Close model picker" title="Close model picker" onClick={close}><X size={18} aria-hidden="true" /></button></header>
-      <p>Changing models does not interrupt the current response. Each request uses the provider you select.</p>
-      <input ref={searchInput} autoFocus aria-label="Search models" placeholder="Search providers or models" value={search} onChange={event => setSearch(event.target.value)} />
-      <div className="model-results" role="group" aria-label="Available models">
-        {models.map(model => <button type="button" key={JSON.stringify([model.providerId, model.modelId])} aria-pressed={sameModel(model, value)}
-          onClick={() => { onChange({ providerId: model.providerId, modelId: model.modelId }); close(); }}>
-          <span>{model.name}<small>{providerLabel(model.providerId)} · {model.modelId}</small></span>{sameModel(model, value) && <span>Selected</span>}
-        </button>)}
-        {!models.length && <p>{catalogue?.models.length ? 'No matching models.' : 'No available models. Add a provider in Settings, then refresh.'}</p>}
-      </div>
-    </dialog>
+    <AnchorMenuTrigger data-anchor-menu className="model-picker-trigger" aria-haspopup="dialog" aria-expanded={open}
+      disabled={disabled || !catalogue } title={value ? `${providerLabel(value.providerId)} · ${value.modelId}` : 'Choose a provider and model'}
+      onClick={() => setOpen(prev => !prev)}>
+      <span>{label}</span>
+    </AnchorMenuTrigger>
+    {open && <AnchorMenu heading="Model" items={items} alignment="end" searchPlaceholder="Search models…" dismiss="select"
+      onSelect={key => { const model = models.find(entry => JSON.stringify([entry.providerId, entry.modelId]) === key); if (model) onChange({ providerId: model.providerId, modelId: model.modelId }); }}
+      onClose={() => setOpen(false)}
+    />}
   </>;
 }

@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, Copy, Download, FileText, Folder, Globe, PanelRight, RefreshCw, Search, Shield } from 'lucide-react';
 import { call, recordedPreview } from '../api';
+import { useAutomaticUpdates } from '../AutomaticUpdates';
 import type { Connection } from '../useConnection';
 import { text, type ServerRecord } from '../types';
+import { chatAttention } from '../chat-attention';
 import BrowserViewer from '../BrowserViewer';
 import Artifact from '../image-viewer/Artifact';
 import { imageMime } from '../image-viewer/artifact-image';
 import DocumentContent, { type DocumentViewMode } from './DocumentContent';
-import { decodeTextArtifact, parseWorkspaceDocument, parseWorkspaceListing, recordedWorkspaceChanges, selectionKey, type WorkspaceDocument, type WorkspaceFile, type WorkspaceListing, type WorkspaceOpenRequest, type WorkspaceSelection } from './workspace-files';
+import { decodeTextArtifact, parseWorkspaceDocument, parseWorkspaceListing, recordedWorkspaceChanges, selectionKey, workspaceFailure, type WorkspaceFailure, type WorkspaceDocument, type WorkspaceFile, type WorkspaceListing, type WorkspaceOpenRequest, type WorkspaceSelection } from './workspace-files';
 import './workspace-panel.css';
 
 interface Props {
@@ -41,13 +43,24 @@ function FileTree({ node, selected, changes, onSelect }: { node: TreeNode; selec
   </button>)}</>;
 }
 
+function WorkspaceUpdateNotice({ environmentId }: { environmentId: Connection['environmentId'] }) {
+  return <><strong>Server update required</strong><p>This server needs an update to support file review.</p>
+    <p>{environmentId ? 'Install a compatible release or enable automatic updates in Server updates.' : 'This legacy connection needs a verified, supported installation before app-managed updates are available. Outpost will not reinstall it automatically.'}</p>
+    <a href={`#settings/servers/${environmentId ?? 'legacy'}/${environmentId ? 'runtime' : 'setup'}`}>{environmentId ? 'Open Server updates' : 'Open server settings'}</a>
+  </>;
+}
+
 export default function WorkspacePanel({ taskId, connection, records, open, request, onClose, onReviewAction }: Props) {
   const { api, connected } = connection;
   const scope = `${api.environmentId ?? 'legacy'}:${taskId}`;
   const previewOnly = recordedPreview();
+  const updates = useAutomaticUpdates();
+  const serverUpdate = updates?.available && !updates.uncertain ? updates.status?.servers.find(server => server.environmentId === api.environmentId) : undefined;
+  const completedRelease = serverUpdate?.state === 'complete' ? serverUpdate.releaseId : undefined;
+  const lastCompletion = useRef(completedRelease);
   const changes = useMemo(() => recordedWorkspaceChanges(records), [records]);
   const artifacts = records.filter(record => record.kind === 'artifact');
-  const pending = records.filter(record => record.kind === 'action' && ['pending', 'authorized'].includes(text(record, 'state')));
+  const pending = chatAttention(records, taskId).records;
   const browserSession = records.find(record => record.kind === 'browser');
   const browserAvailable = Boolean(connection.runtime?.browserDirect || browserSession);
   const [tab, setTab] = useState<'document' | 'browser'>(() => browserAvailable && !changes.size && !artifacts.length ? 'browser' : 'document');
@@ -67,8 +80,8 @@ export default function WorkspacePanel({ taskId, connection, records, open, requ
   const [filter, setFilter] = useState('');
   const [changedOnly, setChangedOnly] = useState(false);
   const [refresh, setRefresh] = useState(0);
-  const [listing, setListing] = useState<{ scope: string; value?: WorkspaceListing; error?: string; loading: boolean }>({ scope, loading: false });
-  const [document, setDocument] = useState<{ key: string; value?: WorkspaceDocument; error?: string; loading: boolean }>({ key: '', loading: false });
+  const [listing, setListing] = useState<{ scope: string; value?: WorkspaceListing; error?: WorkspaceFailure; loading: boolean }>({ scope, loading: false });
+  const [document, setDocument] = useState<{ key: string; value?: WorkspaceDocument; error?: WorkspaceFailure; loading: boolean }>({ key: '', loading: false });
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
   const [outline, setOutline] = useState<string[]>([]);
@@ -78,7 +91,7 @@ export default function WorkspacePanel({ taskId, connection, records, open, requ
   const operationGeneration = useRef(0);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; operationGeneration.current++; }; }, []);
-  const evidenceVersion = records.filter(record => record.kind === 'action' && !['pending', 'running', 'dispatching'].includes(text(record, 'state'))).map(record => `${record.id}:${record.revision}`).join('|');
+  const evidenceVersion = records.filter(record => record.kind === 'action' && !['pending', 'authorized', 'running', 'dispatching'].includes(text(record, 'state'))).map(record => `${record.id}:${record.revision}`).join('|');
   const currentListing = listing.scope === scope ? listing : { scope, loading: false };
   const files = currentListing.value?.files ?? [];
   const artifact = selected?.kind === 'artifact' ? artifacts.find(record => record.id === selected.id) : undefined;
@@ -91,6 +104,11 @@ export default function WorkspacePanel({ taskId, connection, records, open, requ
   const change = selected?.kind === 'workspace' ? changes.get(selected.path) : undefined;
 
   useEffect(() => {
+    if (!completedRelease || lastCompletion.current === completedRelease) return;
+    lastCompletion.current = completedRelease;
+    setRefresh(value => value + 1);
+  }, [completedRelease]);
+  useEffect(() => {
     if (!request) return;
     setSelected(request.selection); setTab('document'); setMode('preview');
   }, [request]);
@@ -101,7 +119,7 @@ export default function WorkspacePanel({ taskId, connection, records, open, requ
     void api.query<unknown>('workspace.files', { taskId }).then(parseWorkspaceListing).then(value => {
       if (current) setListing({ scope, value, loading: false });
     }).catch(error => {
-      if (current) setListing(previous => ({ scope, value: previous.scope === scope ? previous.value : undefined, loading: false, error: `Could not load workspace files. ${String(error)}. If this server is older, update it to enable file review.` }));
+      if (current) setListing(previous => ({ scope, value: previous.scope === scope ? previous.value : undefined, loading: false, error: workspaceFailure(error) }));
     });
     return () => { current = false; };
   }, [api, taskId, scope, open, connected, previewOnly, refresh, evidenceVersion]);
@@ -129,7 +147,7 @@ export default function WorkspacePanel({ taskId, connection, records, open, requ
       return { path: name, name, text: value, hash: artifactHash, size: new TextEncoder().encode(value).length, modifiedAt: artifact.updatedAt };
     };
     void read().then(value => { if (current) setDocument({ key, loading: false, value }); }).catch(error => {
-      if (current) setDocument({ key, loading: false, error: String(error) });
+      if (current) setDocument({ key, loading: false, error: workspaceFailure(error, selected.kind === 'workspace') });
     });
     return () => { current = false; };
   }, [api, taskId, key, open, connected, previewOnly, refresh, metadata?.modifiedAt, metadata?.size, evidenceVersion, artifactHash, isImage]);
@@ -182,10 +200,11 @@ export default function WorkspacePanel({ taskId, connection, records, open, requ
         {notice && <p className="workspace-notice" role="status">{notice}</p>}
         <div className="workspace-document-body" ref={body}>
           {!connected || previewOnly ? <p className="workspace-empty" role="status">{previewOnly ? 'File contents are unavailable in a recorded preview.' : 'Offline. Reconnect to load workspace files.'}</p>
+            : !selected && currentListing.error?.updateRequired ? <div className="workspace-empty" role="alert"><WorkspaceUpdateNotice environmentId={api.environmentId} /></div>
             : !selected ? <p className="workspace-empty">Choose a file from the file list to preview it.</p>
             : isImage && artifact ? <Artifact record={artifact} />
             : currentDocument.loading ? <p className="workspace-empty" role="status">Loading {name}…</p>
-            : currentDocument.error ? <div className="workspace-empty" role="alert"><p>Could not preview {name}.</p><p>{currentDocument.error}</p><button type="button" onClick={() => setRefresh(value => value + 1)}>Retry</button></div>
+            : currentDocument.error ? <div className="workspace-empty" role="alert">{currentDocument.error.updateRequired ? <WorkspaceUpdateNotice environmentId={api.environmentId} /> : <p>Could not preview {name}.</p>}<p>{currentDocument.error.message}</p><button type="button" onClick={() => setRefresh(value => value + 1)}>Retry</button></div>
             : loaded ? <DocumentContent path={documentPath} text={loaded.text} mode={mode} change={change} onOpenLink={openLink} />
             : <p className="workspace-empty">Select a file to load its contents.</p>}
         </div>
@@ -200,9 +219,9 @@ export default function WorkspacePanel({ taskId, connection, records, open, requ
       <div className="workspace-file-filters"><button type="button" aria-pressed={!changedOnly} onClick={() => setChangedOnly(false)}>All files</button><button type="button" aria-pressed={changedOnly} onClick={() => setChangedOnly(true)}>Changes <small>{changes.size}</small></button></div>
       <div className="workspace-files-scroll">
         {currentListing.loading && <p className="workspace-list-note" role="status">Refreshing files…</p>}
-        {currentListing.error && <p className="workspace-list-note" role="alert">{currentListing.error}</p>}
+        {currentListing.error && <div className="workspace-list-note" role="alert">{currentListing.error.updateRequired ? <WorkspaceUpdateNotice environmentId={api.environmentId} /> : <p>Could not load workspace files.</p>}<p>{currentListing.error.message}</p></div>}
         {changedOnly && <p className="workspace-list-note">Recorded file writes only.</p>}
-        {!currentListing.loading && !filteredFiles.length && !visibleArtifacts.length && <p className="workspace-list-note">{filter ? 'No matching files.' : changedOnly ? 'No recorded file changes.' : 'No workspace files yet.'}</p>}
+        {!currentListing.loading && !currentListing.error && !filteredFiles.length && !visibleArtifacts.length && <p className="workspace-list-note">{filter ? 'No matching files.' : changedOnly ? 'No recorded file changes.' : 'No workspace files yet.'}</p>}
         <FileTree node={tree} selected={selected?.kind === 'workspace' ? selected.path : ''} changes={changes} onSelect={selectFile} />
         {currentListing.value?.truncated && <p className="workspace-list-note">File list limited to 1,000 entries and eight directory levels.</p>}
         {!!visibleArtifacts.length && <><p className="workspace-list-heading">Attachments</p>{visibleArtifacts.map(record => <button type="button" className="workspace-file-row" key={record.id} aria-current={selected?.kind === 'artifact' && selected.id === record.id ? 'true' : undefined} onClick={() => { setSelected({ kind: 'artifact', id: record.id }); setTab('document'); setMode('preview'); }}><FileText size={15} /><span>{text(record, 'name') || 'Unnamed file'}</span></button>)}</>}

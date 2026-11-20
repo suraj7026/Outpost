@@ -2,9 +2,17 @@
 
 ## Policy
 
-Deployment scope defaults to **both saved Outpost servers**, not just the currently selected chat/server. The installed Mac app checks connected saved SSH environments in the background. Installation is opt-in: enable **Automatic server updates** in **Pi & extensions** and approve all listed environments once. The app then updates enrolled environments sequentially, only while the app is running and connected. Offline environments are checked when they reconnect; no coordinator history or credentials are migrated between servers.
+Deployment scope defaults to **both saved Outpost servers**, not just the currently selected chat/server. The installed Mac app checks connected saved SSH environments in the background. Installation is opt-in: enable **Automatic server updates** in **Settings → Servers → your server → Server updates** and approve all listed environments once. The app then updates enrolled environments sequentially, only while the app is running and connected. Offline environments are checked when they reconnect; no coordinator history or credentials are migrated between servers.
 
 The existing manual update path remains available. An active, failed, unknown, or unreconciled operation blocks automatic progression. Turning automatic updates off stops future automatic launches but does not cancel an admitted update or remove the server-side grant. A failed/unknown update requires inspection; repeatedly reconnecting or restarting the app does not authorize another launch.
+
+## Settings and file-review compatibility
+
+**Server updates** replaces the Pi-centric tab label while retaining its `/runtime` deep link. The page separates the installed Outpost release ID/sequence from Pi and extension versions. **Check for server updates** compares against this app's bundled compatible release, not an online latest-release feed. An exact compatible release/manifest match is **Up to date with this app**; unsupported installations, missing pinned SSH, incompatible runtime pins, downgrades and conflicting same-sequence content are **Update blocked**, with the reason visible. Older receipts without a classified outcome never imply an exact match.
+
+The main sequence-8 and legacy-compatible sequence-7 bundles both include `workspace.files` and `workspace.read`. Coded `unknown_query` responses (plus exact older bridge string responses) show **Server update required** and link to the chat owner's settings. Permission and transport failures remain ordinary errors. Legacy unbound connections link to setup guidance, never an automatic reinstall. Successful automatic completion refreshes that server's selected file/listing once per release; updates on another server do not reload the current workspace. Reconnection also reloads current file contents.
+
+The native updater remains the admission authority. Opening settings or a file-review link does not grant authorization. Manual launches remain blocked by active/uncertain automatic work; checks and status reads cannot silently opt in or repeat a launch. Both bundle families are qualified against authenticated file queries in isolated extracted-archive tests.
 
 ## Releases and signing
 
@@ -26,7 +34,7 @@ npm --prefix desktop run desktop:build
 
 The private Ed25519 publisher key stays in the `dev.outpost.release-signing` / `publisher-v1` macOS Keychain item. Initialization never replaces an existing key. Builds fail if signing authority is unavailable; they do not quietly produce unsigned automatic-update releases. For CI, `OUTPOST_RELEASE_SIGNING_KEY_FILE` may identify a private (0600) Ed25519 PEM file supplied by the secret manager. Never add that key to source control, app resources, or server releases. Tests use generated disposable keys and never access the real publisher key.
 
-Bump the qualified sequence in `deploy/environment/release-policy.json` and the compatible legacy packager for subsequent releases. Future same-family signed releases need not enumerate every previously produced content ID; changing the family compatibility contract requires explicit qualification, not just reusing a version string.
+Bump the qualified `sequence` (main) and `legacySequence` (legacy-compatible) in `deploy/environment/release-policy.json` for subsequent releases in their respective families. Different content must not reuse a published family/sequence; content hashes alone do not authorize a forward update. Future same-family signed releases need not enumerate every previously produced content ID; changing the family compatibility contract requires explicit qualification, not just reusing a version string.
 
 ## One-time server authorization
 
@@ -72,6 +80,9 @@ node --test desktop/test-automatic-updates.ts
 cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked --no-default-features update
 npm run build
 npm --prefix desktop run build
+node desktop/test-maintenance.mjs
+node desktop/test-workspace-panel.mjs
+OUTPOST_TEST_BROWSER=webkit node desktop/test-workspace-panel.mjs
 ```
 
 Unit/fixture tests do not substitute for a disposable Linux systemd qualification and an actual app-driven enrollment/update rehearsal. Enabling the grant on a live server is a separate one-time user action; implementing or rebuilding the feature alone does not enroll existing installations.

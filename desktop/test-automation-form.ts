@@ -7,7 +7,7 @@ import { actionSummary, chatStatus, displayTimeZones, loadedMessageCount, relati
 
 const start = Date.now() + 86400000;
 const schedule: AutomationSchedule = { name: 'Dependency audit', timezone: 'Europe/London', nextAt: start, intervalMs: 86400000, missed: 'coalesce', paused: false,
-  task: { goal: 'Review dependency updates', profile: 'code', mode: 'ask_permission' } };
+  task: { goal: 'Review dependency updates', profile: 'code', mode: 'full_control' } };
 const record = (value = schedule, revision = 3): ServerRecord => ({ kind: 'automation', id: 'fixture-schedule', revision, updatedAt: '2026-11-15T10:00:00.000Z', data: { ...value, task: { ...value.task } } });
 function harness() {
   const calls: { kind: string; id: string; revision: number; payload: unknown }[] = [];
@@ -20,9 +20,47 @@ test('schedule payload contains only fields supported by strict Schedule / NewTa
   const draft = scheduleDraft(); Object.assign(draft, { name: '  Audit  ', goal: '  Review packages  ', frequency: 'once', start: localDateInput(start) });
   const value = buildSchedule(draft);
   assert.deepEqual(Object.keys(value).sort(), ['intervalMs', 'missed', 'name', 'nextAt', 'paused', 'task', 'timezone'].sort());
-  assert.deepEqual(value.task, { goal: 'Review packages', profile: 'code', mode: 'ask_permission' });
+  assert.deepEqual(value.task, { goal: 'Review packages', profile: 'code', mode: 'full_control' });
+  assert.equal(draft.mode, 'full_control');
   assert.equal(value.intervalMs, null); assert.equal(value.name, 'Audit'); assert.equal(value.nextAt, new Date(draft.start).getTime());
   assert.equal(readSchedule(record(value))?.nextAt, value.nextAt);
+});
+
+test('saved schedule modes preserve Auto, map legacy Ask to Auto, and default missing to Full control', async () => {
+  for (const mode of ['ask_permission', 'auto', 'full_control', undefined]) {
+    const row = record();
+    row.data.task = { ...schedule.task, ...(mode === undefined ? {} : { mode }) };
+    if (mode === undefined) delete (row.data.task as Record<string, unknown>).mode;
+    const migrated = readSchedule(row);
+    assert.ok(migrated);
+    const expected = mode === 'auto' || mode === 'ask_permission' ? 'auto' : 'full_control';
+    assert.equal(migrated.task.mode, expected);
+    assert.equal(scheduleDraft(migrated).mode, expected);
+    assert.equal(buildSchedule(scheduleDraft(migrated), migrated).task.mode, expected);
+    const { client, calls } = harness();
+    client.runtime = { controlModes: ['full_control', 'auto'], autoPolicyVersion: 1 };
+    await saveAutomation(client, row.id, row.revision, migrated, true, false);
+    assert.deepEqual(calls[0].payload, migrated);
+  }
+  const invalid = record(); invalid.data.task = { ...schedule.task, mode: 'made-up' };
+  assert.equal(readSchedule(invalid), null);
+});
+
+test('unsupported Auto saves and schedule toggles fail closed, including legacy saved Auto', async () => {
+  const auto: AutomationSchedule = { ...schedule, task: { ...schedule.task, mode: 'auto' } };
+  for (const runtime of [undefined, {}, { controlModes: ['full_control', 'auto'] }, { controlModes: ['full_control', 'auto'], autoPolicyVersion: 2 }]) {
+    for (const paused of [true, false]) {
+      const { client, calls } = harness(); client.runtime = runtime;
+      await assert.rejects(saveAutomation(client, 'fixture-schedule', 3, { ...auto, paused }, true, false), /needs a compatible server update/);
+      client.records = [];
+      await assert.rejects(saveAutomation(client, 'new-auto', 0, auto, true, false), /needs a compatible server update/);
+      assert.equal(calls.length, 0);
+    }
+  }
+  const { client, calls } = harness(); client.runtime = { controlModes: ['full_control', 'auto'], autoPolicyVersion: 1 };
+  client.records = [];
+  await saveAutomation(client, 'new-auto', 0, auto, true, false);
+  assert.deepEqual(calls[0].payload, auto);
 });
 
 test('untouched edits preserve exact nextAt, paused state and fixed interval', () => {
@@ -51,7 +89,7 @@ test('display time zone does not reinterpret the Mac-local input', () => {
 
 test('validation rejects invalid dates, unsupported choices and unsafe intervals', () => {
   const draft = scheduleDraft(schedule);
-  for (const changes of [{ name: ' ' }, { goal: ' ' }, { goal: 'x'.repeat(20001) }, { profile: 'made-up' }, { mode: 'unrestricted' },
+  for (const changes of [{ name: ' ' }, { goal: ' ' }, { goal: 'x'.repeat(20001) }, { profile: 'made-up' },
     { timezone: 'not/a-zone' }, { start: '' }, { start: '2026-02-30T12:00' }, { start: localDateInput(1000) },
     { intervalMinutes: '0.99999999999' }, { intervalMinutes: '-1' }, { intervalMinutes: 'NaN' }, { intervalMinutes: 'Infinity' }, { intervalMinutes: '1e100' }, { missed: 'replay-all' }]) {
     assert.throws(() => buildSchedule({ ...draft, ...changes }, schedule), JSON.stringify(changes));

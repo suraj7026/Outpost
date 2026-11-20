@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Ledger } from '../core/ledger.js';
 import { id } from '../core/contracts.js';
-import { Coordinator } from './coordinator.js';
+import { Coordinator, publicKinds } from './coordinator.js';
+import { digest } from '../core/contracts.js';
 import { httpServer } from './http.js';
 
 test('signed SSE streams partial output, reconnects from snapshots, and closes on device revocation',async () => {
@@ -42,6 +43,33 @@ test('signed SSE streams partial output, reconnects from snapshots, and closes o
     let ended = false; for (let attempt = 0; attempt < 20; attempt++) if ((await reader.read()).done) { ended = true; break; }
     assert.ok(ended,'Revocation closes an already open stream');
   } finally { abort.abort(); coordinator.live.close(); await new Promise<void>(resolve => server.close(() => resolve())); db.close(); rmSync(root,{ recursive: true,force: true }); }
+});
+
+test('subagent snapshots persist and restart/interruption never invent terminal success', () => {
+  const root = mkdtempSync(join(tmpdir(), 'outpost-subagent-history-')), path = join(root, 'ledger.sqlite');
+  let db = new Ledger(path);
+  const taskId = id(), sessionId = id(), key = digest({ child: 'fixture' });
+  const data = { taskId, parentSessionId: sessionId, parentCallId: 'launch', parentToolId: digest({ sessionId, callId: 'launch' }),
+    label: 'Worker', executionMode: 'background', state: 'running', activity: [{ id: 'observed', kind: 'message', text: 'Recorded work' }], incomplete: true, truncated: false, stopSupported: false };
+  try {
+    let coordinator = new Coordinator(db, root);
+    coordinator.live.publish('subagent_run', key, data);
+    coordinator.live.close(); db.close(); db = new Ledger(path);
+    coordinator = new Coordinator(db, root);
+    const record = db.need('subagent_run', key);
+    assert.equal(record.data.state, 'unknown'); assert.equal(record.data.incomplete, true);
+    assert.equal(record.data.streaming, false); assert.equal(record.data.interrupted, true);
+    assert.deepEqual(record.data.activity, data.activity);
+    assert.ok(publicKinds.includes('subagent_run'));
+    assert.match(JSON.stringify(db.snapshot(publicKinds)), /Recorded work/);
+    coordinator.live.publish('subagent_run', key, { ...data, state: 'running' });
+    coordinator.live.interrupt(taskId);
+    assert.equal(db.need('subagent_run', key).data.state, 'unknown');
+    coordinator.live.finish('subagent_run', key, { ...data, state: 'completed' });
+    new Coordinator(db, root);
+    assert.equal(db.need('subagent_run', key).data.state, 'completed');
+    coordinator.live.close();
+  } finally { db.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
 test('restart preserves checkpoints but marks live records interrupted',() => {

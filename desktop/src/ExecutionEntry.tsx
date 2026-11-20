@@ -4,6 +4,7 @@ import { actionLabel } from './conversation-model';
 import { useConversationDisclosure, type ExecutionViewState } from './conversation-detail';
 import { EvidenceTime } from './LiveContent';
 import OutcomeDot from './OutcomeDot';
+import ActionReviewReason from './ActionReviewReason';
 import { actionNeedsReview, labelState, object, text, type ServerRecord } from './types';
 
 export function executionIsActive(record: ServerRecord): boolean {
@@ -29,7 +30,7 @@ export default function ExecutionEntry({ record, streams = [], onReview, viewSta
   const state = record.data.interrupted ? 'interrupted' : text(record, 'state');
   const failed = stream ? ['error', 'interrupted'].includes(state) : actionNeedsReview(record);
   const succeeded = !failed && ['succeeded', 'finished'].includes(state);
-  const review = !stream && ['pending', 'authorized'].includes(state);
+  const review = !stream && state === 'pending';
   const result = object(record.data.result);
   const argv = Array.isArray(args.argv) && args.argv.every(value => typeof value === 'string') ? args.argv : [];
   // argv is an argument array, not shell text. JSON preserves boundaries for inspection.
@@ -55,7 +56,7 @@ export default function ExecutionEntry({ record, streams = [], onReview, viewSta
       <ChevronRight size={13} className="disclosure" aria-hidden="true" />
       <Icon size={15} aria-hidden="true" />
       <span className="execution-label" title={label}>{labelParts ? <><span className="execution-verb">{labelParts[1]} </span>{labelParts[2]}</> : label}</span>
-      <span className="action-state">{failed || succeeded ? <OutcomeDot failed={failed} label={outcome} /> : labelState(state === 'dispatching' ? 'running' : state)}</span>
+      <span className="action-state">{failed || succeeded ? <OutcomeDot failed={failed} label={outcome} /> : !stream && state === 'authorized' ? 'Queued' : labelState(state === 'dispatching' ? 'running' : state)}</span>
       {review && <button type="button" className="execution-review" onClick={event => {
         event.preventDefault(); event.stopPropagation(); onReview(record);
       }}>Review</button>}
@@ -76,7 +77,8 @@ export default function ExecutionEntry({ record, streams = [], onReview, viewSta
       {detail && <pre className="execution-output" tabIndex={0}>{detail.split('\n').slice(-5).join('\n')}</pre>}
       {typeof result.result === 'string' && <p>{result.result}</p>}
       {failed && !stdout && !stderr && !error && !detail && <p className="small">This attempt did not complete successfully. No additional error detail was recorded.</p>}
-      {review && <p className="small">Review the exact arguments before {state === 'authorized' ? 'dispatching this approved action' : 'approving this action'}.</p>}
+      {review && <><ActionReviewReason record={record} /><p className="small">Review the exact arguments before approving. Approval runs this action and continues the agent automatically.</p></>}
+      {!stream && state === 'authorized' && !failed && <p className="small">Queued for automatic execution.</p>}
       <details className="execution-raw" open={rawOpen} onToggle={event => {
               if (event.target !== event.currentTarget || event.currentTarget.open === rawOpen) return;
               if (viewState) viewState.rawOpen = event.currentTarget.open;

@@ -10,6 +10,7 @@ import "./icon-refinement.css";
 import "./neutral-theme.css";
 import "./page-consistency.css";
 import "./dialog-consistency.css";
+import "./anchor-menu/anchor-menu.css";
 
 initializeAppearance();
 createRoot(document.getElementById("root")!).render(<App />);

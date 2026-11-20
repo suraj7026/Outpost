@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { decodeTextArtifact, normalizedWorkspacePath, parseWorkspaceDocument, parseWorkspaceListing, recordedWorkspaceChanges, workspaceLinkPath, writtenWorkspacePath } from './src/workspace/workspace-files.ts';
+import { decodeTextArtifact, normalizedWorkspacePath, parseWorkspaceDocument, parseWorkspaceListing, recordedWorkspaceChanges, workspaceLinkPath, writtenWorkspacePath, workspaceFailure } from './src/workspace/workspace-files.ts';
 import type { ServerRecord } from './src/types.ts';
 
 const row = (id: string, args: Record<string, string | null>, state = 'succeeded', hash = 'a'.repeat(64)): ServerRecord => ({ kind: 'action', id, revision: 1, updatedAt: `2026-11-17T10:00:0${id}Z`, data: { tool: 'file.write', state, arguments: args, result: { hash } } });
@@ -39,6 +39,18 @@ test('text response checks identity, utf8 byte length, and limits', () => {
   assert.throws(() => parseWorkspaceDocument({ ...document, hash: 'invalid' }, 'README.md'));
   assert.throws(() => parseWorkspaceDocument({ ...document, text: 'x'.repeat(1_048_577), size: 1_048_577 }, 'README.md'));
 });
+test('unsupported workspace queries are distinguished from permission, transport and artifact failures', () => {
+  for (const error of [{ code: 'unknown_query', message: 'Query unavailable' }, 'Unsupported query', new Error('Unsupported query'), new Error('Unknown query: workspace.files'), 'Unknown query: workspace.read']) {
+    assert.equal(workspaceFailure(error).updateRequired, true);
+    assert.equal(workspaceFailure(error, false).updateRequired, false, 'artifact errors cannot trigger a server update notice');
+  }
+  for (const error of [{ code: 'permission_denied', message: 'Unsupported query' }, { code: 'not_found', message: 'File not found' }, 'Cannot reach your server.', new Error('Invalid workspace file metadata.'), 'Unknown query: tools', null, {}]) {
+    assert.equal(workspaceFailure(error).updateRequired, false);
+  }
+  assert.deepEqual(workspaceFailure({ code: 'permission_denied', message: 'Access denied' }), { message: 'Access denied', updateRequired: false });
+  assert.equal(workspaceFailure({}).message, 'The server could not complete this request.');
+});
+
 test('artifact previews reject binary, invalid UTF8, and oversize payloads', () => {
   assert.equal(decodeTextArtifact(Buffer.from('café').toString('base64')), 'café');
   assert.throws(() => decodeTextArtifact(Buffer.from([0, 1, 2]).toString('base64')));

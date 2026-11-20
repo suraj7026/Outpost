@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Server } from "lucide-react";
+
 import { call, nativeApp, recordedPreview, type EnvironmentId } from "./api";
 import { useConnection, type Connection } from "./useConnection";
 import { EnvironmentContext } from "./EnvironmentContext";
@@ -8,6 +8,7 @@ import { AllChats, type ChatGroup } from "./ChatHistory";
 import SettingsWorkspace from "./SettingsWorkspace";
 import SharedMemory, { useSharedMemory } from "./SharedMemory";
 import { AutomaticUpdatesProvider } from "./AutomaticUpdates";
+import OutpostMenu from "./environment/OutpostMenu";
 import { readStartupLocation, resolveStartupLocation, type WorkingLocation } from "./startup-navigation";
 
 export interface SavedEnvironment { environmentId: string; label: string; routes: string[]; activeRoute: string }
@@ -132,12 +133,14 @@ export default function Environments() {
       <App key={`${navigation}:${ownerKey(selected)}:${registry.legacyMutationsRetired}`} connection={connection} initialTask={restored.page === "task" && restored.environmentId === selected ? restored.taskId : null} onWorkingLocation={rememberLocation}
         initialPage={restored.page === "task" || restored.page === "history" ? "home" : restored.page}
         initialHash={restored.page === "task" ? undefined : restored.hash} restoringTask={navigation === 0 && restored.page === "task"}
-        environmentNavigation={<div className="environment-navigation"><Server size={16} /><span>{label}</span><span className={`environment-status ${connection.connected ? "online" : ""}`} title={connection.connected ? "Connected" : "Offline"} />{error && <p role="alert">{error}</p>}</div>}
+        environmentNavigation={<><OutpostMenu
+          owners={owners.map(owner => ({ environmentId: owner.environmentId, label: owner.label, connected: groups.find(group => group.id === owner.environmentId)?.connected ?? false }))}
+          selectedId={selected} onSelect={id => void select(id)} />{error && <p role="alert">{error}</p>}</>}
         draftConnection={draftConnection} draftLabel={draftLabel} connections={connections} sharedMemory={<SharedMemory memory={sharedMemory} />}
-        newTaskNavigation={<details className="new-task-server"><summary aria-label={`Run on ${draftLabel}`}><span className={`environment-status ${draftConnection?.connected ? 'online' : ''}`} aria-hidden="true" />{draftLabel}</summary><div role="group" aria-label="New task server">{draftOwners.map(owner => <button key={ownerKey(owner.environmentId)} onClick={event => {
-          setDraftOwner(owner.environmentId);
-          event.currentTarget.closest("details")?.removeAttribute("open");
-        }}>{owner.label}</button>)}</div></details>}
+        newTaskNavigation={<OutpostMenu
+          owners={draftOwners.map(owner => ({ environmentId: owner.environmentId, label: owner.label, connected: groups.find(group => group.id === owner.environmentId)?.connected ?? false }))}
+          selectedId={target?.environmentId ?? null}
+          onSelect={id => setDraftOwner(id)} disabled={!draftConnection} />}
         renderSettings={appearance => <SettingsWorkspace registry={registry} connections={connections} groups={groups} appearance={appearance} mutate={mutate} refresh={refresh} openChat={openChat} />}
         groups={groups} openChat={openChat} showHistory={() => { window.history.replaceState(null, "", window.location.pathname + window.location.search); setHistory(true); }}
         history={history ? historyView : null} dismissHistory={() => setHistory(false)} ownerLabel={label} />

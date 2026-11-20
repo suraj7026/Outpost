@@ -17,6 +17,8 @@ interface AutomaticUpdatesContextValue extends AutomaticUpdatesSnapshot {
   enable: Controller['enable'];
   disable: Controller['disable'];
   refresh: Controller['refresh'];
+  updateServer: Controller['updateServer'];
+  recoverServer: Controller['recoverServer'];
 }
 const AutomaticUpdatesContext = createContext<AutomaticUpdatesContextValue | null>(null);
 export const useAutomaticUpdates = () => useContext(AutomaticUpdatesContext);
@@ -39,7 +41,7 @@ export function AutomaticUpdatesProvider({ registry, connections, children }: {
   }, [controller, available]);
   useEffect(() => { controller.connectionsChanged(); }, [controller, scope]);
   return <AutomaticUpdatesContext.Provider value={{ ...snapshot, available, environments: registry.environments, targetIds, connectedIds,
-    enable: controller.enable, disable: controller.disable, refresh: controller.refresh }}>{children}</AutomaticUpdatesContext.Provider>;
+    enable: controller.enable, disable: controller.disable, refresh: controller.refresh, updateServer: controller.updateServer, recoverServer: controller.recoverServer }}>{children}</AutomaticUpdatesContext.Provider>;
 }
 
 export function AutomaticUpdatesSection() {
@@ -63,7 +65,7 @@ export function AutomaticUpdatesSection() {
     setApproved(false); setPassword(true); setEnrollmentAttempted(false); setReviewedIds(updates?.targetIds ?? []); setDialog(kind);
   };
   return <Section title="Automatic server updates" description="Global setting for all saved servers on this Mac, not just the selected connection.">
-    <SettingRow title="Unattended Outpost releases" description="After you opt in once, the native supervisor checks connected servers and updates them one at a time. It restores update status across app restarts.">
+    <SettingRow title="Unattended Outpost releases" description="After a one-time opt-in for all saved servers, checks run only while this app is open and the server is connected. The native supervisor updates servers one at a time and restores update status across app restarts.">
       <Badge tone={updates?.uncertain || enrolling ? 'warning' : 'neutral'}>{!updates?.available ? 'Desktop app only' : updates.uncertain ? 'Status uncertain' : !status ? 'Status unknown' : enrolling ? 'Enrollment unconfirmed' : status.enabled ? 'Enabled' : 'Off'}</Badge>
     </SettingRow>
     <div className="provider-runtime-footer">
@@ -89,13 +91,13 @@ export function AutomaticUpdatesSection() {
         </>}><Badge tone={presentation.uncertain ? 'warning' : 'neutral'}>{presentation.label}</Badge></SettingRow>;
       })}
     </div>
-    <p className="provider-runtime-note">Only signed, compatible Outpost releases are eligible. Short service interruptions occur after existing work drains. A restricted updater grant does not allow unrestricted sudo, and no sudo password is stored. Offline and uncertain attempts remain in the native journal for reconciliation, not blind retries.</p>
+    <p className="provider-runtime-note">Only signed, compatible Outpost server releases bundled with this app are eligible—not the latest release online. Newly saved servers are not silently enrolled; review all-server enrollment again to include them. Short service interruptions occur after existing work drains. A restricted updater grant does not allow unrestricted sudo, and no sudo password is stored. Offline and uncertain attempts remain in the native journal for reconciliation, not blind retries.</p>
     {!status?.enabled && pending && <p className="provider-runtime-note">Automatic launches are off, but a previous operation still needs reconciliation. Turning updates off does not cancel it.</p>}
     {dialog && <Dialog title={dialog === 'enable' ? 'Enable updates for all saved servers?' : 'Turn off automatic server updates?'} onClose={close} busy={updates?.busy} className="provider-runtime-dialog runtime-update-dialog">
       {dialog === 'enable' ? <>
         <p>This is a one-time opt-in for all saved, nonretired servers below—including offline servers—not only the connection currently selected. Native enrollment verifies each server’s SSH access.</p>
         <ul>{reviewedIds.map(id => <li key={id}>{updates?.environments[id]?.label ?? id}</li>)}</ul>
-        <p>Outpost may install only signed, compatible Outpost server releases automatically when connected. The native supervisor updates servers sequentially. Expect short service interruptions after existing tasks, sign-ins and imports drain.</p>
+        <p>Checks run only while this app is open and the server is connected. Outpost may install only signed, compatible server releases bundled with this app, not the latest release online. The native supervisor updates servers sequentially; newly saved servers are not silently enrolled. Expect short service interruptions after existing tasks, sign-ins and imports drain.</p>
         <p>One-time enrollment uses a protected native password dialog for each server that needs it. It grants a restricted updater, not unrestricted sudo. No password enters this page or is stored.</p>
         <label className="provider-runtime-check"><input type="checkbox" checked={password} disabled={blocked} onChange={event => setPassword(event.target.checked)} />Ask for the remote sudo password in protected native dialogs</label>
         <p>Uncheck only for root or accounts with appropriate passwordless sudo.</p>
@@ -116,4 +118,16 @@ export function AutomaticUpdatesSection() {
       </div>
     </Dialog>}
   </Section>;
+}
+
+export function ServerUpdateIndicator({ environmentId, navigation = false }: { environmentId?: string | null; navigation?: boolean }) {
+  const updates = useAutomaticUpdates();
+  const rows = updates?.status?.servers.filter(server => environmentId === undefined || server.environmentId === environmentId) ?? [];
+  const attention = rows.some(server => !['complete', 'idle', 'not_enabled'].includes(server.state));
+  if (!attention && !updates?.uncertain) return null;
+  return <span className="server-update-indicator" title="Server update needs attention" aria-label="Server update needs attention"><span className="environment-status" /><ServerUpdateIcon size={navigation ? 14 : 17} aria-hidden="true" /></span>;
+}
+
+export function ServerUpdateIcon({ size = 18 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 8V4h16v4M12 20V8m-5 5 5-5 5 5" /></svg>;
 }

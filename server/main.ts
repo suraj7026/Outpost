@@ -56,6 +56,5 @@ server.listen(Number(process.env.PORT ?? 4318),'127.0.0.1',() => console.log(`Ou
 for (const signal of ['SIGINT','SIGTERM']) process.once(signal,() => {
   clearInterval(timer); coordinator.live.close();
   const finish = () => server.close(() => { db.close(); process.exit(0); });
-  if (coordinator.browsers) void coordinator.closeBrowsers().finally(finish);
-  else finish();
+  void coordinator.close().finally(finish);
 });

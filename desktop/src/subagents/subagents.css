@@ -1,0 +1,100 @@
+.subagent-card,
+.subagent-run-panel,
+.subagent-run-dialog { color: var(--text); font-family: var(--font-sans); font-size: 13px; line-height: 1.6; min-width: 0; box-sizing: border-box; }
+:is(.subagent-card, .subagent-run-panel, .subagent-run-dialog) * { box-sizing: border-box; }
+:is(.subagent-card, .subagent-run-panel, .subagent-run-dialog) [hidden],
+.subagent-run-panel[hidden] { display: none !important; }
+.subagent-card { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin: 18px 0 24px; background: var(--surface); }
+.subagent-card > summary { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 12px 15px; background: var(--raised); cursor: pointer; list-style: none; }
+:is(.subagent-card, .subagent-tool, .subagent-assignment) > summary::-webkit-details-marker { display: none; }
+:is(.subagent-card, .subagent-tool, .subagent-assignment) > summary svg { flex: none; }
+.subagent-card-title { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 14px; font-weight: 500; line-height: 1.45; }
+.subagent-card-model { color: var(--muted); font-size: inherit; font-weight: 400; }
+.subagent-status[data-compact="true"] > span { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.subagent-card-duration, .subagent-duration { font-size: 11px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.subagent-disclosure { color: var(--muted); flex: none; }
+:is(.subagent-card, .subagent-tool, .subagent-assignment)[open] > summary > .subagent-disclosure { transform: rotate(90deg); }
+.subagent-card[open] > summary { border-bottom: 1px solid var(--line); }
+.subagent-card-body { padding: 18px 22px; }
+.subagent-result { font-size: 14px; line-height: 1.7; min-width: 0; }
+.subagent-recorded-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 16px; }
+.subagent-section-title { font-size: 12px; font-weight: 500; line-height: 1.5; color: var(--muted); margin: 20px 0 10px; }
+.subagent-file-list { padding: 0; margin: 0; list-style: none; }
+.subagent-file-list li { display: flex; align-items: flex-start; gap: 9px; min-width: 0; padding: 6px 0; font-size: 12px; }
+.subagent-file-list li > svg { color: var(--muted); flex: none; margin-top: 3px; }
+.subagent-file-list li > span:not(.subagent-file-mark) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.subagent-file-mark { color: var(--muted); font-size: 11px; max-width: 35%; overflow-wrap: anywhere; }
+.subagent-status { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 400; line-height: 1.5; color: var(--muted); min-width: 0; }
+.subagent-status > svg { flex: none; }
+.subagent-status[data-state="completed"] { color: var(--positive); }
+.subagent-status[data-state="failed"] { color: var(--danger); }
+.subagent-status[data-state="partial"] { color: var(--warning); }
+.subagent-spin { animation: subagent-working 1.1s linear infinite; }
+@keyframes subagent-working { to { transform: rotate(360deg); } }
+.subagent-notices { border-left: 2px solid var(--control); padding-left: 12px; margin: 0 0 18px; }
+.subagent-notices p { font-size: 12px; line-height: 1.6; color: var(--muted); margin: 4px 0; overflow-wrap: anywhere; }
+.subagent-empty, .subagent-policy { font-size: 12px; line-height: 1.65; color: var(--muted); margin: 0 0 12px; overflow-wrap: anywhere; }
+.subagent-policy { margin: 18px 0 0; font-size: 11px; }
+.subagent-card-footer { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; min-height: 50px; gap: 8px; padding: 8px 12px 8px 21px; border-top: 1px solid var(--line); }
+.subagent-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+:is(.subagent-card, .subagent-run-panel, .subagent-run-dialog) .subagent-icon-button { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 34px; min-width: 34px; height: 34px; min-height: 34px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); padding: 8px; box-shadow: none; cursor: pointer; }
+:is(.subagent-card, .subagent-run-panel, .subagent-run-dialog) .subagent-icon-button:hover:not(:disabled) { color: var(--text); background: var(--active); }
+:is(.subagent-card, .subagent-run-panel, .subagent-run-dialog) .subagent-icon-button:disabled { cursor: not-allowed; opacity: .5; }
+.subagent-card .subagent-open-run { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; height: 34px; padding: 4px 8px; gap: 6px; font-size: 12px; color: var(--text); border: 0; background: transparent; border-radius: 8px; box-shadow: none; cursor: pointer; }
+.subagent-card .subagent-open-run:hover { background: var(--active); }
+.subagent-open-run svg { flex: none; }
+.subagent-copy-notice { font-size: 11px; color: var(--muted); overflow-wrap: anywhere; min-width: 0; }
+.subagent-card-footer .subagent-copy-notice { flex: 1; }
+.subagent-run-panel { min-height: 0; height: 100%; max-width: 100%; border-left: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; overflow: hidden; }
+.subagent-inspector-header { display: flex; align-items: center; justify-content: space-between; flex: none; min-height: 48px; gap: 8px; padding: 6px 14px 6px 20px; border-bottom: 1px solid var(--line); }
+.subagent-inspector-header > span { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; min-width: 0; }
+.subagent-inspector-header > span > svg { flex: none; }
+.subagent-run-heading { padding: 21px 24px 18px; flex: none; min-width: 0; }
+.subagent-run-heading h2 { font-size: 18px; font-weight: 550; line-height: 1.4; margin: 0 0 10px; letter-spacing: -.2px; overflow-wrap: anywhere; }
+.subagent-run-heading > div { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.subagent-run-heading > div > span { min-width: 0; }
+.subagent-run-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding: 0 24px 14px; border-bottom: 1px solid var(--line); flex: none; }
+.subagent-view-tabs { display: inline-flex; gap: 3px; border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+.subagent-view-tabs button { border: 0; border-radius: 7px; background: transparent; padding: 4px 10px; min-height: 32px; height: 32px; font-size: 12px; color: var(--muted); box-shadow: none; cursor: pointer; }
+.subagent-view-tabs button[aria-pressed="true"], .subagent-view-tabs button:hover { background: var(--active); color: var(--text); }
+.subagent-tool-count { font-size: 11px; color: var(--muted); }
+.subagent-run-scroll { padding: 22px 24px 28px; flex: 1; min-height: 0; min-width: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--control) transparent; overflow-wrap: anywhere; }
+.subagent-assignment { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--raised); margin: 0 0 24px; }
+.subagent-assignment > summary { min-height: 42px; display: flex; align-items: center; gap: 8px; padding: 10px 12px; list-style: none; font-size: 12px; cursor: pointer; }
+.subagent-assignment > div { padding: 0 16px 15px; }
+.subagent-assignment p { font-size: 13px; line-height: 1.7; margin: 0; }
+.subagent-children { margin-bottom: 24px; }
+.subagent-children ul { list-style: none; padding: 0; margin: 0; }
+.subagent-children li { display: flex; align-items: flex-start; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.subagent-children li > svg { flex: none; margin-top: 3px; color: var(--muted); }
+.subagent-children li > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.subagent-children small { display: block; color: var(--muted); font-size: 11px; }
+.subagent-run-author { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; font-weight: 500; }
+.subagent-run-author > svg { color: var(--muted); flex: none; margin-top: 3px; }
+.subagent-run-message, .subagent-activity-notice { margin: 20px 0; }
+:is(.subagent-run-message, .subagent-activity-notice) p { margin: 9px 0 0; font-size: 13px; line-height: 1.7; }
+.subagent-activity-notice { color: var(--muted); }
+.subagent-tool { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; margin: 8px 0; background: transparent; }
+.subagent-tool > summary { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 10px 12px; cursor: pointer; list-style: none; font-size: 12px; }
+.subagent-tool-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.subagent-tool > summary > svg { color: var(--muted); }
+.subagent-tool[data-state="failed"] { border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); }
+.subagent-tool-body { padding: 0 14px 14px; }
+.subagent-tool pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 280px; overflow: auto; overscroll-behavior: contain; margin: 0; padding: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.7; background: var(--raised); color: var(--text); border: 0; border-radius: 6px; }
+.subagent-inspector-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; padding: 11px 18px; border-top: 1px solid var(--line); flex: none; color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
+dialog.subagent-run-dialog { width: min(1050px, calc(100vw - 48px)); max-width: calc(100vw - 24px); height: min(850px, calc(100dvh - 48px)); max-height: calc(100dvh - 24px); padding: 0; margin: auto; border: 1px solid var(--control); border-radius: 16px; color: var(--text); background: var(--surface); overflow: hidden; }
+dialog.subagent-run-dialog[open] { display: flex; flex-direction: column; }
+dialog.subagent-run-dialog:not([open]) { display: none; }
+dialog.subagent-run-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.subagent-run-dialog .subagent-run-scroll { padding-inline: max(24px, calc((100% - 780px) / 2)); }
+:is(.subagent-card, .subagent-run-panel, .subagent-run-dialog) :is(button, summary, pre, .subagent-run-scroll):focus-visible { outline: 2px solid var(--muted); outline-offset: -2px; }
+@media (max-width: 650px) {
+  .subagent-card > summary { gap: 8px; padding: 12px; }
+  .subagent-card-body { padding: 16px; }
+  .subagent-card-footer { padding-inline: 10px; }
+  .subagent-run-heading { padding: 18px; }
+  .subagent-run-toolbar { padding-inline: 18px; gap: 8px; }
+  .subagent-run-scroll, .subagent-run-dialog .subagent-run-scroll { padding: 18px; }
+  dialog.subagent-run-dialog { width: calc(100vw - 20px); max-width: calc(100vw - 20px); height: calc(100dvh - 20px); max-height: calc(100dvh - 20px); }
+}
+@media (prefers-reduced-motion: reduce) { .subagent-spin { animation: none; } }

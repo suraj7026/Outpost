@@ -80,6 +80,7 @@ fn main() {
             transport::server_setup::auto_update::automatic_updates_enable,
             transport::server_setup::auto_update::automatic_updates_disable,
             transport::server_setup::auto_update::automatic_updates_tick,
+            transport::server_setup::auto_update::automatic_updates_recover,
             transport::server_setup::update::environment_update_check,
             transport::server_setup::update::environment_update_start,
             transport::server_setup::update::environment_update_status,

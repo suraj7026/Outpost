@@ -5,6 +5,7 @@ import { createAgentSession, SessionManager, type AgentSession } from '@earendil
 import { Type } from 'typebox';
 import { z } from 'zod';
 import { liveEvents, type LiveSink } from '../pi-adapter/live-events.js';
+import { SubagentRuns } from '../pi-adapter/subagent-runs.js';
 import type { RecordValue } from '../core/contracts.js';
 import { managementError } from '../pi-management/contracts.js';
 import { PiProfile } from '../pi-management/profile.js';
@@ -68,7 +69,9 @@ export class WorkerRuns {
   start(input: unknown) {
     if (this.closed) throw managementError('worker_closed');
     if (this.profile.maintenance) throw managementError('maintenance_in_progress');
-    const request = RunStart.parse(input), fingerprint = createHash('sha256').update(JSON.stringify(request)).digest('hex');
+    const request = RunStart.parse(input);
+        if (request.mode === 'auto' && this.needsAttention) throw managementError('worker_native_work_needs_attention');
+        const fingerprint = createHash('sha256').update(JSON.stringify(request)).digest('hex');
     const existing = this.runs.get(request.runId);
     if (existing) {
       if (existing.fingerprint !== fingerprint) throw managementError('worker_run_conflict');
@@ -106,7 +109,7 @@ export class WorkerRuns {
     const settings = this.profile.settings();
     if (settings.drainErrors().length) throw managementError('pi_settings_invalid');
     settings.applyOverrides({ compaction: { enabled: false }, retry: { enabled: false } });
-    const extensions = await sessionExtensions({ cwd, agentDir: this.profile.directory, modelRuntime,
+    const extensions = await sessionExtensions({ cwd, agentDir: this.profile.directory, modelRuntime, mode: run.input.mode,
       systemPrompt: `${run.input.systemPrompt}\nThe actual task workspace is ${cwd}.` });
     if (cancelled(run)) return;
     const { session } = await createAgentSession({ cwd, agentDir: this.profile.directory, modelRuntime, model,
@@ -128,7 +131,8 @@ export class WorkerRuns {
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], details: { actionId: record.id } };
         } }] });
     run.session = session; run.background = extensions.background;
-    let unsubscribe = () => {}, claimed = false;
+    let unsubscribe = () => {}, unobserve = () => {}, claimed = false;
+    let subagents: SubagentRuns | undefined;
     try {
       if (extensions.background.enabled) { this.journal.own(session); claimed = true; }
       run.sessionInfo = { id: session.sessionId, file: basename(session.sessionFile ?? '') };
@@ -137,7 +141,11 @@ export class WorkerRuns {
         publish: (kind, id, data) => this.publish(run, kind, id, data, false),
         finish: (kind, id, data) => this.publish(run, kind, id, data, true),
       };
-      unsubscribe = session.subscribe(liveEvents(sink, taskId, session.sessionId, model.id));
+      subagents = new SubagentRuns(sink, { taskId, sessionId: session.sessionId, ...(session.sessionFile ? { sessionFile: session.sessionFile } : {}) });
+      unobserve = extensions.observeSubagents((name, value) => {
+        try { subagents?.extensionEvent(name, value); } catch { subagents?.observationFailed(); }
+      });
+      unsubscribe = session.subscribe(liveEvents(sink, taskId, session.sessionId, model.id, subagents));
       await extensions.bind(session);
       if (cancelled(run)) { await extensions.background.cancel(); return; }
       run.state = 'running';
@@ -155,7 +163,10 @@ export class WorkerRuns {
         await extensions.dispose(session);
         if (claimed) this.journal.settled(session);
         extensions.check();
-      } finally { unsubscribe(); }
+      } finally {
+              try { subagents?.close(); } catch { subagents?.observationFailed(); }
+              finally { unobserve(); unsubscribe(); }
+            }
     }
     if (!cancelled(run)) run.state = 'finished';
   }
@@ -182,7 +193,7 @@ export class WorkerRuns {
       bytes += size; projections.push(projection);
     }
     const hasMore = projections.length < all.length;
-    return { runId: id, taskId: run.input.taskId, state: run.state, session: run.sessionInfo, model: run.input.model,
+    return { runId: id, taskId: run.input.taskId, state: run.state, settled: run.settled, needsAttention: this.needsAttention, session: run.sessionInfo, model: run.input.model,
       cursor: hasMore ? projections.at(-1)!.sequence : run.sequence, hasMore, projections,
       actions: [...run.actions.values()].slice(0, 8).map(value => value.input), error: run.error };
   }

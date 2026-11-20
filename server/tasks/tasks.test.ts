@@ -1,7 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Ledger } from '../core/ledger.js';
-import { Tasks } from './tasks.js';
+import { z } from 'zod';
+import { NewTask, Tasks } from './tasks.js';
+
+test('new tasks default to full_control, migrate legacy to auto and advertise exactly two modes',() => {
+  const db = new Ledger(), tasks = new Tasks(db);
+  try {
+    for (const mode of [undefined,'ask_permission','auto','full_control']) {
+      const task = tasks.create(String(mode),{ goal: 'Inspect',profile: 'operations',...(mode ? { mode } : {}) });
+      assert.equal(db.need('policy',task.id).data.mode,mode === 'auto' || mode === 'ask_permission' ? 'auto' : 'full_control');
+    }
+    const schema = z.toJSONSchema(NewTask);
+    assert.doesNotMatch(JSON.stringify(schema),/ask_permission/);
+    assert.match(JSON.stringify(schema),/\"enum\":\[\"full_control\",\"auto\"\]/);
+    const before = db.cursor();
+    for (const mode of ['root',null,3]) assert.throws(() => tasks.create('invalid',{ goal: 'Inspect',profile: 'operations',mode }));
+    assert.equal(db.cursor(),before);
+  } finally { db.close(); }
+});
 
 test('ordered instructions, exclusive execution and honest recovery across three pillars',() => {
   const db = new Ledger(), tasks = new Tasks(db);

@@ -3,6 +3,7 @@ import type { ServerResponse } from 'node:http';
 import { z } from 'zod';
 import type { Data, RecordValue } from '../core/contracts.js';
 import { Ledger } from '../core/ledger.js';
+import { interruptedSubagent } from '../pi-adapter/subagent-contract.js';
 
 /** Live projections are replaceable snapshots, not commands or replayable effects. */
 export class LiveFeed {
@@ -42,7 +43,7 @@ export class LiveFeed {
     return record;
   }
   interrupt(taskId: string) {
-    for (const record of this.snapshot()) if (record.data.taskId === taskId) this.finish(record.kind,record.id,{ ...record.data,interrupted: true });
+    for (const record of this.snapshot()) if (record.data.taskId === taskId) this.finish(record.kind,record.id,{ ...record.data, ...(record.kind === 'subagent_run' ? interruptedSubagent(record.data) : {}), interrupted: true });
   }
   /** Signed POST stream. Reconnection sends a fresh snapshot, never reruns work. */
   serve(response: ServerResponse, deviceId: string, kinds: string[]) {

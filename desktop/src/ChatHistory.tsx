@@ -76,7 +76,7 @@ export function AllChats({ groups, open, connections }: { groups: ChatGroup[]; o
     <div className="workspace-toolbar">
       <label>Search chats<input type="search" placeholder="Search by title, server or status" value={search} onChange={event => setSearch(event.target.value)} /></label>
       <label>Server<select value={server} onChange={event => setServer(event.target.value)}><option value="all">All servers</option>{groups.map(group => <option key={key(group.id)} value={key(group.id)}>{group.label}{group.archived ? " · Removed" : ""}</option>)}</select></label>
-      <button type="button" className="chat-attention-filter" aria-pressed={needsAttention} onClick={() => setNeedsAttention(value => !value)} title="Filter chats with pending approvals or authorized actions; offline counts are last known">
+      <button type="button" className="chat-attention-filter" aria-pressed={needsAttention} onClick={() => setNeedsAttention(value => !value)} title="Filter chats with pending approvals; offline counts are last known">
         <ShieldCheck size={16} aria-hidden="true" /><span>Needs attention</span><b>{attentionCount}</b>
       </button>
     </div>
@@ -90,7 +90,7 @@ export function AllChats({ groups, open, connections }: { groups: ChatGroup[]; o
           <Badge tone={cached ? "neutral" : attention.total ? "warning" : status.tone}>{cached ? "Last known: " : ""}{attention.label || status.label}</Badge><ChevronRight size={16} className="workspace-chat-chevron" aria-hidden="true" />
         </button>;
       })}</div>
-      {!results.length && <div className="workspace-empty"><MessageSquare size={24} aria-hidden="true" /><h2>{!total ? "No conversations loaded yet" : needsAttention ? "No chats need attention in this view" : "No chats match your search"}</h2><p>{!total ? "Connect a server to load its history, or start a new chat from the sidebar." : needsAttention ? "No pending approvals or ready-to-run actions match these filters. Clear filters to see all chats." : "Try a shorter search or switch back to all servers."}</p>{filtered && <button type="button" onClick={() => { setSearch(""); setServer("all"); setNeedsAttention(false); }}>Clear search and filters</button>}</div>}
+      {!results.length && <div className="workspace-empty"><MessageSquare size={24} aria-hidden="true" /><h2>{!total ? "No conversations loaded yet" : needsAttention ? "No chats need attention in this view" : "No chats match your search"}</h2><p>{!total ? "Connect a server to load its history, or start a new chat from the sidebar." : needsAttention ? "No pending approvals match these filters. Clear filters to see all chats." : "Try a shorter search or switch back to all servers."}</p>{filtered && <button type="button" onClick={() => { setSearch(""); setServer("all"); setNeedsAttention(false); }}>Clear search and filters</button>}</div>}
     </section>
     <p className="small">Offline and removed connections show read-only history cached during this app session. Remote history stays on its server.</p>
     <details className="workspace-sync"><summary>Server history availability</summary>{groups.map(group => <p className="small" key={key(group.id)}>{group.label}: {group.lastSync ? `Last synced ${group.lastSync.toLocaleString()}` : "Not yet synced"}{!group.tasks.length ? " · No chats loaded" : ""}</p>)}</details>

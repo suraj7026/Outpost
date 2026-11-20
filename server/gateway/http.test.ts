@@ -8,7 +8,7 @@ import { Ledger } from '../core/ledger.js';
 import { id } from '../core/contracts.js';
 import { Coordinator } from './coordinator.js';
 import { httpServer } from './http.js';
-test('two signed clients converge through HTTP, queued tool approval and durable evidence',async () => {
+for (const mode of [undefined,'ask_permission','auto','full_control']) test(`signed clients converge with ${mode ?? 'default'} preserves control mode, routine reads and durable evidence`,async () => {
   const root = mkdtempSync(join(tmpdir(),'outpost-http-')), db = new Ledger(join(root,'db.sqlite')), coordinator = new Coordinator(db,root), token = 'fixture-token-'.repeat(4);
   const server = httpServer(coordinator,token); await new Promise<void>(resolve => server.listen(0,'127.0.0.1',resolve));
   const address = server.address(); assert.ok(address && typeof address !== 'string'); const base = `http://127.0.0.1:${address.port}`;
@@ -20,17 +20,25 @@ test('two signed clients converge through HTTP, queued tool approval and durable
   try {
     assert.equal((await request('/v1/pair',{ deviceId: mac.id,name: 'Mac',publicKey: pub(mac),token })).status,200);
     assert.equal((await request('/v1/pair-device',query('pair',{ deviceId: phone.id,name: 'Phone',publicKey: pub(phone) }))).status,200);
-    const taskId = id(), create = command('task.create',taskId,0,{ goal: 'Read fixture',profile: 'code' });
+    const taskId = id(), create = command('task.create',taskId,0,{ goal: 'Read fixture',profile: 'code',...(mode ? { mode } : {}) });
+        assert.notEqual((await fetch(base+'/v1/commands',{ method: 'POST',body: JSON.stringify(create) })).status,200);
+        assert.equal(db.list('task').length,0);
     assert.equal((await request('/v1/commands',create)).status,200); assert.equal((await request('/v1/commands',create)).status,200);
+    assert.equal(db.need('policy',taskId).data.mode,mode === 'auto' || mode === 'ask_permission' ? 'auto' : 'full_control');
     await coordinator.drain();
     const proposal = command('action.propose',taskId,1,{ tool: 'system.inspect',arguments: {} });
     assert.equal((await request('/v1/commands',proposal)).status,200); await coordinator.drain();
     const action = db.list('action')[0]!;
     assert.equal(db.need('operation',action.id).data.state,'handled');
-    assert.equal(db.db.prepare("SELECT count(*) AS n FROM outbox WHERE topic='notice'").get()?.n,1);
-    assert.equal((await request('/v1/commands',command('approval.decide',action.id,1,{ nonce: action.data.nonce,actionDigest: action.data.actionDigest,decision: 'approve' }))).status,200);
-    assert.equal((await request('/v1/commands',command('action.dispatch',action.id,2,{}))).status,200); await coordinator.drain();
+    assert.equal(action.data.state,'authorized');
+    assert.equal(db.list('inbox').length,0);
+    assert.equal(db.db.prepare("SELECT count(*) AS n FROM outbox WHERE topic='notice'").get()?.n,0);
+    assert.equal((await request('/v1/commands',command('approval.decide',action.id,1,{ nonce: action.data.nonce,actionDigest: action.data.actionDigest,decision: 'approve' }))).status,409);
+    assert.equal((await request('/v1/commands',command('action.dispatch',action.id,action.revision,{}))).status,200); await coordinator.drain();
     assert.equal(db.need('action',action.id).data.state,'succeeded');
+    assert.equal((await request('/v1/commands',command('policy.change',taskId,1,{ mode: 'ask_permission' }))).status,200);
+    assert.equal(db.need('policy',taskId).data.mode,'auto');
+    assert.notEqual((await request('/v1/commands',command('policy.change',taskId,1,{ mode: 'auto' }))).status,200);
     const bytes = Buffer.from('invoice,total\nfixture,4200\n'), hash = createHash('sha256').update(bytes).digest('hex');
     const begin = await request('/v1/commands',command('artifact.begin',taskId,0,{ name: 'fixture.csv',mime: 'text/csv',size: bytes.length,hash }));
     const upload = await begin.json() as { id: string };

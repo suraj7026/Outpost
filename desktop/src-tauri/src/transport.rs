@@ -671,12 +671,52 @@ pub async fn browser_request(state: tauri::State<'_, State>, payload: Value) -> 
     state.browser_request(payload).await
 }
 
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum QueryError {
+    Message(String),
+    Workspace { code: String, message: String },
+}
+
+impl QueryError {
+    fn into_message(self) -> String {
+        match self {
+            Self::Message(message) | Self::Workspace { message, .. } => message,
+        }
+    }
+}
+
+impl From<String> for QueryError {
+    fn from(message: String) -> Self {
+        Self::Message(message)
+    }
+}
+
+impl From<&str> for QueryError {
+    fn from(message: &str) -> Self {
+        Self::Message(message.into())
+    }
+}
+
+fn query_rejection(kind: &str, value: &Value, fallback: &str) -> QueryError {
+    let message = value["message"].as_str().unwrap_or(fallback).to_owned();
+    if matches!(kind, "workspace.files" | "workspace.read") {
+        if let Some(code) = value["error"].as_str().filter(|code| !code.is_empty()) {
+            return QueryError::Workspace {
+                code: code.into(),
+                message,
+            };
+        }
+    }
+    QueryError::Message(message)
+}
+
 #[tauri::command]
 pub async fn query(
     state: tauri::State<'_, State>,
     kind: String,
     payload: Value,
-) -> Result<Value, String> {
+) -> Result<Value, QueryError> {
     let response = state
         .request(
             "v1/query",
@@ -687,10 +727,7 @@ pub async fn query(
     let status = response.status();
     let value: Value = response.json().await.map_err(|e| e.to_string())?;
     if !status.is_success() {
-        return Err(value["message"]
-            .as_str()
-            .unwrap_or("Server query failed")
-            .into());
+        return Err(query_rejection(&kind, &value, "Server query failed"));
     }
     Ok(value)
 }
@@ -1040,6 +1077,113 @@ mod tests {
     use super::*;
     const WORKSPACE_TASK: &str = "11111111-1111-4111-8111-111111111111";
     const WORKSPACE_PATH: &str = "reports/summary.txt";
+
+    #[test]
+    fn query_rejection_preserves_workspace_unknown_query_codes() {
+        for kind in ["workspace.files", "workspace.read"] {
+            for fallback in ["Query rejected", "Server query failed"] {
+                let error = query_rejection(
+                    kind,
+                    &json!({
+                        "error":"unknown_query", "message":"Unsupported query", "details":"not exposed"
+                    }),
+                    fallback,
+                );
+                assert_eq!(
+                    serde_json::to_value(error).unwrap(),
+                    json!({
+                        "code":"unknown_query", "message":"Unsupported query"
+                    })
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn query_rejection_preserves_other_workspace_codes_without_matching_messages() {
+        for kind in ["workspace.files", "workspace.read"] {
+            for (code, message) in [
+                ("not_found", "Unsupported query"),
+                ("invalid_request", "Request failed validation"),
+                ("unknown_query", "A different server message"),
+            ] {
+                let error = query_rejection(
+                    kind,
+                    &json!({"error":code,"message":message}),
+                    "Query rejected",
+                );
+                assert_eq!(
+                    serde_json::to_value(error).unwrap(),
+                    json!({"code":code,"message":message})
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn query_rejection_keeps_nonworkspace_errors_as_strings() {
+        for kind in [
+            "runtime",
+            "environment",
+            "snapshot",
+            "workspace.write",
+            "workspace.read.more",
+        ] {
+            let error = query_rejection(
+                kind,
+                &json!({"error":"unknown_query","message":"Unsupported query"}),
+                "Query rejected",
+            );
+            assert_eq!(
+                serde_json::to_value(error).unwrap(),
+                json!("Unsupported query")
+            );
+        }
+        for fallback in ["Query rejected", "Server query failed"] {
+            let error = query_rejection("runtime", &json!({"error":"unknown_query"}), fallback);
+            assert_eq!(serde_json::to_value(error).unwrap(), json!(fallback));
+        }
+    }
+
+    #[test]
+    fn query_rejection_keeps_missing_codes_and_local_failures_as_strings() {
+        for kind in ["workspace.files", "workspace.read"] {
+            for code in [Value::Null, json!(42), json!("")] {
+                let error = query_rejection(
+                    kind,
+                    &json!({"error":code,"message":"Unsupported query"}),
+                    "Query rejected",
+                );
+                assert_eq!(
+                    serde_json::to_value(error).unwrap(),
+                    json!("Unsupported query")
+                );
+            }
+            let error = query_rejection(kind, &json!({"error":"unknown_query"}), "Query rejected");
+            assert_eq!(
+                serde_json::to_value(error).unwrap(),
+                json!({"code":"unknown_query","message":"Query rejected"})
+            );
+        }
+        for error in [
+            QueryError::from("Invalid query response"),
+            QueryError::from(String::from("Request failed")),
+        ] {
+            assert!(serde_json::to_value(error).unwrap().is_string());
+        }
+    }
+
+    #[test]
+    fn query_rejection_internal_callers_keep_the_original_message() {
+        for kind in ["workspace.read", "workspace.files", "environment"] {
+            let error = query_rejection(
+                kind,
+                &json!({"error":"unknown_query","message":"Unsupported query"}),
+                "Query rejected",
+            );
+            assert_eq!(error.into_message(), "Unsupported query");
+        }
+    }
 
     fn workspace_response(text: &str) -> Value {
         json!({

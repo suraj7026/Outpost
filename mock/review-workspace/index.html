@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Outpost — Review workspace mock</title>
+<link rel="stylesheet" href="../../desktop/src/fonts.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<svg aria-hidden="true" style="display:none" xmlns="http://www.w3.org/2000/svg">
+<symbol id="glyph-logo" viewBox="0 0 28 28"><path d="M2 12 8 9v16l-6 2zM11 5l6-3v22l-6 3zM20 15l6-3v10l-6 3z"/></symbol>
+<symbol id="glyph-file" viewBox="0 0 24 24"><path d="M5 3h9l5 5v13H5zM14 3v6h5M8 13h8M8 17h6"/></symbol>
+<symbol id="glyph-folder" viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v12H3zM3 12h18"/></symbol>
+<symbol id="glyph-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+<symbol id="glyph-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></symbol>
+<symbol id="glyph-search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 5 5"/></symbol>
+<symbol id="glyph-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
+<symbol id="glyph-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+<symbol id="glyph-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
+<symbol id="glyph-up" viewBox="0 0 24 24"><path d="M12 20V4m-6 6 6-6 6 6"/></symbol>
+<symbol id="glyph-external" viewBox="0 0 24 24"><path d="M14 3h7v7m0-7L11 13M10 5H4v15h15v-6"/></symbol>
+<symbol id="glyph-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M15 8V3H3v13h5"/></symbol>
+<symbol id="glyph-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 15v6h16v-6"/></symbol>
+<symbol id="glyph-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v7c0 4-8 8-8 8s-8-4-8-8V6z"/></symbol>
+<symbol id="glyph-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="glyph-branch" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="6" r="2"/><path d="M6 7v10m0-3c9 0 12-1 12-6"/></symbol>
+<symbol id="glyph-refresh" viewBox="0 0 24 24"><path d="M20 10a8 8 0 1 0-2 8M20 4v6h-6"/></symbol>
+<symbol id="glyph-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+<symbol id="glyph-expand" viewBox="0 0 24 24"><path d="M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6"/></symbol>
+<symbol id="glyph-chat" viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></symbol>
+</svg>
+<div class="app">
+<header class="topbar">
+<div class="brand"><svg class="logo"><use href="#glyph-logo"/></svg>Outpost</div>
+<div class="top-divider"></div><span class="project">BitChat protocol research</span>
+<div class="right"><span class="concept">Interactive mock</span><span class="connection-top small muted"><span class="dot"></span> Outpost 2</span>
+<button class="icon focus-button" id="focus" aria-label="Toggle focused workspace" aria-pressed="false" title="Focus workspace"><svg><use href="#glyph-expand"/></svg></button>
+<button class="icon" id="toggle-files" aria-label="Toggle file sidebar" aria-pressed="true" title="Toggle file sidebar"><svg><use href="#glyph-panel"/></svg></button>
+</div></header>
+<nav class="mobile-nav" aria-label="Mobile workspace">
+<button data-mobile="chat" aria-pressed="false">Chat</button>
+<button data-mobile="review" aria-pressed="true">Review</button>
+<button data-mobile="browser" aria-pressed="false">Browser</button>
+</nav>
+<main class="workspace" data-mobile="review">
+<section class="chat" aria-label="Conversation">
+<div class="panel-heading"><strong>BitChat protocol research</strong><svg class="muted"><use href="#glyph-chat"/></svg></div>
+<div class="chat-scroll">
+<div class="day">Today, 2:09 PM</div>
+<div class="user-message">Research the BitChat protocol and create a markdown file with the findings.</div>
+<div class="agent-title"><svg class="logo"><use href="#glyph-logo"/></svg>Outpost<time>2:10 PM</time></div>
+<div class="activity"><svg><use href="#glyph-check"/></svg>Researched 4 sources · Created 1 file</div>
+<p>I created a research overview covering BitChat’s transports, encryption, message delivery, and privacy caveats.</p>
+<div class="file-card">
+<div class="file-summary"><svg><use href="#glyph-file"/></svg><div><strong>README.md</strong><small>bitchat-protocol-research/</small></div><span class="positive">New</span></div>
+<button class="review-link" id="review-file"><span><svg><use href="#glyph-file"/></svg>Review file</span><svg><use href="#glyph-arrow"/></svg></button>
+</div>
+<p>The main caveat: <strong>encrypted does not mean anonymous.</strong> The notes separate delivery guarantees from privacy assumptions.</p>
+<p class="muted">You can read the formatted document, inspect its source, or review the additions on the right.</p>
+<div class="response-tools">
+<button class="icon" id="copy-response" aria-label="Copy response" title="Copy response"><svg><use href="#glyph-copy"/></svg></button>
+<button class="icon" id="download-chat" aria-label="Download document" title="Download document"><svg><use href="#glyph-download"/></svg></button>
+</div>
+<div class="chat-followup">Your conversation stays here while you review files or browse sources.</div>
+</div>
+<div class="composer-area">
+<div class="connection"><span><svg><use href="#glyph-panel"/></svg>Outpost 2</span><span><i class="dot"></i><span id="chat-status">Ready for your review</span></span></div>
+<div class="composer">
+<textarea aria-label="Follow-up message" placeholder="Ask a follow-up, or request a change…"></textarea>
+<div class="composer-bottom">
+<button class="icon" id="attach" aria-label="Attach sample file"><svg><use href="#glyph-plus"/></svg></button>
+<span class="permission"><svg><use href="#glyph-shield"/></svg>Full control</span>
+<button class="icon send" id="send" aria-label="Preview sending message"><svg><use href="#glyph-up"/></svg></button>
+</div><div class="model">openai · gpt-6.1-terra</div>
+</div></div>
+</section>
+<section class="editor" aria-label="Review workspace">
+<div class="tabs">
+<button class="tab active" id="doc-tab" aria-pressed="true"><svg><use href="#glyph-file"/></svg><span id="tab-filename">README.md</span><i class="dot"></i></button>
+<button class="tab" id="browser-tab" aria-pressed="false"><svg><use href="#glyph-globe"/></svg>Browser</button>
+<div class="tab-spacer"></div>
+<button class="icon" id="expand" aria-label="Toggle focused workspace" title="Focus workspace"><svg><use href="#glyph-expand"/></svg></button>
+</div>
+<div id="document-view" style="display:flex;flex-direction:column;min-height:0;flex:1">
+<div class="document-toolbar">
+<div class="crumb"><span class="folder-name">bitchat-protocol-research</span><svg><use href="#glyph-chevron"/></svg><strong id="crumb-filename">README.md</strong></div>
+<div class="modes" aria-label="Document view">
+<button data-mode="preview" aria-pressed="true">Preview</button><button data-mode="source" aria-pressed="false">Source</button><button data-mode="changes" aria-pressed="false">Changes</button>
+</div></div>
+<div class="document-info">
+<span class="new-label"><svg><use href="#glyph-plus"/></svg>New file</span><span>·</span><span id="file-size">Markdown</span><span class="time">· Updated just now</span>
+<div class="right"><button id="copy" title="Copy markdown"><svg><use href="#glyph-copy"/></svg>Copy</button><button id="download" title="Download markdown"><svg><use href="#glyph-download"/></svg>Download</button></div>
+</div>
+<div class="document-scroll" id="document-scroll">
+<article class="prose" id="preview"></article>
+<div id="source" class="code" hidden></div>
+<div id="changes" hidden><div class="diff-heading"><span>New file · All lines added</span><span class="positive" id="line-count"></span></div><div class="code diff" id="diff-code"></div></div>
+</div>
+
+</div>
+<div id="browser-view" hidden style="display:flex;flex-direction:column;min-height:0;flex:1">
+<div class="browser-address">
+<button class="icon" id="browser-back" aria-label="Back to document"><svg style="transform:rotate(180deg)"><use href="#glyph-arrow"/></svg></button>
+<button class="icon" id="reload" aria-label="Reload sample page"><svg><use href="#glyph-refresh"/></svg></button>
+<div class="address"><svg><use href="#glyph-lock"/></svg><span>github.com/permissionlesstech/bitchat</span></div>
+<button class="icon" id="external" aria-label="Open actual source in external browser"><svg><use href="#glyph-external"/></svg></button>
+</div>
+<div class="browser-label"><svg><use href="#glyph-globe"/></svg>Source preview · Illustrative page, not a live browser session</div>
+<div class="browser-content"><div class="browser-page">
+<div class="web-heading"><svg><use href="#glyph-folder"/></svg><span>permissionlesstech / <strong style="color:var(--text)">bitchat</strong></span><span class="public">Public</span></div>
+<div class="repo-tabs"><strong>Code</strong><span>Issues</span><span>Pull requests</span><span>Security</span></div>
+<div class="repo-list">
+<div><svg><use href="#glyph-folder"/></svg>bitchat<span>Application source</span></div>
+<div><svg><use href="#glyph-file"/></svg>README.md<span>Project overview</span></div>
+<div><svg><use href="#glyph-file"/></svg>WHITEPAPER.md<span>Protocol documentation</span></div>
+<div><svg><use href="#glyph-file"/></svg>LICENSE<span>License</span></div>
+</div>
+<article class="prose">
+<h1>bitchat</h1><p class="lead">A decentralized messaging app with Bluetooth mesh and internet-based communication.</p>
+<h2>Peer-to-peer communication</h2><p>Nearby devices can communicate over Bluetooth Low Energy without depending on an internet connection. Connected peers can relay messages through the local mesh.</p>
+<h2>Read the protocol</h2><p>Review the upstream documentation for transport details, security assumptions, and implementation-specific limitations.</p>
+<blockquote>This is sample content for the workspace mock. Open the actual source to verify the documentation.</blockquote>
+</article>
+</div></div>
+<div class="browser-foot"><span>Keep your sources beside your work.</span><button id="return-doc"><svg><use href="#glyph-file"/></svg>Back to README.md</button></div>
+</div>
+</section>
+<aside class="explorer" aria-label="Project files">
+<div class="panel-heading"><strong>Files</strong><span class="small muted">Workspace</span></div>
+<label class="file-filter"><svg><use href="#glyph-search"/></svg><input id="filter" aria-label="Filter files" placeholder="Filter files…"></label>
+<div class="file-switch"><button data-filter="all" aria-pressed="true">All files</button><button data-filter="changed" aria-pressed="false">Changes <span>1</span></button></div>
+<div class="tree">
+<details open><summary><svg class="chevron"><use href="#glyph-chevron"/></svg><svg class="folder"><use href="#glyph-folder"/></svg>bitchat-protocol-research</summary>
+<button class="file-row selected" data-file="readme" aria-current="true"><svg><use href="#glyph-file"/></svg>README.md<span class="file-status">A</span></button>
+<button class="file-row" data-file="sources"><svg><use href="#glyph-file"/></svg>sources.md</button>
+<button class="file-row" data-file="notes"><svg><use href="#glyph-file"/></svg>notes.md</button>
+<p id="no-files" class="small muted" hidden>No matching files.</p>
+</details>
+<div class="tree-label">In this document</div><div class="outline" id="outline"></div>
+</div>
+<div class="sidebar-note"><strong>Review without leaving the chat.</strong><br>Open a file to preview it. Switch to Changes to see what Outpost wrote.<br><br>Sample workspace · 3 files<br>1 newly created, 2 existing</div>
+</aside>
+</main>
+<footer class="statusbar"><span><svg><use href="#glyph-folder"/></svg>bitchat-protocol-research</span><span class="positive" id="bottom-state">1 added</span><span class="right">Design preview only · No files changed</span><span class="encoding">UTF-8</span></footer>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+<script src="sample-data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

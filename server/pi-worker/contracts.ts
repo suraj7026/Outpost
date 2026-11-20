@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import { ManagementRequest, ModelRef } from '../pi-management/contracts.js';
+import { SubagentRun } from '../pi-adapter/subagent-contract.js';
+import { Mode } from '../core/contracts.js';
 
 export const RunStart = z.strictObject({
-  type: z.literal('run.start'), runId: z.uuid(), taskId: z.uuid(), model: ModelRef,
+  type: z.literal('run.start'), runId: z.uuid(), taskId: z.uuid(), model: ModelRef, mode: Mode.default('full_control'),
   prompt: z.string().min(1).max(20000), systemPrompt: z.string().min(1).max(65536),
   sessionFile: z.string().regex(/^[a-zA-Z0-9_.-]+\.jsonl$/).optional(),
 });
@@ -17,8 +19,11 @@ export const WorkerRequest = z.discriminatedUnion('type',[
 ]);
 export type WorkerRequest = z.infer<typeof WorkerRequest>;
 export const Projection = z.strictObject({
-  sequence: z.number().int().positive(), final: z.boolean(), kind: z.enum(['message','tool_stream']),
+  sequence: z.number().int().positive(), final: z.boolean(), kind: z.enum(['message','tool_stream','subagent_run']),
   id: z.string().regex(/^[a-f0-9]{64}$/), data: z.record(z.string(), z.json()),
+}).superRefine((value, ctx) => {
+  if (value.kind === 'subagent_run' && !SubagentRun.safeParse(value.data).success)
+    ctx.addIssue({ code: 'custom', message: 'invalid_subagent_projection', path: ['data'] });
 });
 export type Projection = z.infer<typeof Projection>;
 export const ActionFailure = z.strictObject({ code: z.enum(['invalid_tool_arguments','unavailable_tool','coordinator_action_failed']) });
@@ -34,6 +39,7 @@ export const ActionRequest = z.strictObject({ callId: z.uuid(), tool: z.string()
 export type ActionRequest = z.infer<typeof ActionRequest>;
 export const RunPoll = z.strictObject({
   runId: z.uuid(), taskId: z.uuid(), state: z.enum(['starting','running','finished','failed','cancelled']),
+    settled: z.boolean().optional(), needsAttention: z.boolean().optional(),
   session: z.strictObject({ id: z.string(), file: z.string() }).nullable(),
   model: ModelRef, cursor: z.number().int().nonnegative(),
   hasMore: z.boolean(), projections: z.array(Projection).max(64), actions: z.array(ActionRequest).max(32), error: z.string().nullable(),

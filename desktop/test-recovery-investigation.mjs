@@ -130,7 +130,7 @@ async function open(options = {}) {
           const task = row('task', args.id, { goal: 'Investigate recovery', profile: 'operations', state: 'queued',
             model: args.payload.model ?? args.payload.modelRef?.modelId, provider: args.payload.modelRef?.providerId });
           const finish = () => {
-            state.records.push(task, row('policy', args.id, { mode: 'ask_permission' }));
+            state.records.push(task, row('policy', args.id, { mode: 'full_control' }));
             state.cursor++; window.__publish(id);
             return structuredClone(task);
           };
@@ -320,7 +320,7 @@ try {
   for (const managed of [false, true]) await run(`${managed ? 'provider-qualified' : 'legacy'} model: consent, fresh read, one command and correct chat owner`, { multi: true, owner: B, managed }, async page => {
     assert.equal(await page.locator('.main-shell').getAttribute('data-owner-id'), A, 'Settings navigation does not change the selected chat owner');
     const modal = await investigate(page);
-    assert.match(await modal.getByRole('region', { name: 'Agent investigation' }).innerText(), /Ask Permission/);
+    assert.match(await modal.getByRole('region', { name: 'Agent investigation' }).innerText(), /Full control.*without individual approvals/);
     await approve(modal, managed);
     // A changed model requires renewed sharing consent.
     await modelSelect(modal).selectOption(managed ? JSON.stringify([modelRef.providerId, 'default-model']) : models[0]);
@@ -343,7 +343,7 @@ try {
     await page.keyboard.press('Escape');
     assert.equal(await modal.isVisible(), true, 'An in-flight command cannot be dismissed accidentally');
     await page.evaluate(() => window.__releaseCommand());
-    await modal.getByText(/Investigation created in Ask Permission/).waitFor();
+    await modal.getByText(/Investigation created with Full control/).waitFor();
     assert.equal(await start(modal).isDisabled(), true);
     await modal.getByRole('button', { name: 'Open investigation', exact: true }).click();
     await page.waitForFunction(({ B, id }) => document.querySelector('.main-shell')?.dataset.ownerId === B &&

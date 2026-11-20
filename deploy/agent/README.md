@@ -19,7 +19,7 @@ Current release: `evidence-order-20261031T055909Z`. Execution-evidence handling 
 
 Executors run privileged with host PID visibility and use `nsenter` into host PID 1's namespaces/root. They require a private token and are exposed through ClusterIP services and a workspace ingress policy. Missing authentication was tested to return 401. Both nodes returned UID 0 and the expected hostname for authenticated read-only commands.
 
-This is **not** an isolation boundary against the agent. Root can read secrets, alter workloads, escape cooperative timeouts, and tamper with logs. Untrusted websites can influence models. Select Ask Permission when you want per-action review. Full control skips those individual approvals by design. Cloud-selected inference sends task/tool/page context to Ollama Cloud, even though the browser is self-hosted.
+This is **not** an isolation boundary against the agent. Root can read secrets, alter workloads, escape cooperative timeouts, and tamper with logs. Untrusted websites can influence models. The current source offers Full control and Auto. Auto requires approval for financial, destructive, security-sensitive and unknown actions, and disables native extensions/subagents that bypass the coordinator. Existing installations require a server update to adopt this policy; authentication, recovery holds and configured host boundaries remain in effect. Cloud-selected inference sends task/tool/page context to Ollama Cloud, even though the browser is self-hosted.
 
 Local volumes are retained, not replicated or automatically backed up. Pod replacement preserves files, not running processes. No unrelated Docker application migration or CI deployment was performed. Host executors do not pool RAM; existing Ollama still uses its own node.
 
@@ -50,7 +50,7 @@ Interrupted/uncertain effects are not blindly replayed. Inspect evidence before 
 
 The current source pins Pi **1.5.2** and bundles `pi-subagents` **0.88.1** alongside `pi-ollama-cloud` **0.13.1**. This does not change the historical deployed layout above. Compatible native installations can update through the Mac app's **Pi & extensions → Check Pi + bundled extensions** flow after rebuilding the app. Containers and older native layouts still need separate migration qualification.
 
-Installed release extensions are enabled automatically in worker sessions and the managed CLI. `pi-subagents` exposes its native tools and child agents; `pi-ollama-cloud` exposes its tools/hooks as well as its provider. They run with worker permissions, outside Outpost's per-action approvals. Installation is the trust decision—there is no separate enable switch. Coordinator tools still use `outpost_action` and retain their gates. Native background work is tracked for draining and cancellation; unresolved restart receipts require reconciliation before maintenance can declare the worker idle.
+Installed release extensions are enabled automatically in worker sessions and the managed CLI. `pi-subagents` exposes its native tools and child agents; `pi-ollama-cloud` exposes its tools/hooks as well as its provider. They run with worker permissions, without individual action approvals. Installation is the trust decision—there is no separate enable switch. Coordinator tools still use `outpost_action` and retain their gates. Native background work is tracked for draining and cancellation; unresolved restart receipts require reconciliation before maintenance can declare the worker idle.
 
 ## Reprovisioning / source updates
 

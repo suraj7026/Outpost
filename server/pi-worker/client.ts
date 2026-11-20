@@ -11,7 +11,7 @@ export class WorkerClient {
       || token.length < 32) throw managementError('invalid_worker_connection');
     this.endpoint = `${url.origin}/v1`;
   }
-  async request(input: WorkerRequest): Promise<unknown> {
+  async request(input: z.input<typeof WorkerRequest>): Promise<unknown> {
     const payload = JSON.stringify(WorkerRequest.parse(input));
     if (Buffer.byteLength(payload) > 1024 * 1024) throw managementError('worker_request_too_large');
     const response = await fetch(this.endpoint, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20000),

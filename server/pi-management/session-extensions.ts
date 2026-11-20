@@ -6,15 +6,18 @@ import { z } from 'zod';
 import { bundledExtensions } from './bundled-extensions.js';
 import { managementError } from './contracts.js';
 import { SessionBackground } from './session-background.js';
+import { Mode } from '../core/contracts.js';
 
 const manifest = z.object({ pi: z.object({ extensions: z.array(z.string()).min(1),
   skills: z.array(z.string()).optional(), prompts: z.array(z.string()).optional(), themes: z.array(z.string()).optional() }) });
-const nativeAllowance = `Installed release extensions are available natively, including their tools and child agents. They may execute, read, and write with the worker's native privileges, without routing through outpost_action. This is an explicit exception to any instruction above that all actual work must use outpost_action. Existing coordinator-gated tools still use outpost_action and retain their approval requirements.`;
+const nativeAllowance = `Installed release extensions are available natively, including their tools and child agents. They may execute, read, and write with the worker's native privileges, without routing through outpost_action. This is an explicit exception to any instruction above that all actual work must use outpost_action. Existing coordinator-gated tools still use outpost_action and retain validation, execution boundaries, and evidence requirements, without per-action approval.`;
 
 /** Release packages only: no ambient settings packages, cwd extensions, or automatic installs. */
-export async function sessionExtensions(options: { cwd: string; agentDir: string; systemPrompt: string; releaseDirectory?: string; modelRuntime?: ModelRuntime }) {
+export async function sessionExtensions(options: { cwd: string; agentDir: string; systemPrompt: string; mode?: z.input<typeof Mode>; releaseDirectory?: string; modelRuntime?: ModelRuntime }) {
   const release = options.releaseDirectory ?? fileURLToPath(new URL('../../', import.meta.url));
-  const { extensions } = bundledExtensions(release);
+  const auto = Mode.parse(options.mode ?? 'full_control') === 'auto';
+    // Decide before resolving/importing packages: even extension factory/startup code can execute.
+    const extensions = auto ? [] : bundledExtensions(release).extensions;
   const entries: string[] = [];
   const packages = extensions.map(({ name }) => {
     const directory = realpathSync(join(release, 'node_modules', name));
@@ -33,7 +36,7 @@ export async function sessionExtensions(options: { cwd: string; agentDir: string
   const loader = new DefaultResourceLoader({ cwd: options.cwd, agentDir: options.agentDir,
     settingsManager: SettingsManager.inMemory(), eventBus: events, additionalExtensionPaths: packages,
     noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
-    systemPrompt: `${options.systemPrompt}\n\n${nativeAllowance}`, appendSystemPrompt: [] });
+    systemPrompt: auto ? options.systemPrompt : `${options.systemPrompt}\n\n${nativeAllowance}`, appendSystemPrompt: [] });
   await loader.reload();
   const loaded = loader.getExtensions();
   // Profiles already compose the package provider with credential/transport handling.
@@ -50,6 +53,15 @@ export async function sessionExtensions(options: { cwd: string; agentDir: string
   return {
     loader,
     background,
+    observeSubagents(observer: (name: string, value: unknown) => void) {
+      const names = ['subagent:async-started', 'subagent:async-complete', 'subagent:foreground-complete',
+        'subagent:child-status', 'subagent:control-event', 'subagent:jobs-changed', 'subagent:process-terminal'];
+      const releases = names.map(name => events.on(name, value => {
+        // Observability must never reject a native lifecycle callback or change execution policy.
+        try { observer(name, value); } catch { /* The observer owns its incomplete-evidence state. */ }
+      }));
+      return () => { for (const release of releases) release(); };
+    },
     get toolNames() { return toolNames(); },
     check,
     async bind(session: AgentSession) {
@@ -60,7 +72,7 @@ export async function sessionExtensions(options: { cwd: string; agentDir: string
       await background.bind(session);
       check();
       // session_start can register tools dynamically (for example Ollama's web tools).
-      session.setActiveToolsByName([...new Set([...session.getActiveToolNames(), 'outpost_action', ...toolNames()])]);
+      session.setActiveToolsByName(auto ? ['outpost_action'] : [...new Set([...session.getActiveToolNames(), 'outpost_action', ...toolNames()])]);
       if (!['outpost_action', ...toolNames()].every(name => session.getActiveToolNames().includes(name)))
         throw managementError('session_extension_tools_missing');
     },

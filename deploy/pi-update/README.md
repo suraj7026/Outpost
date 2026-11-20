@@ -1,7 +1,7 @@
 # Full compatible server update (legacy browser runtime)
 
-This sequence-6 artifact bundles the **full, self-contained compatible server
-source**, including the coordinator, Pi worker, host executor, automation tools
+This sequence-7 artifact bundles the **full, self-contained compatible server
+source**, including the coordinator, Pi worker, host executor, file-review APIs, automation tools
 and authorized auto-update helper. It is not a Pi-only payload, a fresh-install
 artifact, or a browser migration. The `pi-release.*` resource names and
 `buildPiUpdate` API remain for compatibility.
@@ -31,8 +31,20 @@ Only these working-tree source files replace/add baseline files:
 - `deploy/environment/auto_update.py`
 - `deploy/environment/host_install.py`
 - `deploy/environment/host_update.py`
+- `server/artifacts/workspace-review.ts`
+- `server/core/contracts.ts`
+- `server/diagnostics/recovery.ts`
 - `server/environment/qualify-runtime.ts`
+- `server/gateway/live.ts`
+- `server/models/cloud.ts`
+- `server/operations/hosts.ts`
+- `server/pi-adapter/live-events.ts`
+- `server/pi-adapter/remote-runtime.ts`
 - `server/pi-adapter/runtime.ts`
+- `server/pi-adapter/subagent-contract.ts`
+- `server/pi-adapter/subagent-privacy.ts`
+- `server/pi-adapter/subagent-runs.ts`
+- `server/pi-adapter/subagent-transcript.ts`
 - `server/pi-adapter/system-prompt.ts`
 - `server/pi-management/bundled-extensions.ts`
 - `server/pi-management/child-provider-bootstrap.ts`
@@ -41,20 +53,34 @@ Only these working-tree source files replace/add baseline files:
 - `server/pi-management/session-background.ts`
 - `server/pi-management/session-extensions.ts`
 - `server/pi-management/subscription-models.ts`
+- `server/pi-worker/contracts.ts`
 - `server/pi-worker/main.ts`
 - `server/pi-worker/runs.ts`
+- `server/policy/migration.ts`
+- `server/policy/trust.ts`
+- `server/scheduler/scheduler.ts`
 - `server/scheduler/tools.ts`
+- `server/tasks/tasks.ts`
 
-The baseline `server/gateway/coordinator.ts` receives **only** the tested
-`registerAutomationTools` import and registration, with the same integration as
-the local coordinator: worker availability plus a callback checking maintenance
-and `dispatchEnabled`. The automation tools independently enforce strict recovery
-permission (`dispatchEnabled === true` when a recovery record exists), including
-on execution after approval. The current coordinator is never copied. Removing
-the two inserted blocks must recover the exact baseline bytes.
+The baseline `server/gateway/coordinator.ts` receives only audited, unique-anchor
+transforms: automation import/registration, workspace-review import/query handlers,
+subagent public-feed/restart handling, and full-control policy integration. The latter
+removes the reviewer import/construction and `approval.decide` handler/maintenance
+exception, updates the `Gate` constructor, and uses the shared recovery helper for
+fail-closed dispatch checks. Removing the inserted blocks and reversing the exact
+replacements must recover the original baseline bytes; the current coordinator is
+never copied.
+
+Automation retains worker availability and maintenance/recovery checks, including
+revalidation at execution. A missing recovery record permits legacy dispatch; a
+present record must explicitly enable dispatch. The baseline predates
+`recovery.inspect` and `recovery.investigate`: this patch does not add those APIs.
+The packaged recovery helper and prompt guidance use full control, not approvals.
+Workspace queries retain authentication, require the task to exist, and read
+bounded workspace files without mutating them.
 
 All other baseline files remain byte-exact, including legacy browser behavior,
-all other gateway code, host executor, runtime pins and captured AppleDouble
+all other gateway code outside the listed live overlay, host executor, runtime pins and captured AppleDouble
 sidecars. Packaging asserts that `server/main.ts`, `server/pi-worker/main.ts` and
 `deploy/agent/host-executor.mjs` exist and are nonempty, preventing incomplete
 service bundles. The captured baseline contains no `server/browser-engine`
@@ -63,16 +89,25 @@ current browser source is imported.
 
 The staged root package and lock come from `deploy/pi-update/package.json` and
 `deploy/pi-update/package-lock.json`, never the current root package/lock. These
-dedicated files are copied byte-for-byte and are unchanged for sequence 6.
+dedicated files are copied byte-for-byte and are unchanged from sequence 6.
 They retain baseline metadata, scripts, overrides, dev dependencies and other
 direct dependencies. The existing reviewed changes are Pi `1.4.0` to `1.5.2` and
 addition of `pi-subagents` `0.88.1`; `pi-ollama-cloud` remains `0.13.1` and
 `playwright` remains `1.64.1`. No `playwright-camoufox` alias is allowed.
 
 Native installed extensions and child agents run with worker privileges, without
-an extension execution adapter. Coordinator automation tools retain approval
-gates; native extension tools are not rerouted through `outpost_action`. The
-current system-prompt overlay retains recovery and automation instructions.
+an extension execution adapter; native extension tools are not rerouted through
+`outpost_action`. Coordinator tools retain validation, evidence, host boundaries,
+revocation and maintenance/recovery holds, but no per-action approval or reviewer.
+New tasks and scheduled tasks use `full_control`; legacy `auto`/`ask_permission`
+inputs normalize to it, and malformed values still fail validation.
+
+At startup, the task recovery overlay normalizes persisted policies and schedules,
+retires unexecuted pending approvals, resolves their notices, and retires associated
+unclaimed queue entries. Affected tasks pause for explicit resume and replanning;
+startup never dispatches old approvals. Completed/unknown effects and reconciliation
+records are not replayed, and existing terminal/manual holds remain intact. The
+migration is idempotent and preserves prepared maintenance checkpoints.
 
 ## Offline packaging
 
@@ -109,7 +144,8 @@ archive and metadata bytes.
 
 ## Metadata and native/signing integration
 
-The sequence-6 host manifest retains only strict schema-2 fields. Its content ID
+The sequence-7 host manifest retains only strict schema-2 fields. Its sequence
+comes from `legacySequence` in `deploy/environment/release-policy.json`. Its content ID
 hashes every staged file in sorted path order except the generated host manifest,
 including the lockfile and `pi-update-source.json`. Provenance includes the
 baseline digest, original source release, reviewed compatible-source list,
@@ -133,11 +169,11 @@ metadata alone is not authorization. Native selection must independently accept
 all five reviewed sources and enforce identical runtime pins. Neither caller
 input, a working-tree manifest nor sequence inference can add compatible sources.
 
-Future signed releases in the same legacy-browser family need an explicitly
-signed family-selection contract in the parent/native implementation. This
-packager does not relax the existing exact-source allowlist or imply that any
-future same-pins release is already authorized. Runtime-pin comparison remains
-byte-exact even after family selection is introduced.
+Native selection accepts publisher-signed `compatible-server` releases within
+the existing qualified runtime family without enumerating every previous content
+ID. Signatures, schema/layout/protocol, byte-exact runtime pins and forward sequence
+checks still apply. Legacy unsigned Pi-only metadata retains its exact-source
+allowlist; this does not authorize a runtime/browser migration.
 
 ## Lock provenance
 
@@ -162,8 +198,11 @@ node scripts/test-pi-update.mjs --qualify
 Default tests are offline and write only temporary fixtures. They verify:
 
 - Immutable baseline identity, complete inventory and byte-exact protected files.
-- Coordinator changes limited to the import and guarded registration; legacy
-  browser registration and inference retained.
+- Exact reversal of all audited coordinator transforms; legacy browser registration
+  and inference retained.
+- Full-control-only execution, signed-client authentication/revocation, normalized
+  modes/schedules, and safe pending-approval migration using extracted source from
+  both release families. Omitting migration must fail behavioral qualification.
 - Complete helper imports and all three service entrypoints.
 - Exact package/lock inputs, strict metadata, required tools and sequence-bound
   identity; deterministic rebuilding and overlay-byte sensitivity.
@@ -178,10 +217,15 @@ Default tests are offline and write only temporary fixtures. They verify:
 `npm ci --ignore-scripts --no-audit --no-fund`. It loads real native extension
 resources, binds a synthetic Pi model/session, and checks tools without executing
 native tools or child agents. It instantiates the packaged legacy coordinator to
-verify the automation catalogue, owner approval, maintenance/recovery refusals
-(including malformed records and post-approval changes), and synthetic save/list/
-pause behavior. No scheduled task is run. It also runs the packaged runtime
-qualifier, baseline `tsc --noEmit`, and strict manifest schema validation.
+verify full-control automation execution, maintenance/recovery refusals (including
+malformed records and holds introduced after proposal), and synthetic save/list/
+pause behavior. Both release families run the full-control and migration regressions
+with their own dependency locks. Synthetic schedules may enqueue tasks; no real
+model, browser or enrolled-host work runs. Qualification also runs the packaged
+runtime qualifier, baseline `tsc --noEmit`, and strict manifest schema validation.
+Both extracted release families exercise authenticated `workspace.files`/`workspace.read`.
+Removing either handler makes qualification fail; missing workspace-review modules
+are rejected by signing inspection.
 
 Qualification uses disposable HOME, TMPDIR, XDG, Pi agent, subagent and npm-cache
 directories, not production profiles or credentials. Tests do not write desktop
@@ -189,6 +233,6 @@ resources or deploy. Local qualification is not Linux native-addon or live-host
 activation qualification. Current state, credentials, settings, session receipts
 and dependency directories are never collected into the archive.
 
-Sequence-6 validation: all 12 offline tests and all 18 tests with `--qualify`
-passed. Qualification covers the exact overlay bytes captured at test start;
-rerun it after any approved overlay changes before signing or publishing.
+Qualification covers the exact overlay bytes captured at test start. Rerun both
+offline tests and `--qualify` after any approved overlay changes before signing or
+publishing; source changes do not allocate a new release sequence.

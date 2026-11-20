@@ -6,5 +6,7 @@ export function unchangedReviewedAction(snapshot: ServerRecord, current: ServerR
     text(current, 'state') === text(snapshot, 'state') && text(current, 'nonce') === text(snapshot, 'nonce') &&
     text(current, 'actionDigest') === text(snapshot, 'actionDigest') &&
     JSON.stringify(current.data.arguments) === JSON.stringify(snapshot.data.arguments) &&
-    JSON.stringify(current.data.effects) === JSON.stringify(snapshot.data.effects) && text(current, 'target') === text(snapshot, 'target');
+    JSON.stringify(current.data.effects) === JSON.stringify(snapshot.data.effects) && text(current, 'target') === text(snapshot, 'target') &&
+    JSON.stringify(current.data.review) === JSON.stringify(snapshot.data.review) && text(current, 'reviewCategory') === text(snapshot, 'reviewCategory') &&
+        text(current, 'classification') === text(snapshot, 'classification');
 }

@@ -6,12 +6,14 @@ import type { Connection } from './useConnection';
 import { title, type ServerRecord } from './types';
 import { automationBlocker, buildSchedule, intervalLabel, legacyModelSelection, modelRefSelection, readSchedule, saveAutomation, scheduleDraft, scheduleTime, type AutomationDraft, type AutomationSchedule } from './automation-form';
 import { Badge, Button } from './Interface';
+import { ControlMode, ControlModeHelp } from './ComposerControls';
+import { modeBlocker } from './control-mode';
 import { displayTimeZones } from './workspace-presentation';
 import './workspace-refinement.css';
 
 type Editor = { server: string; id: string; revision: number; initial?: AutomationSchedule };
 const serverKey = (group: ChatGroup) => group.id ?? 'legacy';
-const modes = { ask_permission: 'Ask permission', auto: 'Auto review', full_control: 'Full control' };
+
 function modelOptions(connection: Connection | undefined) {
   return connection?.runtime?.piManagement
     ? (connection.agentCatalogue?.models ?? []).map(model => ({ value: modelRefSelection({ providerId: model.providerId, modelId: model.modelId }), label: `${model.name} · ${model.providerId}` }))
@@ -31,7 +33,7 @@ function ScheduleDialog({ editor, groups, connections, close, saved }: {
   const writing = useRef(false), latest = useRef(connections); latest.current = connections;
   const owner = connections[server], options = modelOptions(owner);
   const serverAvailable = groups.some(group => !group.archived && serverKey(group) === server);
-  const blocker = !serverAvailable ? 'This server was removed. Close this schedule.' : automationBlocker(owner, nativeApp(), recordedPreview());
+  const blocker = !serverAvailable ? 'This server was removed. Close this schedule.' : automationBlocker(owner, nativeApp(), recordedPreview()) || modeBlocker(draft.mode, owner?.runtime);
   const current = owner?.records.find(record => record.kind === 'automation' && record.id === editor.id);
   const stale = editor.revision > 0 && (!current || current.revision !== editor.revision);
   const unavailableModel = !!draft.model && !options.some(option => option.value === draft.model);
@@ -67,11 +69,9 @@ function ScheduleDialog({ editor, groups, connections, close, saved }: {
         <label>Server<select value={server} disabled={!!editor.revision} onChange={event => { setServer(event.target.value); field('model', ''); }}>
           {groups.filter(group => !group.archived).map(group => <option key={serverKey(group)} value={serverKey(group)}>{group.label}{group.connected ? '' : ' · Offline'}</option>)}
         </select></label>
-        <div className="workspace-two-col">
-          <label>Task profile<select value={draft.profile} onChange={event => field('profile', event.target.value)}>{['code', 'browser', 'operations', 'research', 'cowork', 'chat'].map(profile => <option key={profile} value={profile}>{profile[0].toUpperCase() + profile.slice(1)}</option>)}</select></label>
-          <label>Control mode<select value={draft.mode} onChange={event => field('mode', event.target.value)}>{Object.entries(modes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        </div>
-        <p className="small">{draft.mode === 'ask_permission' ? 'Proposed actions wait for your approval.' : draft.mode === 'auto' ? 'The server reviews actions automatically; some may still need you.' : 'Actions can run without individual approval, subject to server policy.'}</p>
+        <label>Task profile<select value={draft.profile} onChange={event => field('profile', event.target.value)}>{['code', 'browser', 'operations', 'research', 'cowork', 'chat'].map(profile => <option key={profile} value={profile}>{profile[0].toUpperCase() + profile.slice(1)}</option>)}</select></label>
+        <ControlMode label="Schedule control mode" value={draft.mode} runtime={owner?.runtime} onModeChange={mode => field('mode', mode)} />
+        <ControlModeHelp mode={draft.mode} runtime={owner?.runtime} />
         <label>Model<select value={draft.model} onChange={event => field('model', event.target.value)}>
           <option value="">Server default at run time</option>
           {unavailableModel && <option value={draft.model}>Previously selected model · unavailable</option>}
@@ -128,13 +128,14 @@ export default function Automations({ groups, connections }: { groups: ChatGroup
         return <article className="workspace-item" key={record.id}>
           <CalendarClock size={19} aria-hidden="true" /><div className="workspace-item-body">
             <div className="workspace-item-heading"><h3>{schedule?.name ?? title(record)}</h3>{schedule && <Badge tone={!connection?.connected ? 'neutral' : schedule.paused ? 'warning' : 'success'}>{!connection?.connected ? 'Last known: ' : ''}{schedule.paused ? schedule.intervalMs === null && schedule.nextAt < Date.now() ? 'Paused · may have run' : 'Paused' : 'Scheduled'}</Badge>}</div>
-            {schedule ? <><p className="small">{intervalLabel(schedule.intervalMs)} · {schedule.paused ? 'Saved start' : 'Next start'}: {scheduleTime(schedule)} ({schedule.timezone}) · {modes[schedule.task.mode]}</p><p className="workspace-schedule-goal">{schedule.task.goal}</p>
+            {schedule ? <><p className="small">{intervalLabel(schedule.intervalMs)} · {schedule.paused ? 'Saved start' : 'Next start'}: {scheduleTime(schedule)} ({schedule.timezone}) · {schedule.task.mode === 'auto' ? 'Auto' : 'Full control'}</p><p className="workspace-schedule-goal">{schedule.task.goal}</p>
               <details className="workspace-sync"><summary>Schedule details</summary><p className="workspace-note">{schedule.task.goal}</p><p className="small">Profile: {schedule.task.profile} · Model: {schedule.task.modelRef ? `${schedule.task.modelRef.providerId} / ${schedule.task.modelRef.modelId}` : schedule.task.model || 'Server default at run time'}</p><p className="small">Missed intervals: {schedule.missed === 'coalesce' ? 'Run one catch-up task' : 'Skip intervals overdue by a full interval'}. {schedule.intervalMs !== null && 'Elapsed-time intervals can shift the local hour at daylight-saving changes.'}</p></details>
               {schedule.paused && schedule.nextAt <= Date.now() && <p className="small">Resuming can start a task immediately. Edit the start first if you want a future run.</p>}
             </> : <p className="small">This record doesn’t match the supported server schedule format. It is read-only; no fields will be discarded.</p>}
+            {schedule && modeBlocker(schedule.task.mode, connection?.runtime) && <p className="small" role="status">{modeBlocker(schedule.task.mode, connection?.runtime)}</p>}
             {blocked && <p className="small">{blocked}</p>}
           </div>
-          {schedule && <div className="workspace-item-actions"><button disabled={!!blocked || working || !!editor} onClick={() => setEditor({ server: serverKey(group), id: record.id, revision: record.revision, initial: schedule })}>Edit</button><button disabled={!!blocked || working || !!editor} onClick={() => void toggle(serverKey(group), record, schedule)}>{schedule.paused ? <Play size={13} /> : <Pause size={13} />}{schedule.paused ? 'Resume' : 'Pause'}</button></div>}
+          {schedule && <div className="workspace-item-actions"><button disabled={!!blocked || working || !!editor} onClick={() => setEditor({ server: serverKey(group), id: record.id, revision: record.revision, initial: schedule })}>Edit</button><button disabled={!!blocked || working || !!editor || !!modeBlocker(schedule.task.mode, connection?.runtime)} onClick={() => void toggle(serverKey(group), record, schedule)}>{schedule.paused ? <Play size={13} /> : <Pause size={13} />}{schedule.paused ? 'Resume' : 'Pause'}</button></div>}
         </article>;
       })}</div>
       {!rows.length && <p className="small">{connection?.connected ? 'No schedules on this server.' : 'Connect to load its schedules.'}</p>}

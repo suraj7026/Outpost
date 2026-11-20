@@ -110,7 +110,7 @@ function installTransport({ records, options, environmentId, taskId }) {
       if (command === 'query') {
         if (control.offline) throw new Error('Synthetic fixture is offline');
         if (args.kind === 'snapshot') return { protocolVersion: 1, cursor: control.cursor, records: structuredClone(control.records) };
-        if (args.kind === 'runtime') return { configured: true, model: 'fixture:cloud', hostAdministration: false, unrestrictedCommands: false };
+        if (args.kind === 'runtime') return { controlModes: ['full_control', 'auto'], autoPolicyVersion: 1, configured: true, model: 'fixture:cloud', hostAdministration: false, unrestrictedCommands: false };
         if (args.kind === 'models') return { models: ['fixture:cloud'], defaultModel: 'fixture:cloud' };
         if (args.kind === 'events') return { events: [], hasMore: false, nextCursor: control.cursor };
       }
@@ -459,7 +459,9 @@ try {
           await follow(page).click(); await frames(page);
           equal(await page.locator('.composer-context-run .composer-run-status').count(), 1, 'Status lives inside the composer context, not a separate banner');
           equal(await page.locator('.composer-context-run').evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(16, 17, 18)', 'Composer context remains black in both themes');
-          for (const label of ['Message Outpost', 'Attach file', 'Task control mode', 'Send message']) check(await page.getByLabel(label, { exact: true }).isVisible(), `Composer retains ${label}`);
+          for (const label of ['Message Outpost', 'Attach file', 'Send message']) check(await page.getByLabel(label, { exact: true }).isVisible(), `Composer retains ${label}`);
+          equal(await page.getByRole('combobox', { name: 'Task control mode', exact: true }).count(), 1, 'Reply composer retains the shared control mode selector');
+          equal(await page.locator('.composer-permission').count(), 1, 'Shared mode control has one wrapper');
           check(await page.locator('.composer-model-control').isVisible(), 'Composer retains model control');
           check(await page.locator('.composer-context-run .environment-navigation').isVisible(), 'Composer retains environment navigation');
           check(await page.getByRole('button', { name: 'Files, changes and browser', exact: true }).isVisible(), 'Resources remain available');
@@ -550,16 +552,10 @@ try {
           const style = getComputedStyle(node), box = node.getBoundingClientRect();
           return { height: box.height, radius: style.borderRadius, padding: style.padding, appearance: style.appearance, background: style.backgroundColor };
         });
-        const permission = page.getByLabel('Task control mode', { exact: true });
-        equal(await permission.locator('..').locator('svg').count(), 1, 'Control mode keeps its shield without a dropdown arrow');
-                equal(await page.locator('.composer-stack .lucide-chevron-down:visible').count(), 0, 'Composer model control has no visible dropdown arrow');
-        equal((await measure('.composer-permission select')).appearance, 'none', 'Native select chrome is removed');
-        const unfocused = await measure('.composer-permission');
-        await permission.hover();
-        check((await measure('.composer-permission')).background !== unfocused.background, 'The entire control highlights on hover');
+        equal(await page.getByRole('combobox', { name: 'Task control mode', exact: true }).count(), 1, 'Reply composer retains control mode');
+        equal(await page.locator('.composer-permission').count(), 1, 'Reply composer uses the shared mode control');
+        equal(await page.locator('.composer-stack .lucide-chevron-down:visible').count(), 0, 'Composer model control has no visible dropdown arrow');
         const taskComposer = await measure('.reply-composer');
-        const taskField = await measure('.composer-permission');
-        equal(taskField.height, 36, 'Permission control uses shared 36px height');
         const terminal = page.getByRole('button', { name: 'Terminal', exact: true });
         equal(await terminal.locator('svg.lucide-square-terminal').count(), 1, 'Terminal uses the shared Lucide glyph');
         equal(await page.locator('.new-work').count(), 0, 'Task starts in conversation');
@@ -574,7 +570,8 @@ try {
         const homeComposer = await measure('.composer');
         equal(homeComposer.padding, taskComposer.padding, 'New task and reply composer padding match');
         equal(homeComposer.radius, taskComposer.radius, 'New task and reply composer roundness match');
-        equal((await measure('.composer-permission')).height, taskField.height, 'Control sizing matches across composers');
+        equal(await page.getByRole('combobox', { name: 'New task control mode', exact: true }).inputValue(), 'full_control', 'New-task composer defaults to Full control');
+        equal(await page.locator('.composer-permission').count(), 1, 'New-task composer uses the shared mode control');
                 equal(await page.locator('.composer-stack .lucide-chevron-down:visible').count(), 0, 'New-task model control has no visible dropdown arrow');
                 equal(await page.locator('.new-task-server summary').evaluate(node => getComputedStyle(node, '::after').content), 'none', 'Server selector has no dropdown arrow');
         check(await page.getByRole('button', { name: 'Terminal', exact: true }).isVisible(), 'New task has a real server terminal control');
@@ -810,9 +807,14 @@ try {
         await dialog.getByRole('button', { name: 'Approve', exact: true }).click();
         await page.waitForFunction(() => window.__unified.commands.length === 1);
         equal(await page.evaluate(() => window.__unified.commands[0]), { command: 'environment_send_command', args: { environmentId, kind: 'approval.decide', id: changed.id, revision: 18, payload: { nonce: changed.data.nonce, actionDigest: changed.data.actionDigest, decision: 'approve' } } }, 'Fresh review approves exact nonce, digest and revision');
+        await dialog.getByText('The action has updated: Queued. Close this review to see its current state.', { exact: true }).waitFor();
+        equal(await dialog.getByRole('button', { name: /^(Approve|Deny|Run approved action)$/ }).count(), 0, 'Authorized state cannot turn the stale review into a dispatch control');
+        await dialog.getByRole('button', { name: 'Close review', exact: true }).click();
+        equal(await entry(page, changed.id).locator('.action-state').textContent(), 'Queued', 'Legacy approval transitions to queued automatic execution');
+        equal(await page.evaluate(() => window.__unified.commands.length), 1, 'The client sends only the explicit legacy approval, never dispatch');
       });
 
-      await scenario(engine, 'approval-deny-and-authorized-dispatch', { approval: true, allowMutations: true }, async page => {
+      await scenario(engine, 'approval-deny-and-authorized-queued', { approval: true, allowMutations: true }, async page => {
         await page.getByRole('button', { name: 'Review (1)', exact: true }).click();
         const dialog = page.getByRole('dialog', { name: 'Review the exact action' });
         await dialog.getByRole('button', { name: 'Deny', exact: true }).click();
@@ -821,24 +823,30 @@ try {
         await dialog.getByText(/The action has updated/).waitFor();
         await dialog.getByRole('button', { name: 'Close review', exact: true }).click();
         await emit(page, { type: 'settled', record: approval(19, 'authorized') });
-        await entry(page, 'approval-action').getByRole('button', { name: 'Review', exact: true }).click();
-        await dialog.getByRole('button', { name: 'Run approved action', exact: true }).click();
-        await page.waitForFunction(() => window.__unified.commands.length === 2);
-        equal(await page.evaluate(() => window.__unified.commands[1]), { command: 'environment_send_command', args: { environmentId, kind: 'action.dispatch', id: 'approval-action', revision: 19, payload: {} } }, 'Dispatch retains exact action revision without altering arguments');
+        const queued = entry(page, 'approval-action');
+        await page.locator('.execution-entry[data-record-id="approval-action"][data-state="authorized"]').waitFor();
+        equal(await queued.locator('.action-state').textContent(), 'Queued', 'Authorized actions wait for automatic execution, not approval');
+        equal(await queued.getByRole('button', { name: 'Review', exact: true }).count(), 0, 'Queued actions have no review affordance');
+        equal(await page.getByRole('button', { name: 'Run approved action', exact: true }).count(), 0, 'Queued actions have no manual dispatch control');
+        equal(await page.locator('.review-shortcut, .task-attention-indicator').count(), 0, 'Authorized actions do not request attention');
+        equal(await queued.locator('xpath=ancestor::details[contains(@class,"activity-group")]').getAttribute('data-state'), 'active', 'Queued execution remains active, not attention or completion');
+        equal(await page.getByRole('dialog').count(), 0, 'Automatic execution does not open a review dialog');
+        equal(await page.evaluate(() => window.__unified.commands.length), 1, 'Only the legacy denial was sent');
+        equal(await page.evaluate(() => window.__unified.commands.filter(command => command.args.kind === 'action.dispatch')), [], 'The client never dispatches authorized actions');
       });
 
       await scenario(engine, 'composer-controls-and-steering', { allowMutations: true }, async page => {
-        await page.getByLabel('Task control mode', { exact: true }).selectOption('auto');
-        await page.waitForFunction(() => window.__unified.commands.length === 1);
-        equal(await page.evaluate(() => window.__unified.commands[0]), { command: 'environment_send_command', args: { environmentId, kind: 'policy.change', id: taskId, revision: 3, payload: { mode: 'auto' } } }, 'Permission control keeps its original mutation contract');
+        equal(await page.getByRole('combobox', { name: 'Task control mode', exact: true }).inputValue(), 'auto', 'Legacy policy displays as Auto');
+        equal(await page.locator('.composer-permission').count(), 1, 'Shared mode selector remains available');
+        equal(await page.evaluate(() => window.__unified.commands), [], 'Rendering a legacy policy never sends policy.change');
         await page.waitForFunction(() => !document.querySelector('[aria-label="Attach file"]').disabled);
         const chooser = page.waitForEvent('filechooser');
         await page.getByRole('button', { name: 'Attach file', exact: true }).click();
         check((await chooser).isMultiple() === false, 'Attach still opens the native single-file chooser');
         await page.getByRole('textbox', { name: 'Message Outpost', exact: true }).fill('  Keep the existing evidence and continue.  ');
         await page.getByRole('button', { name: 'Send message', exact: true }).click();
-        await page.waitForFunction(() => window.__unified.commands.length === 2);
-        equal(await page.evaluate(() => window.__unified.commands[1]), { command: 'environment_send_command', args: { environmentId, kind: 'task.steer', id: taskId, revision: 41, payload: { text: 'Keep the existing evidence and continue.' } } }, 'Send preserves trimming and task/revision routing');
+        await page.waitForFunction(() => window.__unified.commands.length === 1);
+        equal(await page.evaluate(() => window.__unified.commands[0]), { command: 'environment_send_command', args: { environmentId, kind: 'task.steer', id: taskId, revision: 41, payload: { text: 'Keep the existing evidence and continue.' } } }, 'Send preserves trimming and task/revision routing without a policy mutation');
         await page.waitForFunction(() => document.querySelector('[aria-label="Message Outpost"]').value === '');
         check(await gap(page) < 4, 'Successful steering clears the composer and jumps to latest');
       });

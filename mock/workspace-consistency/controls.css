@@ -1,0 +1,155 @@
+body.consistency-preview {
+  --preview-control-height: 36px;
+  --preview-field-height: 40px;
+  --preview-control-radius: 8px;
+  --preview-dialog-radius: 16px;
+  --preview-dialog-padding: 24px;
+}
+body.consistency-preview .main-shell > .page :is(button, a.settings-add, a.machine-settings-link):not(.workspace-chat):not(.workspace-outline-link):not(.workspace-file-row):not(.preview-attention-filter) {
+  min-height: var(--preview-control-height);
+  border-radius: var(--preview-control-radius);
+  line-height: 20px;
+  font-size: 13px;
+  gap: 8px;
+}
+body.consistency-preview .main-shell > .page :is(.page-heading,.section-heading,.machines-server-actions,.workspace-item-actions,.ui-row-actions) { align-items: center; gap: 8px; }
+body.consistency-preview .main-shell > .page :is(.page-heading,.section-heading,.machines-server-actions,.workspace-item-actions) :is(button,a.settings-add,a.machine-settings-link) { padding: 7px 12px; margin-block: 0; box-sizing: border-box; }
+body.consistency-preview .main-shell > .page .artifact-row .icon-button { width: 36px; height: 36px; padding: 9px; border-radius: 8px; }
+body.consistency-preview .main-shell > .page .preview-file-open { min-height: 36px; padding: 7px 12px; }
+body.consistency-preview .preview-attention-filter { min-height: var(--preview-field-height); }
+body.consistency-preview .preview-standard-dialog {
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--control);
+  border-radius: var(--preview-dialog-radius);
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 48px);
+  box-shadow: 0 24px 80px #0005;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--control) transparent;
+}
+body.consistency-preview .preview-standard-dialog::backdrop { background: rgb(0 0 0 / 55%); backdrop-filter: none; }
+body.consistency-preview :is(.ui-dialog,.workspace-dialog,.action-review-dialog,.agent-dialog,.settings-dialog,.server-reboot-dialog).preview-standard-dialog { width: min(600px,calc(100vw - 32px)); }
+body.consistency-preview :is(.workspace-dialog:not(.ui-dialog),.action-review-dialog,.agent-dialog,.settings-dialog,.server-reboot-dialog).preview-standard-dialog { padding: var(--preview-dialog-padding); }
+body.consistency-preview .ui-dialog.preview-standard-dialog { padding: 0; }
+body.consistency-preview .preview-standard-dialog .ui-dialog-body { padding: var(--preview-dialog-padding); }
+body.consistency-preview .preview-standard-dialog :is(.ui-dialog-heading,.modal-top,.agent-dialog-heading,.server-reboot-heading) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 72px;
+  padding: 18px var(--preview-dialog-padding);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+body.consistency-preview :is(.action-review-dialog,.agent-dialog,.settings-dialog,.server-reboot-dialog).preview-standard-dialog > :is(.modal-top,.agent-dialog-heading,.server-reboot-heading) {
+  margin: calc(-1 * var(--preview-dialog-padding)) calc(-1 * var(--preview-dialog-padding)) 20px;
+}
+body.consistency-preview .preview-standard-dialog :is(.ui-dialog-heading,.modal-top,.agent-dialog-heading,.server-reboot-heading) h2,
+body.consistency-preview .preview-form-dialog > form > h2 {
+  margin: 0;
+  min-width: 0;
+  font-size: 18px;
+  font-weight: 550;
+  line-height: 1.4;
+  letter-spacing: -.2px;
+}
+body.consistency-preview .preview-standard-dialog :is(.ui-dialog-heading,.modal-top,.agent-dialog-heading) > h2 { flex: 1; }
+body.consistency-preview .preview-standard-dialog button:not(.model-results button):not(.browser-page-input) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: var(--preview-control-height);
+  border-radius: var(--preview-control-radius);
+  padding: 7px 12px;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  gap: 8px;
+  white-space: nowrap;
+}
+body.consistency-preview .preview-standard-dialog button svg { width: 16px; height: 16px; flex: none; stroke-width: 1.7; }
+body.consistency-preview .preview-standard-dialog :is(.primary,.ui-button-primary) { background: var(--text); color: var(--bg); border: 1px solid transparent; }
+body.consistency-preview .preview-standard-dialog :is(.primary,.ui-button-primary):disabled { background: var(--raised); color: var(--muted); border-color: var(--line); }
+body.consistency-preview .preview-standard-dialog .preview-button-danger { color: var(--danger); background: transparent; border-color: transparent; }
+body.consistency-preview .preview-standard-dialog :is(.ui-close,.icon-button,.preview-dialog-close,.preview-model-close) {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  flex: none;
+}
+body.consistency-preview .preview-standard-dialog :is(.ui-close,.icon-button,.preview-dialog-close,.preview-model-close):hover:not(:disabled) { color: var(--text); background: var(--active); }
+body.consistency-preview .preview-standard-dialog :is(.ui-close,.icon-button,.preview-dialog-close,.preview-model-close) svg { width: 18px; height: 18px; }
+body.consistency-preview .preview-standard-dialog .preview-model-close { font-size: 0 !important; gap: 0 !important; }
+body.consistency-preview .preview-standard-dialog :is(p,.small,.ui-row-description) { font-size: 13px; line-height: 1.65; }
+body.consistency-preview .preview-standard-dialog > p,
+body.consistency-preview .preview-standard-dialog .ui-dialog-body > p,
+body.consistency-preview .preview-standard-dialog > form > p { margin: 0 0 18px; color: var(--muted); }
+body.consistency-preview .preview-standard-dialog :is(.ui-form,.workspace-fields) { display: grid; gap: 16px; border: 0; padding: 0; margin: 0; min-width: 0; }
+body.consistency-preview .preview-standard-dialog :is(.ui-form label,.workspace-fields label,.workspace-note-field) { display: grid; gap: 8px; align-items: start; color: var(--muted); font-size: 12px; line-height: 1.5; min-width: 0; }
+body.consistency-preview .preview-standard-dialog :is(input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea) {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  min-height: var(--preview-field-height);
+  border: 1px solid var(--line);
+  border-radius: var(--preview-control-radius);
+  background-color: var(--raised);
+  color: var(--text);
+  padding: 9px 12px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  box-sizing: border-box;
+}
+body.consistency-preview .preview-standard-dialog textarea { min-height: 120px; line-height: 1.6; resize: vertical; }
+body.consistency-preview .preview-standard-dialog .workspace-two-col { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+body.consistency-preview .preview-standard-dialog .workspace-two-col:has(> label:only-child) { grid-template-columns: minmax(0,1fr); }
+body.consistency-preview .preview-standard-dialog :is(.ui-dialog-actions,.workspace-dialog-actions,.modal-actions) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+body.consistency-preview .preview-standard-dialog :is(.ui-dialog-actions,.workspace-dialog-actions,.modal-actions) > button { min-width: 80px; margin: 0; }
+body.consistency-preview .preview-form-dialog { position: fixed; }
+body.consistency-preview .preview-form-dialog > form > h2 { padding: 20px 72px 20px var(--preview-dialog-padding); margin: calc(-1 * var(--preview-dialog-padding)) calc(-1 * var(--preview-dialog-padding)) 20px; border-bottom: 1px solid var(--line); min-height: 72px; }
+body.consistency-preview .preview-form-dialog > form > .preview-dialog-close { position: absolute; right: var(--preview-dialog-padding); top: 18px; }
+body.consistency-preview .preview-standard-dialog.preview-form-dialog:has(> form > .workspace-fields) { padding: 0; overflow: hidden; }
+body.consistency-preview .preview-form-dialog:has(> form > .workspace-fields) > form { display: flex; flex-direction: column; max-height: calc(100dvh - 50px); }
+body.consistency-preview .preview-form-dialog:has(> form > .workspace-fields) > form > h2 { margin: 0; flex: none; }
+body.consistency-preview .preview-form-dialog > form > .workspace-fields { min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; padding: 24px var(--preview-dialog-padding); }
+body.consistency-preview .preview-form-dialog:has(> form > .workspace-fields) .workspace-dialog-actions { flex: none; margin: 0; padding: 16px var(--preview-dialog-padding); background: var(--surface); }
+body.consistency-preview .preview-form-dialog:has(> form > .workspace-fields) > form > p { margin: 0; padding: 8px var(--preview-dialog-padding); flex: none; }
+body.consistency-preview .new-task-server > div { padding: 6px; border: 1px solid var(--control); border-radius: 12px; background: var(--surface); }
+body.consistency-preview .new-task-server > div > button { min-height: 36px; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+body.consistency-preview .preview-standard-dialog .action { border: 1px solid var(--line); border-radius: 10px; margin: 16px 0 0; }
+body.consistency-preview .preview-standard-dialog .action > summary { min-height: 54px; padding: 12px 16px; }
+body.consistency-preview .preview-standard-dialog .action-body { padding: 0 16px 16px; }
+body.consistency-preview .preview-standard-dialog .action-body pre { margin: 12px 0 0; padding: 14px; border-radius: 8px; background: var(--raised); border: 0; font-size: 12px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+body.consistency-preview .preview-original-action,
+body.consistency-preview .preview-original-action-row { display: none !important; }
+body.consistency-preview .preview-standard-dialog .model-results { gap: 4px; }
+body.consistency-preview .preview-standard-dialog .model-results button { border-radius: 8px; min-height: 56px; padding: 12px; }
+body.consistency-preview .preview-standard-dialog .model-results button > span:last-child:not(:first-child) { font-size: 12px; color: var(--muted); flex: none; }
+body.consistency-preview .preview-standard-dialog :is(button,input,select,textarea):focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }
+@media(max-width:640px) {
+  body.consistency-preview { --preview-dialog-padding: 20px; }
+  body.consistency-preview .preview-standard-dialog { max-width: calc(100vw - 24px); max-height: calc(100dvh - 32px); }
+  body.consistency-preview .preview-standard-dialog .workspace-two-col { grid-template-columns: minmax(0,1fr); }
+  body.consistency-preview .preview-standard-dialog :is(.ui-dialog-heading,.modal-top,.agent-dialog-heading,.server-reboot-heading) { min-height: 68px; padding-block: 16px; }
+  body.consistency-preview .preview-standard-dialog :is(.ui-dialog-actions,.workspace-dialog-actions,.modal-actions) { gap: 8px; }
+}

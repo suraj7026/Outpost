@@ -120,7 +120,7 @@ test('unrecognized maintenance data and host names cannot become arbitrary repor
   } finally { f.close(); }
 });
 
-test('recovery.inspect advertises strict empty input and uses the normal approval/evidence gate', async () => {
+test('recovery.inspect advertises strict empty input and uses validation/evidence without approval', async () => {
   const f = fixture();
   try {
     const task = f.coordinator.tasks.create(id(), { goal: 'Inspect recovery', profile: 'operations', mode: 'ask_permission' });
@@ -134,9 +134,8 @@ test('recovery.inspect advertises strict empty input and uses the normal approva
     for (const input of [{ command: 'anything' }, { taskId: task.id }, [], null]) await assert.rejects(gate.propose(task.id, 'recovery.inspect', input));
     assert.equal(f.db.cursor(), before);
     const action = await gate.propose(task.id, 'recovery.inspect', {});
-    assert.equal(action.data.state, 'pending');
-    await assert.rejects(gate.dispatch(action.id), { code: 'not_authorized' });
-    gate.decide(action.id, action.revision, action.data.nonce, action.data.actionDigest, 'approve', id());
+    assert.equal(action.data.state, 'authorized');
+    assert.equal(f.db.list('inbox').length, 0);
     const observed = await gate.dispatch(action.id);
     assert.equal(observed.data.state, 'succeeded');
     const toolReport = RecoveryReport.parse(observed.data.result), queryReport = report(f.coordinator);

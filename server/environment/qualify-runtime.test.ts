@@ -13,6 +13,8 @@ test('staging qualifier loads, binds and invokes installed native tools in a pri
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const release = join(directory, 'release');
   mkdirSync(join(release, 'server/environment'), { recursive: true });
+    mkdirSync(join(release, 'server/core'), { recursive: true });
+    cpSync(join(project, 'server/core/contracts.ts'), join(release, 'server/core/contracts.ts'));
   cpSync(join(project, 'server/pi-management'), join(release, 'server/pi-management'), { recursive: true });
   cpSync(join(project, 'server/environment/qualify-runtime.ts'), join(release, 'server/environment/qualify-runtime.ts'));
   symlinkSync(join(project, 'node_modules'), join(release, 'node_modules'));

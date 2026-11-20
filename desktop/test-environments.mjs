@@ -354,7 +354,8 @@ try {
   check(await page.getByRole('button', { name: /Disconnect environment|Reconnect environment|Select server/ }).count() === 0, 'Servers index has no connection or selection actions');
   await page.locator(`.server-settings-list a[data-server-id="${B}"]`).click();
   await page.locator('.server-settings-tabs').waitFor();
-  assert.deepEqual(await page.locator('.server-settings-tabs a').allTextContents(), ['General', 'Connection', 'Models & providers', 'Pi & extensions', 'Devices', 'Recovery']); checks++;
+  assert.deepEqual(await page.locator('.server-settings-tabs a').allTextContents(), ['General', 'Connection', 'Models & providers', 'Server updates', 'Devices', 'Recovery']); checks++;
+  check(await page.getByRole('link', { name: 'Server updates', exact: true }).getAttribute('href') === `#settings/servers/${B}/runtime`, 'Renamed server updates tab preserves runtime deep links');
   check(await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: 'Machines', exact: true }).getAttribute('aria-current') === 'page', 'Machines remains selected for server settings');
   check(await page.locator('.settings-back-link').getByText('Machines', { exact: true }).count() === 1, 'Server settings has a quiet back link to Machines');
     check(await page.locator('.settings-breadcrumb, .settings-connection-status').count() === 0, 'No breadcrumb-heavy chrome or persistent refresh strip');

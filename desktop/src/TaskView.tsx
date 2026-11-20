@@ -10,10 +10,14 @@ import { useWorkspaceResize } from './workspace/useWorkspaceResize';
 import type { WorkspaceOpenRequest, WorkspaceSelection } from './workspace/workspace-files';
 import './workspace/task-workspace.css';
 import TaskConversation from './TaskConversation';
+import SubagentPanel from './subagents/SubagentPanel';
+import { subagentRun, type SubagentRun } from './subagents/model';
 import ActionReviewDialog from './ActionReviewDialog';
 import { chatAttention } from './chat-attention';
 import { ComposerRunContext } from './ComposerContext';
 import { ControlMode } from './ComposerControls';
+import { modeBlocker, modeChangeActive, pauseToChangeMode, savedControlMode, type ControlMode as Mode } from './control-mode';
+
 import TaskRunControls from './TaskRunControls';
 import { taskRunStatus, type TaskRunStatus } from './conversation-model';
 import { useConversationScroll } from './useConversationScroll';
@@ -31,20 +35,34 @@ export default function TaskView({ task, ownerLabel, connection, contextBar }: {
 }) {
   const [reply, setReply] = useState('');
   const [resourcesOpen, setResourcesOpen] = useState(false);
+  const [resourcePane, setResourcePane] = useState<'files' | 'subagent'>('files');
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [runExpanded, setRunExpanded] = useState(false);
+  const runTrigger = useRef<HTMLButtonElement | null>(null);
+  const splitOpen = resourcesOpen && !(resourcePane === 'subagent' && runExpanded);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const terminalButton = useRef<HTMLButtonElement>(null);
   const terminalOwner = connection.environmentId;
   const workspaceToggle = useRef<HTMLButtonElement>(null);
   const resourcesButton = useRef<HTMLButtonElement>(null);
   const [fileRequest, setFileRequest] = useState<WorkspaceOpenRequest | null>(null);
-  const workspace = useWorkspaceResize({ open: resourcesOpen, scope: `${connection.environmentId ?? 'legacy'}:${task.id}` });
+  const workspace = useWorkspaceResize({ open: splitOpen, scope: `${connection.environmentId ?? 'legacy'}:${task.id}` });
   const openFile = useCallback((selection: WorkspaceSelection) => {
     setFileRequest(previous => ({ selection, sequence: (previous?.sequence ?? 0) + 1 }));
+    setResourcePane('files');
+    setRunExpanded(false);
+    setResourcesOpen(true);
+  }, []);
+  const openSubagent = useCallback((run: SubagentRun, expanded: boolean, trigger: HTMLButtonElement) => {
+    runTrigger.current = trigger;
+    setSelectedRunId(run.parentToolId);
+    setResourcePane('subagent');
+    setRunExpanded(expanded);
     setResourcesOpen(true);
   }, []);
   const collapseTerminal = () => {
     setTerminalOpen(false);
-    const focusTarget = resourcesOpen && workspace.singlePane ? workspaceToggle : terminalButton;
+    const focusTarget = splitOpen && workspace.singlePane ? workspaceToggle : terminalButton;
     focusTarget.current?.focus({ preventScroll: true });
   };
   const [reviewedAction, setReviewedAction] = useState<ServerRecord | null>(null);
@@ -54,22 +72,43 @@ export default function TaskView({ task, ownerLabel, connection, contextBar }: {
   const selectedRef = chosenModel(connection.agentCatalogue, modelRef, initialModel);
 
   const input = useRef<HTMLInputElement>(null);
-  const mutationBlocked = connection.retired || !!connection.info?.pendingError || connection.busy || !connection.connected || Boolean(connection.info?.pending) || recordedPreview();
+  const [changingMode, setChangingMode] = useState(false), [modeError, setModeError] = useState('');
+  const modeWriting = useRef(false);
+  const policy = connection.records.find(record => record.kind === 'policy' && record.id === task.id);
+  const mode = savedControlMode(policy?.data.mode);
+  const policyBlocker = mode ? modeBlocker(mode, connection.runtime) : 'Task policy is unavailable. Refresh before continuing.';
+  const modeActive = modeChangeActive(task, connection.records);
+  const mutationBlocked = changingMode || connection.retired || !!connection.info?.pendingError || connection.busy || !connection.connected || Boolean(connection.info?.pending) || recordedPreview();
   const related = useMemo(() => connection.records.filter(record => text(record, 'taskId') === task.id), [connection.records, task.id]);
+  const selectedRun = useMemo(() => {
+    let selected: SubagentRun | null = null;
+    for (const record of related) {
+      const run = subagentRun(record, task.id);
+      if (run?.parentToolId === selectedRunId && (!selected || !run.legacy)) selected = run;
+    }
+    return selected;
+  }, [related, selectedRunId, task.id]);
   const attention = useMemo(() => chatAttention(related, task.id), [related, task.id]);
   const attentionLabel = `${!connection.connected || connection.retired ? 'Last known: ' : ''}${attention.label}`;
   const reviewAction = useCallback((action: ServerRecord) => setReviewedAction(structuredClone(action)), []);
   const closeResources = () => {
     setResourcesOpen(false);
-    requestAnimationFrame(() => workspaceToggle.current?.focus({ preventScroll: true }));
+    setRunExpanded(false);
+    requestAnimationFrame(() => {
+      const trigger = resourcePane === 'subagent' ? runTrigger.current : null;
+      const summary = trigger?.closest('details')?.querySelector('summary');
+      const target = trigger?.isConnected && trigger.getClientRects().length ? trigger
+        : summary instanceof HTMLElement && summary.getClientRects().length ? summary : workspaceToggle.current;
+      target?.focus({ preventScroll: true });
+    });
   };
   useEffect(() => {
-    if (resourcesOpen && workspace.singlePane && document.activeElement instanceof HTMLElement && document.activeElement.closest('.conversation-column')) {
+    if (splitOpen && workspace.singlePane && document.activeElement instanceof HTMLElement && document.activeElement.closest('.conversation-column')) {
       workspaceToggle.current?.focus({ preventScroll: true });
     }
-  }, [resourcesOpen, workspace.singlePane]);
+  }, [splitOpen, workspace.singlePane]);
 
-  const policy = connection.records.find(record => record.kind === 'policy' && record.id === task.id);
+
   const state = text(task, 'state');
   const stopped = ['cancelled', 'completed'].includes(state);
   const resumable = ['paused', 'interrupted', 'failed', 'waiting_for_capacity'].includes(state);
@@ -98,20 +137,31 @@ export default function TaskView({ task, ownerLabel, connection, contextBar }: {
       void connection.command('task.cancel', task.id, task.revision);
     }
   };
+  const changeMode = async (next: Mode) => {
+    if (!policy || next === mode || mutationBlocked || stopped || modeActive || modeWriting.current || modeError || modeBlocker(next, connection.runtime)) return;
+    modeWriting.current = true; setChangingMode(true);
+    try {
+      const result = await connection.command('policy.change', task.id, policy.revision, { mode: next });
+      if (!result || result.kind !== 'policy' || result.id !== task.id || result.revision <= policy.revision || result.data.mode !== next)
+        setModeError('Mode change was not confirmed. Refresh this task and inspect pending work before trying again.');
+    } catch {
+      setModeError('Mode change was not confirmed. Refresh this task and inspect pending work before trying again.');
+    } finally { modeWriting.current = false; setChangingMode(false); }
+  };
   const submit = async () => {
-    if (!reply.trim() || stopped || mutationBlocked || (managed && !selectedRef)) return;
+    if (!reply.trim() || stopped || mutationBlocked || policyBlocker || modeError || (managed && !selectedRef)) return;
     const result = await connection.command('task.steer', task.id, task.revision, {
       text: reply.trim(), ...(managed && selectedRef ? { modelRef: { providerId: selectedRef.providerId, modelId: selectedRef.modelId } } : {}),
     });
     if (result) { setReply(''); scroll.jumpToLatest(); }
   };
   return <section className="task-view task-unified workspace-enabled" aria-label={`${ownerLabel || 'Workspace'}: ${title(task)}`}>
-    <header className="task-workspace-heading"><h1>{title(task)}</h1>{attention.first && <button type="button" className="task-attention-indicator" data-cached={!connection.connected || connection.retired} title={attentionLabel} aria-label={`Review ${attentionLabel}`} onClick={() => attention.first && reviewAction(attention.first)}><ShieldCheck size={14} aria-hidden="true" /><span>{attentionLabel}</span></button>}<button ref={workspaceToggle} type="button" className="task-workspace-toggle" aria-label={resourcesOpen ? 'Close workspace' : 'Open workspace'} title={resourcesOpen ? 'Close workspace' : 'Open workspace'} aria-controls="task-resources" aria-expanded={resourcesOpen} onClick={() => resourcesOpen ? closeResources() : setResourcesOpen(true)}><PanelRight size={20} aria-hidden="true" /></button></header>
-    <div ref={workspace.columnsRef} className={`task-columns${resourcesOpen ? ' workspace-open' : ''}`} data-workspace-single={workspace.singlePane} data-resizing={workspace.dragging} style={{ '--workspace-chat-width': `${workspace.chatWidth}px` } as CSSProperties}>
-      <div className="conversation-column" hidden={resourcesOpen && workspace.singlePane} inert={resourcesOpen && workspace.singlePane}>
+    <header className="task-workspace-heading"><h1>{title(task)}</h1>{attention.first && <button type="button" className="task-attention-indicator" data-cached={!connection.connected || connection.retired} title={attentionLabel} aria-label={`Review ${attentionLabel}`} onClick={() => attention.first && reviewAction(attention.first)}><ShieldCheck size={14} aria-hidden="true" /><span>{attentionLabel}</span></button>}<button ref={workspaceToggle} type="button" className="task-workspace-toggle" aria-label={resourcesOpen ? 'Close workspace' : 'Open workspace'} title={resourcesOpen ? 'Close workspace' : 'Open workspace'} aria-controls={resourcePane === 'files' ? 'task-resources' : 'task-subagent-run'} aria-expanded={resourcesOpen} onClick={() => resourcesOpen ? closeResources() : setResourcesOpen(true)}><PanelRight size={20} aria-hidden="true" /></button></header>
+    <div ref={workspace.columnsRef} className={`task-columns${splitOpen ? ' workspace-open' : ''}`} data-workspace-single={workspace.singlePane} data-resizing={workspace.dragging} style={{ '--workspace-chat-width': `${workspace.chatWidth}px` } as CSSProperties}>
+      <div className="conversation-column" hidden={splitOpen && workspace.singlePane} inert={splitOpen && workspace.singlePane}>
         <div className="conversation" ref={scroll.viewportRef} tabIndex={0} aria-label="Conversation and execution evidence">
           <div className="conversation-content" ref={scroll.contentRef}>
-            <TaskConversation records={related} connection={connection} onReview={reviewAction} onOpenFile={openFile} />
+            <TaskConversation records={related} connection={connection} onReview={reviewAction} onOpenFile={openFile} onOpenSubagent={openSubagent} />
             {text(task, 'blocker') && state !== 'verifying' && <p className="inline-notice">{text(task, 'blocker')}</p>}
           </div>
         </div>
@@ -134,23 +184,31 @@ export default function TaskView({ task, ownerLabel, connection, contextBar }: {
                 event.target.value = '';
               }} />
               <button className="icon-button" aria-label="Attach file" title="Attach file" disabled={mutationBlocked || stopped} onClick={() => input.current?.click()}><Plus size={18} /></button>
-              {!stopped && <button type="button" className="icon-button" title={resumable ? 'Resume task' : 'Pause task'} aria-label={resumable ? 'Resume task' : 'Pause task'} disabled={mutationBlocked}
-                onClick={() => void connection.command(resumable ? 'task.resume' : 'task.pause', task.id, task.revision)}>{resumable ? <Play size={18} /> : <Pause size={18} />}</button>}
-              <button ref={resourcesButton} type="button" className="icon-button" aria-label="Files, changes and browser" title="Files, changes and browser" aria-controls="task-resources" aria-expanded={resourcesOpen} onClick={() => resourcesOpen ? closeResources() : setResourcesOpen(true)}><Files size={18} /></button>
-              {policy && <ControlMode label="Task control mode" value={text(policy, 'mode')} disabled={mutationBlocked} onChange={event => void connection.command('policy.change', task.id, policy.revision, { mode: event.target.value })} />}
+              {!stopped && <button type="button" className="icon-button" title={resumable ? 'Resume task' : 'Pause task'} aria-label={resumable ? 'Resume task' : 'Pause task'} disabled={mutationBlocked || (resumable && (!!policyBlocker || !!modeError))}
+                onClick={() => { if (!mutationBlocked && (!resumable || (!policyBlocker && !modeError))) void connection.command(resumable ? 'task.resume' : 'task.pause', task.id, task.revision); }}>{resumable ? <Play size={18} /> : <Pause size={18} />}</button>}
+              <button ref={resourcesButton} type="button" className="icon-button" aria-label="Files, changes and browser" title="Files, changes and browser" aria-controls="task-resources" aria-expanded={resourcesOpen && resourcePane === 'files'} onClick={() => {
+                if (resourcesOpen && resourcePane === 'files') closeResources();
+                else { setResourcePane('files'); setRunExpanded(false); setResourcesOpen(true); }
+              }}><Files size={18} /></button>
+
+              <ControlMode label="Task control mode" value={mode ?? 'full_control'} runtime={connection.runtime} onModeChange={next => void changeMode(next)} disabled={mutationBlocked || stopped || !mode || modeActive || !!modeError} reason={modeActive ? pauseToChangeMode : policyBlocker || modeError} />
               <div className="composer-model-control">{managed ? <ModelPicker catalogue={connection.agentCatalogue} value={selectedRef} onChange={setModelRef} disabled={mutationBlocked || stopped} /> : <span className="composer-model" title={text(task, 'model') || connection.runtime?.model || 'Server default'}>{text(task, 'model') || connection.runtime?.model || 'Server default'}</span>}</div>
               <button type="button" className="send-button" data-action={primaryStops ? 'stop' : 'send'}
                 aria-label={primaryStops ? 'Stop task' : 'Send message'} title={primaryStops ? 'Stop task' : 'Send message'}
                 onClick={() => { if (primaryStops) cancel(); else void submit(); }}
-                disabled={mutationBlocked || stopped || (!primaryStops && (!reply.trim() || (managed && !selectedRef)))}>
+                disabled={mutationBlocked || stopped || (!primaryStops && (!reply.trim() || !!policyBlocker || !!modeError || (managed && !selectedRef)))}>
                 {primaryStops ? <Square size={14} aria-hidden="true" /> : <ArrowUp size={17} aria-hidden="true" />}
               </button>
             </div>
           </div>
+          {modeActive && <p className="small" role="status">{pauseToChangeMode}</p>}
+          {policyBlocker && <p className="small" role="status">{policyBlocker}</p>}
+          {modeError && <p className="error-text" role="alert">{modeError}</p>}
         </div>
       </div>
-      <WorkspacePanel key={`${connection.environmentId ?? 'legacy'}:${task.id}`} taskId={task.id} connection={connection} records={related} open={resourcesOpen} request={fileRequest} onClose={closeResources} onReviewAction={reviewAction} />
-      {resourcesOpen && !workspace.singlePane && <div className="task-workspace-divider" {...workspace.separatorProps} />}
+      <WorkspacePanel key={`${connection.environmentId ?? 'legacy'}:${task.id}`} taskId={task.id} connection={connection} records={related} open={resourcesOpen && resourcePane === 'files'} request={fileRequest} onClose={closeResources} onReviewAction={reviewAction} />
+      <SubagentPanel run={selectedRun} connected={connection.connected && !connection.retired} open={resourcesOpen && resourcePane === 'subagent'} expanded={runExpanded} onExpandedChange={setRunExpanded} onClose={closeResources} />
+      {splitOpen && !workspace.singlePane && <div className="task-workspace-divider" {...workspace.separatorProps} />}
     </div>
     {terminalOpen && <TerminalPane key={terminalOwner ?? 'legacy'} id="chat-server-terminal" environmentId={terminalOwner} label={ownerLabel} onCollapse={collapseTerminal} />}
     {reviewedAction && <ActionReviewDialog key={`${reviewedAction.id}:${reviewedAction.revision}`} snapshot={reviewedAction} connection={connection} onClose={() => setReviewedAction(null)} />}

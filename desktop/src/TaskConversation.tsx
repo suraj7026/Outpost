@@ -13,6 +13,10 @@ import ActivityGroup, { type ActivityGroupMemory } from './ActivityGroup';
 import { activityChunks, isExecutionRecord } from './activity-model';
 import { ThinkingIndicator, useConversationDisclosure, type ExecutionViewState } from './conversation-detail';
 import OutpostMark from './OutpostMark';
+import SubagentCard from './subagents/SubagentCard';
+import { isSubagentRecord, subagentRun, type SubagentRun } from './subagents/model';
+
+type OpenSubagent = (run: SubagentRun, expanded: boolean, trigger: HTMLButtonElement) => void;
 
 import Artifact from './image-viewer/Artifact';
 import MarkdownImage from './image-viewer/MarkdownImage';
@@ -53,12 +57,13 @@ function RunReasoning({ records }: { records: ServerRecord[] }) {
 }
 
 
-function Run({ group, connection, streams, onReview, onOpenFile }: {
+function Run({ group, connection, streams, onReview, onOpenFile, onOpenSubagent }: {
   group: Extract<ConversationGroup, { kind: 'run' }>;
   connection: Connection;
   streams: Map<string, ServerRecord[]>;
   onReview: (record: ServerRecord) => void;
   onOpenFile?: (selection: WorkspaceSelection) => void;
+  onOpenSubagent?: OpenSubagent;
 }) {
   const executionKeys = useRef(new Map<string, string>());
   const executionOrder = useRef(new Map<string, number>());
@@ -83,6 +88,12 @@ function Run({ group, connection, streams, onReview, onOpenFile }: {
   };
   const chunks = activityChunks(group.records);
   const render = (record: ServerRecord) => {
+    if (isSubagentRecord(record)) {
+      const run = subagentRun(record);
+      if (!run) return <p key={record.id} className="small">Subagent run details unavailable.</p>;
+      return <SubagentCard key={`subagent:${run.parentToolId}`} run={run} connected={connection.connected && !connection.retired}
+        onOpen={(expanded, trigger) => onOpenSubagent?.(run, expanded, trigger)} />;
+    }
     if (record.kind === 'artifact') return <div className="stream-artifact" id={`artifact-${record.id}`} key={record.id}><Artifact record={record} onReviewFile={onOpenFile ? () => onOpenFile({ kind: 'artifact', id: record.id }) : undefined} /></div>;
     if (record.kind !== 'message') {
       const key = executionKey(record);
@@ -119,11 +130,12 @@ function Run({ group, connection, streams, onReview, onOpenFile }: {
   </article>;
 }
 
-const TaskConversation = memo(function TaskConversation({ records, connection, onReview, onOpenFile }: {
+const TaskConversation = memo(function TaskConversation({ records, connection, onReview, onOpenFile, onOpenSubagent }: {
   records: ServerRecord[];
   connection: Connection;
   onReview: (record: ServerRecord) => void;
   onOpenFile?: (selection: WorkspaceSelection) => void;
+  onOpenSubagent?: OpenSubagent;
 }) {
   const firstSeen = useRef(new Map<string, number>());
   const groups = useMemo(() => groupConversation(records, firstSeen.current), [records]);
@@ -136,7 +148,7 @@ const TaskConversation = memo(function TaskConversation({ records, connection, o
       </div>
       <span className="message-avatar owner-avatar" aria-hidden="true"><UserRound size={18} /></span>
     </article>
-    : <Run key={group.id} group={group} connection={connection} streams={streams} onReview={onReview} onOpenFile={onOpenFile} />)}</>;
+    : <Run key={group.id} group={group} connection={connection} streams={streams} onReview={onReview} onOpenFile={onOpenFile} onOpenSubagent={onOpenSubagent} />)}</>;
 });
 
 export default TaskConversation;
