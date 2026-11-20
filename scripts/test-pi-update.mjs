@@ -118,6 +118,7 @@ const subagentPaths = [
 ];
 const overlays = [
   'deploy/environment/auto_update.py',
+  'deploy/environment/common.py',
   'deploy/environment/host_install.py', 'deploy/environment/host_update.py',
   workspacePath,
   'server/environment/qualify-runtime.ts',
@@ -498,8 +499,8 @@ try {
     await t.test('auto-update helper imports are self-contained without executing privileged code', () => {
       const helper = files.get('deploy/environment/auto_update.py').toString('utf8');
       assert.match(helper, /^import host_update$/m);
-      assert.match(helper, /^from host_install import /m);
-      for (const name of ['auto_update', 'host_install', 'host_update']) {
+      assert.match(helper, /^from common import /m);
+      for (const name of ['auto_update', 'common', 'host_install', 'host_update']) {
         assert.ok(files.get(`deploy/environment/${name}.py`)?.length > 0, name);
       }
       assert.match(files.get('server/scheduler/tools.ts').toString('utf8'), /recovery\.data\.dispatchEnabled === true/);

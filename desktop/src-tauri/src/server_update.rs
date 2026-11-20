@@ -23,7 +23,7 @@ fn acquire(environment: &str) -> Result<UpdateGuard, String> {
     }
     Ok(UpdateGuard(environment.into()))
 }
-const INSTALLER: &str = include_str!("../../../deploy/environment/host_install.py");
+const COMMON: &str = include_str!("../../../deploy/environment/common.py");
 const UPDATER: &str = include_str!("../../../deploy/environment/host_update.py");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -431,7 +431,7 @@ fn manual_bootstrap_command(root: bool, password: bool) -> String {
 }
 
 fn bootstrap_source(
-    installer: &str,
+    common: &str,
     updater: &str,
     operation: &str,
     environment: &str,
@@ -443,8 +443,8 @@ fn bootstrap_source(
     Ok(format!(
         r#"import base64,types,sys,json
 try:
- m=types.ModuleType('host_install');sys.modules['host_install']=m
- exec(base64.b64decode('{installer}'),m.__dict__)
+ m=types.ModuleType('common');sys.modules['common']=m
+ exec(base64.b64decode('{common}'),m.__dict__)
  exec(base64.b64decode('{updater}'))
 except Exception as error:
  if isinstance(error,json.JSONDecodeError):
@@ -457,7 +457,7 @@ except Exception as error:
   code,stage='launcher_failed','Bootstrap execution failed. Launch outcome remains unknown; check status.'
  print(json.dumps({{'operationId':'{operation}','environmentId':'{environment}','state':'unknown','launchError':code,'stage':stage}}))
 "#,
-        installer = STANDARD.encode(installer),
+        common = STANDARD.encode(common),
         updater = STANDARD.encode(updater),
     ))
 }
@@ -1367,11 +1367,11 @@ mod tests {
     fn bootstrap_success_receipt_passes_through_unchanged() {
         let receipt = json!({"operationId":OPERATION,"environmentId":ENVIRONMENT,"state":"queued","stage":"Verified release received","updatedAt":123}).to_string() + "\n";
         let updater = format!(
-            "import sys\nfrom host_install import marker\nassert marker == 'fixture'\nassert __name__ == '__main__'\nassert sys.argv[1:] == ['--bootstrap']\nsys.stdout.write({})\n",
+            "import sys\nfrom common import marker\nassert marker == 'fixture'\nassert __name__ == '__main__'\nassert sys.argv[1:] == ['--bootstrap']\nsys.stdout.write({})\n",
             serde_json::to_string(&receipt).unwrap()
         );
         let bytes = run_fixture_bootstrap(
-            "assert __name__ == 'host_install'\nmarker = 'fixture'\n",
+            "assert __name__ == 'common'\nmarker = 'fixture'\n",
             &updater,
         );
         assert_eq!(bytes, receipt.as_bytes());
@@ -1379,7 +1379,7 @@ mod tests {
 
     #[test]
     fn production_bootstrap_command_stays_below_argument_limit() {
-        let source = bootstrap_source(INSTALLER, UPDATER, OPERATION, ENVIRONMENT).unwrap();
+        let source = bootstrap_source(COMMON, UPDATER, OPERATION, ENVIRONMENT).unwrap();
         let encoded_source = STANDARD.encode(source);
         assert!(
             encoded_source.len() <= 1048576,
@@ -2189,7 +2189,7 @@ pub async fn environment_update_start(
         }
         let packet=json!({"operationId":review["operationId"],"environmentId":environment_id,"deviceId":device.0,"releaseId":review["artifact"]["id"],
             "expectedRelease":review["installed"]["releaseId"],"sha256":digest,"size":bytes.len(),"target":review["artifact"]["manifest"]});
-        let bootstrap = bootstrap_source(INSTALLER, UPDATER, review["operationId"].as_str().ok_or("Invalid operation ID")?, &environment_id)?;
+        let bootstrap = bootstrap_source(COMMON, UPDATER, review["operationId"].as_str().ok_or("Invalid operation ID")?, &environment_id)?;
         input.extend_from_slice(STANDARD.encode(bootstrap).as_bytes()); input.push(b'\n');
         input.extend(serde_json::to_vec(&packet).map_err(|_|"Invalid packet")?); input.push(b'\n'); input.extend(bytes);
         let mut args=setup.ssh_args(&entry)?;

@@ -394,7 +394,7 @@ fn policy(environment: &str, device: &str, publisher: &str, user: &str) -> Value
 fn public_policy(policy: &Value) -> Value {
     let mut public = policy.clone();
     public["schema"] = json!(1);
-    public["sourcesSha256"] = json!({"auto_update.py":sha(HELPER.as_bytes()),"host_install.py":sha(INSTALLER.as_bytes()),"host_update.py":sha(UPDATER.as_bytes())});
+    public["sourcesSha256"] = json!({"auto_update.py":sha(HELPER.as_bytes()),"common.py":sha(COMMON.as_bytes()),"host_update.py":sha(UPDATER.as_bytes())});
     public
 }
 const RENEW_HELPER: &str = "The enrolled update helper differs from this app's security-reviewed helper. No maintenance request was submitted. Disable automatic updates, then enable them with renewed protected authorization to update the helper; no unattended helper migration is permitted.";
@@ -438,11 +438,18 @@ fn policy_identity(public: &Value) -> Result<Value, String> {
     let sources = public["sourcesSha256"]
         .as_object()
         .ok_or("Missing helper source pins")?;
-    if sources.len() != 3
-        || ["auto_update.py", "host_install.py", "host_update.py"]
-            .iter()
-            .any(|name| !sources.get(*name).is_some_and(is_sha256))
-    {
+    let valid_sources = [
+        ["auto_update.py", "common.py", "host_update.py"],
+        ["auto_update.py", "host_install.py", "host_update.py"],
+    ]
+    .iter()
+    .any(|names| {
+        sources.len() == names.len()
+            && names
+                .iter()
+                .all(|name| sources.get(*name).is_some_and(is_sha256))
+    });
+    if !valid_sources {
         return Err("Invalid helper source pins".into());
     }
     Ok(policy(environment, device, publisher, user))
@@ -517,8 +524,9 @@ if not p.exists() and not p.is_symlink():
  print('null')
 else:
  v=json.loads(read(p,65536)); hashes=v['sourcesSha256']
- names=('auto_update.py','host_install.py','host_update.py')
- if set(hashes)!=set(names) or any(not isinstance(hashes[n],str) or len(hashes[n])!=64 or any(c not in '0123456789abcdef' for c in hashes[n]) for n in names): raise ValueError('Invalid source pins')
+ candidates=(('auto_update.py','common.py','host_update.py'),('auto_update.py','host_install.py','host_update.py'))
+ names=next((c for c in candidates if isinstance(hashes,dict) and set(hashes)==set(c)),None)
+ if names is None or any(not isinstance(hashes[n],str) or len(hashes[n])!=64 or any(c not in '0123456789abcdef' for c in hashes[n]) for n in names): raise ValueError('Invalid source pins')
  root=pathlib.Path('/usr/local/lib/outpost-updater'); secure(root,True)
  versions=root/'versions'
  if versions.exists() or versions.is_symlink(): secure(versions,True)
@@ -536,7 +544,7 @@ fn policy_probe_source() -> Result<String, String> {
     // Read only the bundled Python byte literals. literal_eval never imports or
     // executes either the bundled helper or the remote enrolled helper.
     let mut literals = Vec::new();
-    for name in ["LEGACY_LAUNCHER", "LAUNCHER"] {
+    for name in ["LEGACY_LAUNCHER", "LAUNCHER", "LEGACY_VERSIONED_LAUNCHER"] {
         let prefix = format!("\n{name} = b'''");
         let body = HELPER
             .split_once(&prefix)
@@ -626,20 +634,20 @@ fn renewal_action(policy: &Value, previous: &Value, attempt: &str) -> Result<Str
 previous=receipt['previousPolicy']
 h=sys.modules['auto_update']
 h.require(h.os.geteuid()==0)
-h.validate_public_policy(previous)
+h.validate_public_policy(previous,allow_legacy=True)
 h.validate_public_policy(receipt['desiredPolicy'])
 h.secure_path(h.CONFIG,directory=True)
 receipt_path=h.CONFIG/'auto-update-native-renewal.json'
 if receipt_path.exists() or receipt_path.is_symlink(): h.secure_path(receipt_path)
 h.atomic_json(receipt_path,receipt,0o644)
 try:
- value=h.reauthorize(p,previous,raw['auto_update'],raw['host_install'],raw['host_update'])
+ value=h.reauthorize(p,previous,raw['auto_update'],raw['host_update'],raw['common'])
 except Exception:
  receipt['state']='unknown'
  try:
   actual=h.read_public(h.CONFIG/'auto-update.json')
   if actual==previous:
-   h.verify_sources(h.active_library(actual),actual)
+   h.verify_sources(h.active_library(actual,allow_legacy=True),actual,allow_legacy=True)
    receipt['state']='previous_retained'
  except Exception:
   pass
@@ -671,12 +679,12 @@ fn enrollment_source(
     let action = if let Some(previous) = previous {
         renewal_action(policy, previous, attempt.ok_or("Missing renewal attempt")?)?
     } else {
-        "print(json.dumps(sys.modules['auto_update'].enroll(p,raw['auto_update'],raw['host_install'],raw['host_update'])))".into()
+        "print(json.dumps(sys.modules['auto_update'].enroll(p,raw['auto_update'],raw['host_update'],raw['common'])))".into()
     };
     Ok(format!(
         r#"import base64,json,types,sys,hashlib
-sources={{'host_install':'{installer}','host_update':'{updater}','auto_update':'{helper}'}}
-hashes={{'host_install':'{installer_hash}','host_update':'{updater_hash}','auto_update':'{helper_hash}'}}
+sources={{'common':'{common}','host_update':'{updater}','auto_update':'{helper}'}}
+hashes={{'common':'{common_hash}','host_update':'{updater_hash}','auto_update':'{helper_hash}'}}
 raw={{}}
 for name,encoded in sources.items():
  data=base64.b64decode(encoded,validate=True)
@@ -686,10 +694,10 @@ for name,encoded in sources.items():
 p=json.loads(base64.b64decode('{policy}'))
 {action}
 "#,
-        installer = STANDARD.encode(INSTALLER),
+        common = STANDARD.encode(COMMON),
         updater = STANDARD.encode(UPDATER),
         helper = STANDARD.encode(HELPER),
-        installer_hash = sha(INSTALLER.as_bytes()),
+        common_hash = sha(COMMON.as_bytes()),
         updater_hash = sha(UPDATER.as_bytes()),
         helper_hash = sha(HELPER.as_bytes()),
         policy = STANDARD.encode(policy_bytes)
@@ -1557,12 +1565,32 @@ first=sample();started=time.monotonic()
 for _ in range(4):
  time.sleep(2)
  if sample()!=first: raise ValueError('Services restarted during observation')
+def read_env_port(path,var,default):
+ try:
+  s=path.lstat()
+  if not stat.S_ISREG(s.st_mode) or s.st_uid!=0 or s.st_mode & 0o022 or path.resolve()!=path: return default
+  raw=path.read_bytes()
+ except (OSError,KeyError):
+  return default
+ if len(raw)>65536: return default
+ found=None
+ for line in raw.decode('utf-8',errors='replace').splitlines():
+  line=line.strip()
+  if not line or line.startswith(('#',';')) or '=' not in line: continue
+  key,val=line.split('=',1)
+  if key.strip()!=var: continue
+  val=val.strip()
+  if len(val)>=2 and val[0]==val[-1] and val[0] in ('"',"'"): val=val[1:-1]
+  if re.fullmatch(r'[0-9]{1,5}',val) and 1<=int(val)<=65535: found=int(val)
+  else: found=None
+ return default if found is None else found
 if installation.get('fullControl'):
- with opener.open('http://127.0.0.1:4519/health',timeout=2) as response:
+ host_port=read_env_port(pathlib.Path('/etc/outpost-native/host.env'),'OUTPOST_HOST_PORT',4519)
+ with opener.open(f'http://127.0.0.1:{host_port}/health',timeout=2) as response:
   v=json.loads(response.read(32768))
   if v.get('ready') is not True or v.get('host')!='local': raise ValueError('Host listener mismatch')
  try:
-  opener.open('http://127.0.0.1:4519/outpost-update-auth-probe',timeout=2)
+  opener.open(f'http://127.0.0.1:{host_port}/outpost-update-auth-probe',timeout=2)
   raise ValueError('Host authentication not enforced')
  except urllib.error.HTTPError as error:
   if error.code!=401: raise ValueError('Host auth challenge mismatch')
