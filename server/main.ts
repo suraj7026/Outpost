@@ -1,6 +1,7 @@
 import { resolve, join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { Ledger } from './core/ledger.js';
+import { formatErrorForLog } from './core/contracts.js';
 import { Coordinator } from './gateway/coordinator.js';
 import { httpServer } from './gateway/http.js';
 import { Notifications } from './notifier/apns.js';
@@ -44,17 +45,28 @@ const apns: APNsConfig | undefined = process.env.APNS_KEY_FILE && process.env.AP
 } : undefined;
 let draining = false;
 const timer = setInterval(() => {
-  void coordinator.maintenance.advance().catch(() => console.error('Maintenance hold needs reconciliation'));
+  void coordinator.maintenance.advance().catch(error =>
+    console.error('Maintenance hold needs reconciliation:', formatErrorForLog(error)),
+  );
   if (draining || !coordinator.dispatchEnabled) return; draining = true;
-  if (!coordinator.maintenance.holding) coordinator.scheduler.tick();
-  void coordinator.drain().then(async () => {
+  void Promise.resolve().then(async () => {
+    if (!coordinator.maintenance.holding) coordinator.scheduler.tick();
+    await coordinator.drain();
     if (apns) for (const notice of db.list('inbox').filter(row => row.data.state === 'pending').slice(0,20)) await notifier.deliver(notice.id,apns);
-  }).catch(() => console.error('Background work needs inspection')).finally(() => { draining = false; });
+  }).catch(error =>
+    console.error('Background work needs inspection:', formatErrorForLog(error)),
+  ).finally(() => { draining = false; });
 },500);
+const compactionTimer = setInterval(() => {
+  if (coordinator.maintenance.holding) return;
+  try { db.compact(); }
+  catch (error) { console.error('Ledger compaction needs inspection:', formatErrorForLog(error)); }
+}, 60 * 60 * 1000);
+compactionTimer.unref();
 server.requestTimeout = 15000; server.headersTimeout = 10000;
 server.listen(Number(process.env.PORT ?? 4318),'127.0.0.1',() => console.log(`Outpost coordinator: http://127.0.0.1:${process.env.PORT ?? 4318} (loopback only); inference=${inference?.model ?? 'legacy/unconfigured'}; host administration=${!!hosts}`));
 for (const signal of ['SIGINT','SIGTERM']) process.once(signal,() => {
-  clearInterval(timer); coordinator.live.close();
+  clearInterval(timer); clearInterval(compactionTimer); coordinator.live.close();
   const finish = () => server.close(() => { db.close(); process.exit(0); });
   void coordinator.close().finally(finish);
 });
