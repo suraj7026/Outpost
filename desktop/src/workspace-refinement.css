@@ -69,6 +69,12 @@
 .workspace-fields textarea, .workspace-note-field textarea { font-size: 14px; line-height: 1.65; resize: vertical; }
 .workspace-fields .small { margin: 0; line-height: 1.65; }
 .workspace-two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.workspace-weekday-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.workspace-weekday-picker button { min-width: 44px; padding: 6px 10px; border: 1px solid var(--line); background: var(--raised); color: var(--muted); font-size: 12px; }
+.workspace-weekday-picker button[aria-pressed="true"] { background: var(--bg); color: var(--text); border-color: var(--text); font-weight: 600; }
+.workspace-preview-box { padding: 12px 14px; border-radius: 8px; background: var(--raised); display: grid; gap: 6px; }
+.workspace-preview-box strong { font-size: 12px; color: var(--muted); font-weight: 600; }
+.workspace-preview-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; color: var(--text); }
 .workspace-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
 .workspace-refinement :is(button, input, select, textarea, summary, a):focus-visible,
 .workspace-dialog :is(button, input, select, textarea):focus-visible { background-color: var(--focus-surface); }

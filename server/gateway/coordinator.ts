@@ -20,7 +20,8 @@ import { ManagementRequest, ModelRef } from '../pi-management/contracts.js';
 import { profileCSV } from '../data/analysis.js';
 import { renderHTML } from '../documents/documents.js';
 import { MemoryStore } from '../memory/memory.js';
-import { Scheduler } from '../scheduler/scheduler.js';
+import { CalendarScheduleDefinition, Scheduler } from '../scheduler/scheduler.js';
+import { CALENDAR_LIMITS, CalendarTimestamp, MAX_CALENDAR_TIMESTAMP, previewCalendar, validateCalendarDefinition } from '../scheduler/calendar.js';
 import { registerAutomationTools } from '../scheduler/tools.js';
 import { Notifications } from '../notifier/apns.js';
 import type { InferenceConfiguration } from '../models/inference.js';
@@ -193,6 +194,10 @@ export class Coordinator {
         }
         case 'artifact.complete': return wire(this.artifacts.complete(key));
         case 'automation.save': return wire(this.scheduler.save(key,expected,payload));
+        case 'automation.delete': {
+          z.strictObject({}).parse(payload);
+          return wire(this.scheduler.delete(key,expected));
+        }
         case 'memory.save': return wire(this.memory.save(z.strictObject({ text: z.string(),project: z.string(),identityId: z.string(),source: z.string(),provenance: z.literal('owner') }).parse(payload)));
         case 'memory.forget': return wire(this.memory.forget(key,expected));
         case 'memory.shared': {
@@ -270,6 +275,23 @@ export class Coordinator {
     });
   }
   query(type: string, payload: Record<string,Json>) {
+    if (type === 'automation.preview') {
+      try {
+        const request = z.strictObject({
+          calendar: CalendarScheduleDefinition,
+          afterAt: CalendarTimestamp.optional(),
+          limit: z.number().int().min(1).max(CALENDAR_LIMITS.previewSize).default(3),
+        }).parse(payload);
+        const afterAt = request.afterAt ?? Date.now();
+        const throughAt = Math.min(afterAt + CALENDAR_LIMITS.horizonMs, MAX_CALENDAR_TIMESTAMP);
+        if (throughAt <= afterAt) throw new RangeError('Preview horizon must be positive');
+        const definition = validateCalendarDefinition(request.calendar);
+        const preview = previewCalendar(definition, { afterAt, throughAt, limit: request.limit });
+        return wire({ definition, afterAt, status: preview.status, occurrences: preview.occurrences });
+      } catch (error) {
+        throw new Fault('invalid_calendar', error instanceof Error ? error.message : 'Invalid calendar schedule', 400);
+      }
+    }
     if (type === 'workspace.files' || type === 'workspace.read') {
       const input = type === 'workspace.files' ? { ...WorkspaceFilesInput.parse(payload), path: undefined } : WorkspaceReadInput.parse(payload);
       this.db.need('task',input.taskId);

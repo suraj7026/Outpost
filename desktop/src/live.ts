@@ -20,7 +20,12 @@ export function mergeRecords(
   );
   for (const record of incoming) {
     const key = `${record.kind}:${record.id}`;
-    if (!rows.has(key) || rows.get(key)!.revision < record.revision)
+    const existing = rows.get(key);
+    if (record.deleted === true || record.data?.deleted === true) {
+      if (!existing || existing.revision < record.revision) rows.delete(key);
+      continue;
+    }
+    if (!existing || existing.revision < record.revision)
       rows.set(key, record);
   }
   return [...rows.values()];

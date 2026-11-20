@@ -6,6 +6,7 @@ export interface ServerRecord {
   revision: number;
   updatedAt: string;
   data: Record<string, Json>;
+  deleted?: boolean;
 }
 export interface Snapshot {
   protocolVersion: number;

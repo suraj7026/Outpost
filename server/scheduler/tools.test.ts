@@ -13,8 +13,9 @@ import { WorkerClient } from '../pi-worker/client.js';
 import { outpostSystemPrompt } from '../pi-adapter/system-prompt.js';
 import { Schedule } from './scheduler.js';
 
-const names = ['automation.list', 'automation.save', 'automation.set_paused'] as const;
+const names = ['automation.list', 'automation.save', 'automation.set_paused', 'automation.delete'] as const;
 const AutomationRecord = z.strictObject({ kind: z.literal('automation'), id: z.string(), revision: z.number().int().positive(), data: Schedule, updatedAt: z.string() });
+const DeletedAutomationRecord = z.strictObject({ kind: z.literal('automation'), id: z.string(), revision: z.number().int().positive(), data: z.strictObject({ deleted: z.literal(true) }), updatedAt: z.string(), deleted: z.literal(true) });
 const AutomationPage = z.strictObject({ serverTime: z.number(), automations: z.array(AutomationRecord), total: z.number().int().nonnegative(), hasMore: z.boolean() });
 const schedule = (overrides: Partial<z.input<typeof Schedule>> = {}) => ({
   name: 'Inspect service', timezone: 'UTC', nextAt: 1000, intervalMs: 60000, missed: 'coalesce' as const,
@@ -75,32 +76,40 @@ test('automation tools expose descriptions, effects and authoritative JSON input
         assert.equal(property('offset').type, 'integer'); assert.equal(property('offset').minimum, 0); assert.equal(property('offset').default, 0);
       } else {
         const required = z.array(z.string()).parse(tool.inputSchema.required);
-        assert.deepEqual(required.sort(), (name === 'automation.save' ? ['automationId', 'expectedRevision', 'schedule'] : ['automationId', 'expectedRevision', 'paused']).sort());
+        const expectedRequired = name === 'automation.save' ? ['automationId', 'expectedRevision', 'schedule']
+          : name === 'automation.set_paused' ? ['automationId', 'expectedRevision', 'paused']
+            : ['automationId', 'expectedRevision'];
+        assert.deepEqual(required.sort(), expectedRequired.sort());
         assert.equal(property('automationId').type, 'string');
         assert.equal(property('expectedRevision').type, 'integer');
         assert.equal(property('expectedRevision').minimum, name === 'automation.save' ? 0 : 1);
         if (name === 'automation.save') {
           assert.equal(property('automationId').minLength, 1); assert.equal(property('automationId').maxLength, 200);
           assert.equal(property('schedule').type, 'object');
-        } else assert.equal(property('paused').type, 'boolean');
+        } else if (name === 'automation.set_paused') {
+          assert.equal(property('paused').type, 'boolean');
+        } else {
+          assert.deepEqual(Object.keys(properties).sort(), ['automationId', 'expectedRevision']);
+        }
       }
     }
   } finally { f.close(); }
 });
 
-test('system prompt explicitly teaches automation tools and fixed-interval rather than calendar or implicit OS cron scheduling', () => {
+test('system prompt explicitly teaches automation tools, calendar schedules, fixed intervals, deletion, and no implicit OS cron', () => {
   const prompt = outpostSystemPrompt([]);
   for (const name of names) assert.ok(prompt.includes(name), `${name} must be explained, not merely serialized in the catalogue`);
   assert.match(prompt, /fixed[- ]interval/i);
   assert.match(prompt, /calendar/i);
   assert.match(prompt, /cron/i);
+  assert.match(prompt, /IANA/);
   assert.match(prompt, /(?:OS|operating.system|system)[^\n]*cron|crontab/i);
   assert.match(prompt, /explicit/i);
   assert.match(prompt, /full_control without per-action approval/);
   assert.doesNotMatch(prompt, /ask_permission|Request permission|Stop and explain pending approvals|normal permission and evidence gates/);
 });
 
-test('save, list, update, pause and resume reuse the UI automation records and preserve a non-UUID id', async () => {
+test('save, list, update, pause, resume and delete reuse the UI automation records and preserve a non-UUID id', async () => {
   const f = fixture();
   try {
     const automationId = 'service-health/every-minute';
@@ -122,23 +131,93 @@ test('save, list, update, pause and resume reuse the UI automation records and p
     const resumed = AutomationRecord.parse(await f.run('automation.set_paused', { automationId, expectedRevision: 3, paused: false }));
     assert.equal(resumed.revision, 4); assert.deepEqual(resumed.data, updated.data);
     assert.deepEqual(resumed, f.db.need('automation', automationId));
+    const deleted = DeletedAutomationRecord.parse(await f.run('automation.delete', { automationId, expectedRevision: 4 }));
+    assert.equal(deleted.id, automationId); assert.equal(deleted.revision, 5);
+    assert.equal(f.db.get('automation', automationId), undefined);
+    const afterDelete = AutomationPage.parse(await f.run('automation.list', { automationId }));
+    assert.deepEqual(afterDelete.automations, []); assert.equal(afterDelete.total, 0);
+    assert.deepEqual(f.coordinator.scheduler.tick(1000), []);
   } finally { f.close(); }
 });
 
-test('save executes through the existing Scheduler inside a Ledger transaction, never during proposal', async t => {
+test('calendar schedules save, pause, resume, tick across DST, and reject invalid definitions at parse time through tools', async () => {
+  const f = fixture();
+  try {
+    const automationId = 'ny-weekday-standup';
+    const saved = AutomationRecord.parse(await f.run('automation.save', {
+      automationId,
+      expectedRevision: 0,
+      schedule: {
+        name: 'NY standup',
+        timezone: 'America/New_York',
+        nextAt: Date.parse('2026-03-06T12:00:00Z'),
+        intervalMs: null,
+        missed: 'coalesce',
+        calendar: { kind: 'cron', expression: '0 9 * * 1-5', timezone: 'America/New_York', gap: 'skip', fold: 'earlier' },
+        task: { goal: 'Post standup summary', profile: 'operations' },
+      },
+    }));
+    assert.equal(saved.data.nextAt, Date.parse('2026-03-06T14:00:00Z'));
+    // Pause and resume preserve nextAt.
+    const paused = AutomationRecord.parse(await f.run('automation.set_paused', { automationId, expectedRevision: 1, paused: true }));
+    assert.equal(paused.data.nextAt, Date.parse('2026-03-06T14:00:00Z'));
+    const resumed = AutomationRecord.parse(await f.run('automation.set_paused', { automationId, expectedRevision: 2, paused: false }));
+    assert.equal(resumed.data.nextAt, Date.parse('2026-03-06T14:00:00Z'));
+    assert.equal(f.coordinator.scheduler.tick(Date.parse('2026-03-06T14:00:00Z')).length, 1);
+    // Crosses spring-forward to 09:00 EDT (13:00Z).
+    assert.equal(f.db.need<Schedule>('automation', automationId).data.nextAt, Date.parse('2026-03-09T13:00:00Z'));
+
+    // Invalid calendar saves fail before proposal.
+    for (const bad of [
+      { intervalMs: 60000, calendar: { kind: 'cron', expression: '0 9 * * *', timezone: 'America/New_York', gap: 'skip', fold: 'earlier' } },
+      { intervalMs: null, timezone: 'UTC', calendar: { kind: 'cron', expression: '0 9 * * *', timezone: 'America/New_York', gap: 'skip', fold: 'earlier' } },
+      { intervalMs: null, timezone: '+05:30', calendar: { kind: 'cron', expression: '0 9 * * *', timezone: '+05:30', gap: 'skip', fold: 'earlier' } },
+      { intervalMs: null, timezone: 'America/New_York', calendar: { kind: 'cron', expression: '@daily', timezone: 'America/New_York', gap: 'skip', fold: 'earlier' } },
+      { intervalMs: null, timezone: 'America/New_York', calendar: { kind: 'cron', expression: '0 0 31 2 *', timezone: 'America/New_York', gap: 'skip', fold: 'earlier' } },
+    ]) {
+      await f.rejects('automation.save', {
+        automationId: 'bad-calendar',
+        expectedRevision: 0,
+        schedule: {
+          name: 'Bad calendar',
+          timezone: 'America/New_York',
+          nextAt: Date.parse('2026-03-06T12:00:00Z'),
+          missed: 'coalesce',
+          task: { goal: 'Never', profile: 'operations' },
+          ...bad,
+        },
+      });
+    }
+  } finally { f.close(); }
+});
+
+test('save and delete execute through the existing Scheduler inside a Ledger transaction, never during proposal', async t => {
   const f = fixture();
   try {
     const save = f.coordinator.scheduler.save.bind(f.coordinator.scheduler);
-    const delegated = t.mock.method(f.coordinator.scheduler, 'save', (key: string, expected: number, input: unknown) => {
+    const delegatedSave = t.mock.method(f.coordinator.scheduler, 'save', (key: string, expected: number, input: unknown) => {
       assert.equal(f.db.db.isTransaction, true, 'Execute must validate and save in the same transaction');
       return save(key, expected, input);
     });
+    const del = f.coordinator.scheduler.delete.bind(f.coordinator.scheduler);
+    const delegatedDelete = t.mock.method(f.coordinator.scheduler, 'delete', (key: string, expected: number) => {
+      assert.equal(f.db.db.isTransaction, true, 'Execute must validate and delete in the same transaction');
+      return del(key, expected);
+    });
     const action = await f.propose('automation.save', { automationId: 'transactional-save', expectedRevision: 0, schedule: schedule() });
-    assert.equal(delegated.mock.callCount(), 0);
+    assert.equal(delegatedSave.mock.callCount(), 0);
     const observed = await f.gate.dispatch(action.id);
     assert.equal(observed.data.state, 'succeeded', JSON.stringify(observed.data.result));
-    assert.equal(delegated.mock.callCount(), 1);
+    assert.equal(delegatedSave.mock.callCount(), 1);
     assert.deepEqual(AutomationRecord.parse(observed.data.result), f.db.need('automation', 'transactional-save'));
+
+    const deleteAction = await f.propose('automation.delete', { automationId: 'transactional-save', expectedRevision: 1 });
+    assert.equal(delegatedDelete.mock.callCount(), 0);
+    const deleted = await f.gate.dispatch(deleteAction.id);
+    assert.equal(deleted.data.state, 'succeeded', JSON.stringify(deleted.data.result));
+    assert.equal(delegatedDelete.mock.callCount(), 1);
+    assert.equal(DeletedAutomationRecord.parse(deleted.data.result).revision, 2);
+    assert.equal(f.db.get('automation', 'transactional-save'), undefined);
   } finally { f.close(); }
 });
 
@@ -187,30 +266,35 @@ test('tool-created automations run through the existing Scheduler with full_cont
   } finally { f.close(); }
 });
 
-test('legacy ask_permission save, pause and resume require exact approvals', async () => {
-  const f = fixture('ask_permission');
+for (const mode of ['ask_permission', 'auto'] as const) test(`${mode} save, pause, resume and delete require exact approvals`, async () => {
+  const f = fixture(mode);
   try {
     const automationId = 'owner-approved';
     for (const [name, input] of [
       ['automation.save', { automationId, expectedRevision: 0, schedule: schedule() }],
       ['automation.set_paused', { automationId, expectedRevision: 1, paused: true }],
       ['automation.set_paused', { automationId, expectedRevision: 2, paused: false }],
+      ['automation.delete', { automationId, expectedRevision: 3 }],
     ] as const) {
       const before = f.db.list('automation');
       const action = await f.propose(name, input);
       assert.equal(action.data.state, 'pending'); assert.deepEqual(action.data.effects, ['automation.write']);
-      assert.deepEqual(f.db.list('automation'), before, 'Proposal alone must not write the schedule');
+      assert.deepEqual(f.db.list('automation'), before, 'Proposal alone must not write or delete the schedule');
       assert.equal(f.db.need('inbox', action.id).data.state, 'pending');
       await assert.rejects(f.gate.dispatch(action.id), /not_authorized/);
       f.approve(action);
       const observed = await f.gate.dispatch(action.id);
       assert.equal(observed.data.state, 'succeeded');
-      assert.equal(AutomationRecord.parse(observed.data.result).revision, input.expectedRevision + 1);
+      const result = name === 'automation.delete'
+        ? DeletedAutomationRecord.parse(observed.data.result)
+        : AutomationRecord.parse(observed.data.result);
+      assert.equal(result.revision, input.expectedRevision + 1);
     }
+    assert.equal(f.db.list('automation').length, 0);
   } finally { f.close(); }
 });
 
-test('stale save and pause revisions, and updates to missing ids, are rejected before proposal', async () => {
+test('stale save, pause and delete revisions, and updates to missing ids, are rejected before proposal', async () => {
   const f = fixture();
   try {
     f.coordinator.scheduler.save('existing', 0, schedule());
@@ -219,20 +303,25 @@ test('stale save and pause revisions, and updates to missing ids, are rejected b
     await f.rejects('automation.save', { automationId: 'missing', expectedRevision: 1, schedule: schedule() });
     await f.rejects('automation.set_paused', { automationId: 'existing', expectedRevision: 2, paused: true });
     await f.rejects('automation.set_paused', { automationId: 'missing', expectedRevision: 1, paused: true });
+    await f.rejects('automation.delete', { automationId: 'existing', expectedRevision: 2 });
+    await f.rejects('automation.delete', { automationId: 'missing', expectedRevision: 1 });
     assert.deepEqual(f.db.list('automation'), before);
   } finally { f.close(); }
 });
 
-for (const operation of ['create', 'update', 'pause', 'resume'] as const) {
+for (const operation of ['create', 'update', 'pause', 'resume', 'delete'] as const) {
   for (const mode of ['full_control', 'ask_permission'] as const) test(`${operation} revalidates revisions for ${mode}; stale dispatch is rejected before execution without overwriting newer data`, async () => {
     const f = fixture(mode);
     try {
       const automationId = 'concurrent-schedule';
       const existing = operation === 'create' ? undefined : f.coordinator.scheduler.save(automationId, 0, schedule({ paused: operation === 'resume' }));
-      const name = operation === 'create' || operation === 'update' ? 'automation.save' : 'automation.set_paused';
+      const name = operation === 'create' || operation === 'update' ? 'automation.save'
+        : operation === 'delete' ? 'automation.delete' : 'automation.set_paused';
       const input = name === 'automation.save'
         ? { automationId, expectedRevision: existing?.revision ?? 0, schedule: schedule({ name: 'Proposed value' }) }
-        : { automationId, expectedRevision: existing!.revision, paused: operation === 'pause' };
+        : name === 'automation.delete'
+          ? { automationId, expectedRevision: existing!.revision }
+          : { automationId, expectedRevision: existing!.revision, paused: operation === 'pause' };
       const action = await f.propose(name, input);
       if (action.data.state === 'pending') f.approve(action);
       const concurrent = f.coordinator.scheduler.save(automationId, existing?.revision ?? 0, schedule({ name: 'Concurrent owner edit', paused: operation === 'resume' }));
@@ -243,7 +332,7 @@ for (const operation of ['create', 'update', 'pause', 'resume'] as const) {
   });
 }
 
-test('invalid list/save/pause inputs fail at parse time without action or automation writes', async () => {
+test('invalid list/save/pause/delete inputs fail at parse time without action or automation writes', async () => {
   const f = fixture();
   try {
     for (const input of [null, [], { extra: true }, { automationId: 1 }, { limit: 0 }, { limit: 101 }, { limit: 1.5 }, { limit: '50' }, { offset: -1 }, { offset: 0.5 }, { offset: '0' }]) await f.rejects('automation.list', input);
@@ -258,6 +347,8 @@ test('invalid list/save/pause inputs fail at parse time without action or automa
     f.coordinator.scheduler.save('existing', 0, schedule());
     const pause = { automationId: 'existing', expectedRevision: 1, paused: true };
     for (const input of [null, [], {}, { ...pause, expectedRevision: 0 }, { ...pause, expectedRevision: -1 }, { ...pause, expectedRevision: 1.5 }, { ...pause, expectedRevision: '1' }, { ...pause, paused: 'true' }, { ...pause, extra: true }]) await f.rejects('automation.set_paused', input);
+    const del = { automationId: 'existing', expectedRevision: 1 };
+    for (const input of [null, [], {}, { ...del, automationId: '' }, { ...del, expectedRevision: 0 }, { ...del, expectedRevision: -1 }, { ...del, expectedRevision: 1.5 }, { ...del, expectedRevision: '1' }, { ...del, extra: true }]) await f.rejects('automation.delete', input);
     assert.equal(f.db.list('action').length, 0); assert.equal(f.db.list('automation').length, 1);
   } finally { f.close(); }
 });
@@ -275,7 +366,7 @@ test('valid boundary ids, one-shot schedules and IANA timezones are accepted', a
   } finally { f.close(); }
 });
 
-for (const sourceMode of ['ask_permission', 'auto', 'full_control'] as const) test(`${sourceMode} can save, pause and resume after required review, preserving each child mode`, async () => {
+for (const sourceMode of ['ask_permission', 'auto', 'full_control'] as const) test(`${sourceMode} can save, pause, resume and delete after required review, preserving each child mode`, async () => {
   const f = fixture(sourceMode);
   try {
     for (const childMode of ['ask_permission', 'auto', 'full_control'] as const) {
@@ -287,6 +378,8 @@ for (const sourceMode of ['ask_permission', 'auto', 'full_control'] as const) te
       assert.equal(f.db.need<Schedule>('automation', automationId).data.paused, true);
       await f.run('automation.set_paused', { automationId, expectedRevision: 2, paused: false });
       assert.equal(f.db.need<Schedule>('automation', automationId).data.paused, false);
+      await f.run('automation.delete', { automationId, expectedRevision: 3 });
+      assert.equal(f.db.get('automation', automationId), undefined);
     }
     assert.equal(f.db.list('inbox').filter(row => row.data.state === 'pending').length, 0);
   } finally { f.close(); }
@@ -333,6 +426,7 @@ for (const hold of ['recovery', 'invalid recovery', 'draining', 'holding', 'prep
         ['automation.save', { automationId: 'existing', expectedRevision: 1, schedule: schedule({ name: 'Changed' }) }],
         ['automation.set_paused', { automationId: 'existing', expectedRevision: 1, paused: true }],
         ['automation.set_paused', { automationId: 'paused', expectedRevision: 1, paused: false }],
+        ['automation.delete', { automationId: 'existing', expectedRevision: 1 }],
       ] as const;
       const proposals: RecordValue<Action>[] = [];
       if (phase === 'after proposal') for (const [name, input] of writes) proposals.push(await f.propose(name, input));
