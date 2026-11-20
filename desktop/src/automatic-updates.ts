@@ -52,6 +52,15 @@ function validStatus(value: AutomaticUpdatesStatus): boolean {
     value.servers.every(server => !!server && typeof server.environmentId === 'string' && typeof server.state === 'string' && typeof server.message === 'string' && (server.releaseId === undefined || typeof server.releaseId === 'string'));
 }
 
+const recoveryErrorMessages = new Set([
+  'Only a verified pre-activation failure can use this recovery',
+  'Only a verified pre-activation idle timeout can use this recovery',
+  'Another server owns the update queue',
+  'The coordinator has not confirmed a released maintenance hold on the previous release; nothing was cleared',
+  'Host inspection could not be verified; nothing was cleared',
+  'Recovery refused: the failed operation, released maintenance hold, stopped updater and previous release must all agree',
+]);
+
 type Command = 'automatic_updates_status' | 'automatic_updates_tick' | 'automatic_updates_enable' | 'automatic_updates_disable' | 'automatic_updates_recover';
 interface ControllerOptions {
   input: () => AutomaticUpdatesInput;
@@ -93,7 +102,14 @@ export function createAutomaticUpdatesController({ input, invoke, working = { cu
     } catch (error) {
       if (running && ticket === generation && automaticUpdatesAllowed(input())) {
         needsStatus = true;
-        publish({ uncertain: true, error: command === 'automatic_updates_recover' ? (typeof error === 'string' && ['Only a verified pre-activation idle timeout can use this recovery', 'Another server owns the update queue', 'The coordinator has not confirmed a released maintenance hold on the previous release; nothing was cleared', 'Host inspection could not be verified; nothing was cleared', 'Recovery refused: the failed operation, released maintenance hold, stopped updater and previous release must all agree'].includes(error) ? error : 'Recovery could not be verified. The retained operation must be inspected; no restart was automatically repeated.') : 'Supervisor status could not be confirmed. An enrollment or update may still be running. Outpost will reconcile native status; it will not repeat enrollment or blindly retry a launch.' });
+        publish({
+          uncertain: true,
+          error: command === 'automatic_updates_recover'
+            ? (typeof error === 'string' && recoveryErrorMessages.has(error)
+              ? error
+              : 'Recovery could not be verified. The retained operation must be inspected; no restart was automatically repeated.')
+            : 'Supervisor status could not be confirmed. An enrollment or update may still be running. Outpost will reconcile native status; it will not repeat enrollment or blindly retry a launch.',
+        });
       }
     } finally {
       working.current = false;
@@ -138,14 +154,18 @@ export function createAutomaticUpdatesController({ input, invoke, working = { cu
       return accepted;
     },
     async enable(approved: boolean, password = true, reviewedIds = automaticUpdateTargets(input())) {
-      const environmentIds = automaticUpdateTargets(input());
-      // Consent is bound to the entire current registry, not the selected connection or an obsolete dialog.
-      if (!approved || !environmentIds.length || !snapshot.status || snapshot.status.enabled || snapshot.uncertain || automaticUpdatesPending(snapshot.status) ||
-        JSON.stringify(environmentIds) !== JSON.stringify([...reviewedIds].sort())) return false;
+      const availableIds = automaticUpdateTargets(input());
+      const environmentIds = [...new Set(reviewedIds)].sort();
+      // Consent is bound only to the explicitly selected saved, nonretired servers.
+      if (!approved || !environmentIds.length || !snapshot.status || snapshot.uncertain || automaticUpdatesPending(snapshot.status) ||
+        !environmentIds.every(id => availableIds.includes(id)) ||
+        (snapshot.status.enabled && environmentIds.every(id => snapshot.status!.targets.includes(id)))) return false;
       const accepted = await request('automatic_updates_enable', { environmentIds, approved: true, password });
       // Native may return a valid status while a partial enrollment remains reserved.
       return accepted && !!snapshot.status?.enabled && environmentIds.every(id => snapshot.status?.targets.includes(id)) && !automaticUpdatesPending(snapshot.status);
     },
-    disable: () => request('automatic_updates_disable'),
+    disable: (environmentId?: string) => environmentId
+      ? request('automatic_updates_disable', { environmentId })
+      : request('automatic_updates_disable'),
   };
 }

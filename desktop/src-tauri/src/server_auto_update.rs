@@ -819,15 +819,82 @@ pub fn automatic_updates_status(setup: tauri::State<'_, Arc<Setup>>) -> Result<V
     setup.ready()?;
     Ok(Journal::read(&setup.directory)?.status())
 }
+fn disable_targets(journal: &mut Journal, environment_id: Option<&str>) -> Result<(), String> {
+    if let Some(id) = environment_id {
+        environments::validate_id(id)?;
+        journal.targets.retain(|target| target != id);
+        if let Some(server) = journal.servers.get_mut(id) {
+            server.message = "Local automatic launching disabled for this server. The server sudo grant is NOT revoked; existing operations are still inspected.".into();
+        }
+        if journal.targets.is_empty() {
+            journal.enabled = false;
+        }
+    } else {
+        journal.enabled = false;
+        for server in journal.servers.values_mut() {
+            server.message = "Local automatic launching disabled. The server sudo grant is NOT revoked; existing operations are still inspected.".into();
+        }
+    }
+    Ok(())
+}
+fn resolve_enrollment_targets(
+    saved_ids: &[String],
+    requested: Vec<String>,
+) -> Result<Vec<String>, String> {
+    let ids = if requested.is_empty() {
+        saved_ids.to_vec()
+    } else {
+        requested
+    };
+    if ids.is_empty() || ids.len() > 128 || ids.iter().collect::<BTreeSet<_>>().len() != ids.len() {
+        return Err("Choose distinct saved SSH environments".into());
+    }
+    for id in &ids {
+        environments::validate_id(id)?;
+        if !saved_ids.iter().any(|saved| saved == id) {
+            return Err("Automatic updates require saved pinned SSH environments".into());
+        }
+    }
+    Ok(ids)
+}
+fn merge_enrollment_targets(journal: &mut Journal, saved_ids: &[String], ids: &[String]) {
+    let mut targets: Vec<String> = if journal.enabled {
+        journal
+            .targets
+            .iter()
+            .filter(|existing| {
+                saved_ids.iter().any(|saved| saved == *existing)
+                    && journal
+                        .servers
+                        .get(*existing)
+                        .is_some_and(|server| server.policy.is_some())
+            })
+            .cloned()
+            .collect()
+    } else {
+        Vec::new()
+    };
+    for id in ids {
+        if !targets.contains(id) {
+            targets.push(id.clone());
+        }
+        journal
+            .servers
+            .entry(id.clone())
+            .or_insert_with(|| Server::new(id.clone()));
+    }
+    journal.targets = targets;
+    journal.enabled = true;
+}
 #[tauri::command]
-pub fn automatic_updates_disable(setup: tauri::State<'_, Arc<Setup>>) -> Result<Value, String> {
+pub fn automatic_updates_disable(
+    setup: tauri::State<'_, Arc<Setup>>,
+    environment_id: Option<String>,
+) -> Result<Value, String> {
     let _guard = acquire_global(&setup.directory)?;
     setup.ready()?;
     let mut journal = Journal::read(&setup.directory)?;
-    journal.enabled = false;
-    for server in journal.servers.values_mut() {
-        server.message = "Local automatic launching disabled. The server sudo grant is NOT revoked; existing operations are still inspected.".into();
-    }
+    disable_targets(&mut journal, environment_id.as_deref())?;
     journal.write(&setup.directory)?;
     Ok(journal.status())
 }
@@ -866,43 +933,22 @@ pub async fn automatic_updates_enable(
     }
     unresolved_manual(&setup, None)?;
     let bindings = registry.ssh_bindings()?;
-    let ids = if environment_ids.is_empty() {
-        bindings
-            .iter()
-            .map(|(id, _)| id.clone())
-            .collect::<Vec<_>>()
-    } else {
-        environment_ids
-    };
-    if ids.is_empty() || ids.len() > 128 || ids.iter().collect::<BTreeSet<_>>().len() != ids.len() {
-        return Err("Choose distinct saved SSH environments".into());
-    }
+    let saved_ids: Vec<String> = bindings.iter().map(|(id, _)| id.clone()).collect();
+    let ids = resolve_enrollment_targets(&saved_ids, environment_ids)?;
     let host = bundled_artifact(&app, ArtifactResource::Host)?
         .ok_or("Signed bundled release unavailable")?;
     let pi = bundled_artifact(&app, ArtifactResource::Pi)?;
+    // Do not alter journal.enabled or journal.targets on disk until every selected
+    // server finishes enrollment; pre-prompt errors or cancelled dialogs preserve
+    // already-enabled servers untouched, while interrupted enrollments reserve
+    // active_environment_id in Phase::Enrolling without activating unselected hosts.
     for id in &ids {
-        environments::validate_id(id)?;
-        if !bindings.iter().any(|(saved, _)| saved == id) {
-            return Err("Automatic updates require saved pinned SSH environments".into());
-        }
-    }
-    journal.targets = ids.clone();
-    // Do not launch on the first host if a later target's enrollment fails.
-    journal.enabled = false;
-    for id in &ids {
-        journal
-            .servers
-            .entry(id.clone())
-            .or_insert_with(|| Server::new(id.clone()));
-    }
-    journal.write(&setup.directory)?;
-    for id in ids {
         let binding = &bindings
             .iter()
-            .find(|(saved, _)| saved == &id)
+            .find(|(saved, _)| saved == id)
             .ok_or("Saved route missing")?
             .1;
-        let state = registry.get(&id)?;
+        let state = registry.get(id)?;
         // Authentication succeeds with the existing device, never a replacement enrollment.
         let installed = state
             .agent_request(json!({"type":"runtime.inventory"}))
@@ -920,7 +966,7 @@ pub async fn automatic_updates_enable(
         let publisher = artifact["authorization"]["publisherPublicKey"]
             .as_str()
             .ok_or("Publisher pin missing")?;
-        let expected = policy(&id, &device.0, publisher, &entry.target.user);
+        let expected = policy(id, &device.0, publisher, &entry.target.user);
 
         let observed = {
             let setup = setup.inner().clone();
@@ -930,13 +976,16 @@ pub async fn automatic_updates_enable(
                 .map_err(|_| "Policy inspection interrupted")??
         };
         let action = enrollment_action(
-            journal.servers[&id].policy.as_ref(),
+            journal.servers.get(id).and_then(|server| server.policy.as_ref()),
             &observed,
             &public_policy(&expected),
         )?;
         let previous = match action {
             EnrollmentAction::Existing => {
-                let server = journal.servers.get_mut(&id).ok_or("Missing target")?;
+                let server = journal
+                    .servers
+                    .entry(id.clone())
+                    .or_insert_with(|| Server::new(id.clone()));
                 server.policy = Some(observed);
                 server.previous_policy = None;
                 server.enrollment_attempt_id = None;
@@ -959,11 +1008,16 @@ pub async fn automatic_updates_enable(
             .map_err(|_| "Native enrollment prompt interrupted")??
         };
         let attempt = renewal.then(|| Uuid::new_v4().to_string());
-        let server = journal.servers.get_mut(&id).ok_or("Missing target")?;
-        server.policy = Some(public_policy(&expected));
-        server.previous_policy = previous.clone();
-        server.enrollment_attempt_id = attempt.clone();
-        journal.hold(&id,Phase::Enrolling,"Enrollment reserved. If interrupted, inspect public policy only; never repeat root bootstrap automatically.");
+        {
+            let server = journal
+                .servers
+                .entry(id.clone())
+                .or_insert_with(|| Server::new(id.clone()));
+            server.policy = Some(public_policy(&expected));
+            server.previous_policy = previous.clone();
+            server.enrollment_attempt_id = attempt.clone();
+        }
+        journal.hold(id,Phase::Enrolling,"Enrollment reserved. If interrupted, inspect public policy only; never repeat root bootstrap automatically.");
         journal.write(&setup.directory)?;
         let result = {
             let setup = setup.inner().clone();
@@ -984,7 +1038,7 @@ pub async fn automatic_updates_enable(
         match result {
             Ok(()) => {
                 journal.active_environment_id = None;
-                let s = journal.servers.get_mut(&id).ok_or("Missing target")?;
+                let s = journal.servers.get_mut(id).ok_or("Missing target")?;
                 s.state = Phase::Ready;
                 s.previous_policy = None;
                 s.enrollment_attempt_id = None;
@@ -992,14 +1046,14 @@ pub async fn automatic_updates_enable(
                     "Enrolled current helper; waiting for an idle-drained signed update".into();
             }
             Err(_) => {
-                journal.hold(&id,Phase::Enrolling,"Enrollment could not be confirmed. Public-policy inspection only; the password is not retained.");
+                journal.hold(id,Phase::Enrolling,"Enrollment could not be confirmed. Public-policy inspection only; the password is not retained.");
                 journal.write(&setup.directory)?;
                 return Ok(journal.status());
             }
         }
         journal.write(&setup.directory)?;
     }
-    journal.enabled = true;
+    merge_enrollment_targets(&mut journal, &saved_ids, &ids);
     journal.write(&setup.directory)?;
     Ok(journal.status())
 }
@@ -1337,14 +1391,10 @@ fn should_launch(journal: &Journal, id: &str, review: Option<&Value>, time: u64)
         && journal.targets.iter().any(|target| target == id)
         && server.state == Phase::Checked
         && server.policy.is_some()
-        && !journal.targets.iter().any(|target| {
-            journal.servers.get(target).is_some_and(|s| {
-                matches!(
-                    s.state,
-                    Phase::Failed | Phase::RolledBack | Phase::Blocked | Phase::NeedsAttention
-                )
-            })
-        })
+        && !journal
+            .servers
+            .values()
+            .any(|s| matches!(s.state, Phase::Unknown | Phase::Enrolling))
         && review["state"] == "review"
         && review["available"] == true
         && review["environmentId"] == id
@@ -1384,10 +1434,31 @@ fn apply_progress(journal: &mut Journal, id: &str, review: &Value) -> Result<(),
     {
         return Err("Automatic operation binding mismatch; queue held".into());
     }
+    match review["state"].as_str() {
+        Some("failed") => {
+            if let Some(server) = journal.servers.get_mut(id) {
+                server.state = Phase::Failed;
+                server.message = "Update failed. No automatic retry for this server; other servers may continue".into();
+            }
+            if journal.active_environment_id.as_deref() == Some(id) {
+                journal.active_environment_id = None;
+            }
+            return Ok(());
+        }
+        Some("rolled_back") => {
+            if let Some(server) = journal.servers.get_mut(id) {
+                server.state = Phase::RolledBack;
+                server.message = "Update rolled back. No automatic retry for this server; other servers may continue".into();
+            }
+            if journal.active_environment_id.as_deref() == Some(id) {
+                journal.active_environment_id = None;
+            }
+            return Ok(());
+        }
+        _ => {}
+    }
     let (phase,message)=match review["state"].as_str() {
         Some("complete")=>(Phase::Verifying,"Host reports completion; independently verifying coordinator, worker, host and tools before releasing the queue"),
-        Some("failed")=>(Phase::Failed,"Update failed. Queue held; no automatic retry"),
-        Some("rolled_back")=>(Phase::RolledBack,"Update rolled back. Queue held; no automatic retry"),
         Some("queued"|"staging"|"waiting_for_idle"|"activating"|"recovering")=>(Phase::Updating,"Existing updater owns idle draining and recovery; inspecting only"),
         Some("needs_attention"|"cancelled")=>(Phase::NeedsAttention,"Existing operation needs manual attention; queue held"),
         _=>(Phase::Unknown,"Operation outcome uncertain; queue held and launch will not be repeated"),
@@ -1469,8 +1540,14 @@ async fn reconcile(
     }
     if matches!(
         server.state,
-        Phase::Failed | Phase::RolledBack | Phase::NeedsAttention | Phase::Blocked
+        Phase::Failed | Phase::RolledBack | Phase::Blocked
     ) {
+        if journal.active_environment_id.as_deref() == Some(id) {
+            journal.active_environment_id = None;
+        }
+        return Ok(());
+    }
+    if server.state == Phase::NeedsAttention {
         return Ok(());
     }
     if server.state == Phase::Verifying {
@@ -1785,20 +1862,153 @@ async fn postverify(
 #[path = "server_auto_update_tests.rs"]
 mod tests;
 
-fn validate_failed_recovery(review: &Value, environment: &str, owner: &str, maintenance: &Value, host: &Value) -> Result<(), String> {
-    let operation = review["operationId"].as_str().ok_or("Missing retained operation")?;
+fn recoverable_pre_activation_failure(review: &Value) -> Option<&str> {
+    if review["state"] != "failed" {
+        return None;
+    }
+    let stage = review["progress"]["failureStage"].as_str()?;
+    let code = review["progress"]["failureCode"].as_str()?;
+    let allowed = match stage {
+        "preflight" => matches!(
+            code,
+            "preflight_failed"
+                | "installation_changed"
+                | "target_already_exists"
+                | "release_paths_changed"
+                | "unsupported_manifest"
+                | "runtime_pins_mismatch"
+                | "missing_service_files"
+        ),
+        "staging" => code == "staging_failed",
+        "waiting_for_idle" => code == "waiting_for_idle_failed",
+        _ => false,
+    };
+    allowed.then_some(stage)
+}
+
+fn maintenance_safe_for_recovery(
+    stage: &str,
+    operation: &str,
+    owner: &str,
+    digest: &Value,
+    maintenance: &Value,
+) -> bool {
+    let confirmed_cancelled = maintenance["operationId"] == operation
+        && maintenance["owner"] == owner
+        && maintenance["state"] == "cancelled"
+        && maintenance["sha256"] == *digest;
+    if confirmed_cancelled {
+        return true;
+    }
+    stage == "preflight"
+        && maintenance["state"] == "idle"
+        && maintenance.get("operationId").is_none_or(Value::is_null)
+        && maintenance.get("owner").is_none_or(Value::is_null)
+        && maintenance.get("sha256").is_none_or(Value::is_null)
+}
+
+fn validate_failed_recovery(
+    review: &Value,
+    environment: &str,
+    owner: &str,
+    maintenance: &Value,
+    host: &Value,
+) -> Result<(), String> {
+    let operation = review["operationId"]
+        .as_str()
+        .ok_or("Missing retained operation")?;
     environments::validate_id(operation)?;
-    if review["state"] != "failed" || review["progress"]["failureStage"] != "waiting_for_idle"
-        || review["progress"]["failureCode"] != "waiting_for_idle_failed"
-        || maintenance["operationId"] != operation || maintenance["owner"] != owner
-        || maintenance["state"] != "cancelled" || maintenance["sha256"] != review["artifact"]["sha256"]
-        || host["environmentId"] != environment || host["operationId"] != operation
+    let Some(stage) = recoverable_pre_activation_failure(review) else {
+        return Err("Recovery refused: the failed operation, released maintenance hold, stopped updater and previous release must all agree".into());
+    };
+    if !maintenance_safe_for_recovery(
+        stage,
+        operation,
+        owner,
+        &review["artifact"]["sha256"],
+        maintenance,
+    ) || host["environmentId"] != environment
+        || host["operationId"] != operation
+        || host["failureStage"] != stage
         || host["expectedRelease"] != review["installed"]["releaseId"]
-        || host["sha256"] != review["artifact"]["sha256"] || host["state"] != "safe_to_recheck"
-        || ![Some("inactive"), Some("failed")].contains(&host["updaterState"].as_str()) {
+        || host["sha256"] != review["artifact"]["sha256"]
+        || host["state"] != "safe_to_recheck"
+        || ![Some("inactive"), Some("failed")].contains(&host["updaterState"].as_str())
+    {
         return Err("Recovery refused: the failed operation, released maintenance hold, stopped updater and previous release must all agree".into());
     }
     Ok(())
+}
+
+fn inspect_failed_host_over_ssh(
+    setup: &Setup,
+    entry: &Entry,
+    environment_id: &str,
+    operation: &str,
+    expected_release: &str,
+    digest: &str,
+    password: bool,
+) -> Result<Value, String> {
+    let params = [environment_id, operation, expected_release, digest];
+    let source = format!("{}\n", include_str!("../../../deploy/environment/inspect_failed_update.py"));
+    let root = entry.inspection.as_ref().is_some_and(|v| v.uid == 0);
+    let command = format!(
+        "{}{} {}",
+        if root {
+            ""
+        } else if password {
+            "sudo -k -S -p '' -- "
+        } else {
+            "sudo -n -- "
+        },
+        isolated_python(&source),
+        params
+            .iter()
+            .map(|value| format!("'{}'", value.replace('\'', "'\\''")))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+    let mut args = setup.ssh_args(entry)?;
+    args.extend(["--".into(), entry.target.host.clone(), command]);
+    let mut input = zeroize::Zeroizing::new(Vec::new());
+    if !root && password {
+        let prompt = serde_json::to_string(&format!(
+            "Inspect the stopped Outpost update on {}@{}. This read-only check does not restart services. The password is not saved.",
+            entry.target.user, entry.target.host
+        ))
+        .map_err(|_| "Invalid prompt")?;
+        let script = format!("text returned of (display dialog {prompt} default answer \"\" with hidden answer buttons {{\"Cancel\",\"Inspect update\"}} default button \"Inspect update\" with title \"Outpost recovery\")");
+        let mut secret = zeroize::Zeroizing::new(run(
+            "/usr/bin/osascript",
+            &["-e".into(), script],
+            b"",
+            Duration::from_secs(180),
+            &AtomicBool::new(false),
+        )?);
+        while matches!(secret.last(), Some(b'\n' | b'\r')) {
+            secret.pop();
+        }
+        if secret.is_empty()
+            || secret.len() > 1024
+            || secret.contains(&b'\n')
+            || secret.contains(&b'\r')
+            || secret.contains(&0)
+        {
+            return Err("Invalid authorization input".into());
+        }
+        input.extend_from_slice(&secret);
+        input.push(b'\n');
+        secret.fill(0);
+    }
+    let bytes = run(
+        setup.ssh_program(),
+        &args,
+        &input,
+        Duration::from_secs(30),
+        &AtomicBool::new(false),
+    )
+    .map_err(|_| "Host inspection could not be verified; nothing was cleared")?;
+    serde_json::from_slice(&bytes).map_err(|_| "Invalid host inspection".into())
 }
 
 #[tauri::command]
@@ -1810,54 +2020,88 @@ pub async fn automatic_updates_recover(
     approved: bool,
     password: bool,
 ) -> Result<Value, String> {
-    if !approved { return Err("Recovery must be explicitly requested".into()); }
+    if !approved {
+        return Err("Recovery must be explicitly requested".into());
+    }
     let _global = acquire_global(&setup.directory)?;
     let mut journal = Journal::read(&setup.directory)?;
-    if journal.active_environment_id.as_deref().is_some_and(|id| id != environment_id) {
+    if journal
+        .active_environment_id
+        .as_deref()
+        .is_some_and(|id| id != environment_id)
+    {
         return Err("Another server owns the update queue".into());
     }
     let review = load(&setup, &environment_id)?;
-    if review["state"] != "failed" || review["progress"]["failureCode"] != "waiting_for_idle_failed" {
-        return Err("Only a verified pre-activation idle timeout can use this recovery".into());
-    }
+    let Some(stage) = recoverable_pre_activation_failure(&review) else {
+        return Err("Only a verified pre-activation failure can use this recovery".into());
+    };
+    let operation = review["operationId"]
+        .as_str()
+        .ok_or("Operation missing")?;
+    environments::validate_id(operation)?;
     let state = registry.get(&environment_id)?;
     let owner = public_identity(&state)?.0;
-    let maintenance = state.agent_request(json!({"type":"maintenance.status"})).await?;
-    if maintenance["state"] != "cancelled" || maintenance["owner"] != owner
-        || maintenance["operationId"] != review["operationId"] || maintenance["sha256"] != review["artifact"]["sha256"]
-        {
+    let maintenance = state
+        .agent_request(json!({"type":"maintenance.status"}))
+        .await?;
+    if !maintenance_safe_for_recovery(
+        stage,
+        operation,
+        &owner,
+        &review["artifact"]["sha256"],
+        &maintenance,
+    ) {
         return Err("The coordinator has not confirmed a released maintenance hold on the previous release; nothing was cleared".into());
     }
     let entry = setup.entry(review["setupId"].as_str().ok_or("Saved SSH route missing")?)?;
-    let operation = review["operationId"].as_str().ok_or("Operation missing")?;
-    environments::validate_id(operation)?;
-    let params = [environment_id.as_str(), operation, review["installed"]["releaseId"].as_str().ok_or("Previous release missing")?, review["artifact"]["sha256"].as_str().ok_or("Release digest missing")?];
-    let source = format!("{}\n", include_str!("../../../deploy/environment/inspect_failed_update.py"));
-    let root = entry.inspection.as_ref().is_some_and(|v| v.uid == 0);
-    let command = format!("{}{} {}", if root { "" } else if password { "sudo -k -S -p '' -- " } else { "sudo -n -- " }, isolated_python(&source), params.iter().map(|value| format!("'{}'", value.replace('\'', "'\\''"))).collect::<Vec<_>>().join(" "));
-    let mut args = setup.ssh_args(&entry)?;
-    args.extend(["--".into(), entry.target.host.clone(), command]);
-    let host = tauri::async_runtime::spawn_blocking(move || -> Result<Value, String> {
-        let mut input = zeroize::Zeroizing::new(Vec::new());
-        if !root && password {
-            let prompt = serde_json::to_string(&format!("Inspect the stopped Outpost update on {}@{}. This read-only check does not restart services. The password is not saved.", entry.target.user, entry.target.host)).map_err(|_| "Invalid prompt")?;
-            let script = format!("text returned of (display dialog {prompt} default answer \"\" with hidden answer buttons {{\"Cancel\",\"Inspect update\"}} default button \"Inspect update\" with title \"Outpost recovery\")");
-            let mut secret = zeroize::Zeroizing::new(run("/usr/bin/osascript", &["-e".into(), script], b"", Duration::from_secs(180), &AtomicBool::new(false))?);
-            while matches!(secret.last(), Some(b'\n' | b'\r')) { secret.pop(); }
-            if secret.is_empty() || secret.len() > 1024 || secret.contains(&b'\n') { return Err("Invalid authorization input".into()); }
-            input.extend_from_slice(&secret); input.push(b'\n'); secret.fill(0);
-        }
-        let bytes = run("/usr/bin/ssh", &args, &input, Duration::from_secs(30), &AtomicBool::new(false)).map_err(|_| "Host inspection could not be verified; nothing was cleared")?;
-        serde_json::from_slice(&bytes).map_err(|_| "Invalid host inspection".into())
-    }).await.map_err(|_| "Recovery inspection interrupted")??;
+    let expected_release = review["installed"]["releaseId"]
+        .as_str()
+        .ok_or("Previous release missing")?
+        .to_owned();
+    let digest = review["artifact"]["sha256"]
+        .as_str()
+        .ok_or("Release digest missing")?
+        .to_owned();
+    let host = {
+        let setup = setup.inner().clone();
+        let environment_id = environment_id.clone();
+        let operation = operation.to_owned();
+        tauri::async_runtime::spawn_blocking(move || {
+            inspect_failed_host_over_ssh(
+                &setup,
+                &entry,
+                &environment_id,
+                &operation,
+                &expected_release,
+                &digest,
+                password,
+            )
+        })
+        .await
+        .map_err(|_| "Recovery inspection interrupted")??
+    };
     // Read authenticated coordinator state again after the privileged host probe.
-    let maintenance_after = state.agent_request(json!({"type":"maintenance.status"})).await?;
+    let maintenance_after = state
+        .agent_request(json!({"type":"maintenance.status"}))
+        .await?;
     validate_failed_recovery(&review, &environment_id, &owner, &maintenance, &host)?;
     validate_failed_recovery(&review, &environment_id, &owner, &maintenance_after, &host)?;
-    let archive = setup.directory.join(format!("recovered-update-{}-{}.json", environment_id, operation));
-    private_write(&archive, &serde_json::to_vec(&review).map_err(|_| "Invalid recovery archive")?)?;
-    let server = journal.servers.get_mut(&environment_id).ok_or("Server journal missing")?;
-    server.state = Phase::Ready; server.operation_id = None; server.review_id = None;
+    let archive = setup.directory.join(format!(
+        "recovered-update-{}-{}.json",
+        environment_id, operation
+    ));
+    private_write(
+        &archive,
+        &serde_json::to_vec(&review).map_err(|_| "Invalid recovery archive")?,
+    )?;
+    let server = journal
+        .servers
+        .get_mut(&environment_id)
+        .ok_or("Server journal missing")?;
+    server.state = Phase::Ready;
+    server.operation_id = None;
+    server.review_id = None;
     server.message = "Verified stopped pre-activation failure; retained receipt archived; checking a fresh update".into();
     journal.active_environment_id = None;
     journal.write(&setup.directory)?;
@@ -1869,29 +2113,125 @@ pub async fn automatic_updates_recover(
 #[cfg(test)]
 mod failed_recovery_tests {
     use super::*;
-    fn evidence() -> (Value, Value, Value, Value) {
-        let review = json!({"state":"failed","operationId":"33abaf6c-63dd-4977-a0c9-fba36a2b874b","progress":{"failureStage":"waiting_for_idle","failureCode":"waiting_for_idle_failed"},"artifact":{"sha256":"digest"},"installed":{"releaseId":"previous"}});
+    fn evidence(stage: &str, code: &str) -> (Value, Value, Value, Value) {
+        let review = json!({"state":"failed","operationId":"33abaf6c-63dd-4977-a0c9-fba36a2b874b","progress":{"failureStage":stage,"failureCode":code},"artifact":{"sha256":"digest"},"installed":{"releaseId":"previous"}});
         let maintenance = json!({"operationId":review["operationId"],"owner":"device","state":"cancelled","sha256":"digest"});
         let inventory = json!({"releaseId":"previous"});
-        let host = json!({"environmentId":"environment","operationId":review["operationId"],"expectedRelease":"previous","sha256":"digest","state":"safe_to_recheck","updaterState":"inactive"});
+        let host = json!({"environmentId":"environment","operationId":review["operationId"],"failureStage":stage,"expectedRelease":"previous","sha256":"digest","state":"safe_to_recheck","updaterState":"inactive"});
         (review, maintenance, inventory, host)
     }
     #[test]
     fn recovery_requires_every_bound_piece_of_live_evidence() {
-        let (review, maintenance, _inventory, host) = evidence();
-        assert!(validate_failed_recovery(&review,"environment","device",&maintenance,&host).is_ok());
+        let (review, maintenance, _inventory, host) =
+            evidence("waiting_for_idle", "waiting_for_idle_failed");
+        assert!(validate_failed_recovery(&review, "environment", "device", &maintenance, &host).is_ok());
         for key in ["operationId", "owner", "state", "sha256"] {
-            let mut bad=maintenance.clone(); bad[key]=json!("changed");
-            assert!(validate_failed_recovery(&review,"environment","device",&bad,&host).is_err(),"{key}");
+            let mut bad = maintenance.clone();
+            bad[key] = json!("changed");
+            assert!(
+                validate_failed_recovery(&review, "environment", "device", &bad, &host).is_err(),
+                "{key}"
+            );
         }
-        for key in ["environmentId", "operationId", "expectedRelease", "sha256", "state", "updaterState"] {
-            let mut bad=host.clone(); bad[key]=json!("changed");
-            assert!(validate_failed_recovery(&review,"environment","device",&maintenance,&bad).is_err(),"{key}");
+        for key in [
+            "environmentId",
+            "operationId",
+            "failureStage",
+            "expectedRelease",
+            "sha256",
+            "state",
+            "updaterState",
+        ] {
+            let mut bad = host.clone();
+            bad[key] = json!("changed");
+            assert!(
+                validate_failed_recovery(&review, "environment", "device", &maintenance, &bad)
+                    .is_err(),
+                "{key}"
+            );
         }
-        for state in ["unknown","staging","activating","rolled_back","complete","needs_attention"] {
-            let mut bad=review.clone(); bad["state"]=json!(state);
-            assert!(validate_failed_recovery(&bad,"environment","device",&maintenance,&host).is_err(),"{state}");
+        for state in [
+            "unknown",
+            "staging",
+            "activating",
+            "rolled_back",
+            "complete",
+            "needs_attention",
+        ] {
+            let mut bad = review.clone();
+            bad["state"] = json!(state);
+            assert!(
+                validate_failed_recovery(&bad, "environment", "device", &maintenance, &host)
+                    .is_err(),
+                "{state}"
+            );
         }
-
+    }
+    #[test]
+    fn recovery_allows_all_pre_activation_stages_and_refuses_post_activation() {
+        for (stage, code) in [
+            ("preflight", "preflight_failed"),
+            ("preflight", "runtime_pins_mismatch"),
+            ("preflight", "installation_changed"),
+            ("preflight", "target_already_exists"),
+            ("preflight", "release_paths_changed"),
+            ("preflight", "unsupported_manifest"),
+            ("preflight", "missing_service_files"),
+            ("staging", "staging_failed"),
+            ("waiting_for_idle", "waiting_for_idle_failed"),
+        ] {
+            let (review, maintenance, _, host) = evidence(stage, code);
+            assert!(
+                validate_failed_recovery(&review, "environment", "device", &maintenance, &host)
+                    .is_ok(),
+                "{stage}/{code}"
+            );
+            let idle = json!({"state": "idle"});
+            let idle_result =
+                validate_failed_recovery(&review, "environment", "device", &idle, &host);
+            if stage == "preflight" {
+                assert!(idle_result.is_ok(), "preflight with never-created idle maintenance");
+            } else {
+                assert!(idle_result.is_err(), "{stage} must require bound cancelled maintenance");
+            }
+        }
+        // Even for preflight, an active hold or mismatched operation must still be refused.
+        let (preflight_review, _, _, preflight_host) = evidence("preflight", "preflight_failed");
+        for bad_maint in [
+            json!({"state": "staging", "operationId": preflight_review["operationId"], "owner": "device", "sha256": "digest"}),
+            json!({"state": "draining", "operationId": preflight_review["operationId"], "owner": "device", "sha256": "digest"}),
+            json!({"state": "holding", "operationId": preflight_review["operationId"], "owner": "device", "sha256": "digest"}),
+            json!({"state": "prepared", "operationId": preflight_review["operationId"], "owner": "device", "sha256": "digest"}),
+            json!({"state": "idle", "operationId": "different"}),
+        ] {
+            assert!(
+                validate_failed_recovery(
+                    &preflight_review,
+                    "environment",
+                    "device",
+                    &bad_maint,
+                    &preflight_host
+                )
+                .is_err(),
+                "{bad_maint}"
+            );
+        }
+        for (stage, code) in [
+            ("activating", "activating_failed"),
+            ("health_verification", "health_verification_failed"),
+            ("committing", "committing_failed"),
+            ("releasing_dispatch", "releasing_dispatch_failed"),
+            ("unknown", "unknown_failed"),
+            ("needs_attention", "needs_attention_failed"),
+            ("staging", "waiting_for_idle_failed"),
+            ("preflight", "staging_failed"),
+        ] {
+            let (review, maintenance, _, host) = evidence(stage, code);
+            assert!(
+                validate_failed_recovery(&review, "environment", "device", &maintenance, &host)
+                    .is_err(),
+                "{stage}/{code}"
+            );
+        }
     }
 }

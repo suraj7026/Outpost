@@ -224,11 +224,9 @@ fn global_guard_excludes_all_targets_and_releases_on_drop() {
     println!("{VERIFIED}");
 }
 #[test]
-fn uncertain_failed_and_rollback_receipts_keep_queue_reserved() {
+fn uncertain_receipts_keep_queue_reserved_while_terminal_failures_isolate_to_server() {
     for (state, phase) in [
         ("unknown", Phase::Unknown),
-        ("failed", Phase::Failed),
-        ("rolled_back", Phase::RolledBack),
         ("needs_attention", Phase::NeedsAttention),
         ("recovering", Phase::Updating),
     ] {
@@ -236,6 +234,13 @@ fn uncertain_failed_and_rollback_receipts_keep_queue_reserved() {
         apply_progress(&mut journal, ENVIRONMENT, &receipt(state)).unwrap();
         assert_eq!(journal.servers[ENVIRONMENT].state, phase);
         assert_eq!(journal.active_environment_id.as_deref(), Some(ENVIRONMENT));
+    }
+    for (state, phase) in [("failed", Phase::Failed), ("rolled_back", Phase::RolledBack)] {
+        let mut journal = journal();
+        journal.active_environment_id = Some(ENVIRONMENT.into());
+        apply_progress(&mut journal, ENVIRONMENT, &receipt(state)).unwrap();
+        assert_eq!(journal.servers[ENVIRONMENT].state, phase);
+        assert!(journal.active_environment_id.is_none());
     }
 }
 #[test]
@@ -376,34 +381,57 @@ fn disabled_expired_changed_and_offline_reservations_never_launch() {
     assert!(!should_launch(&journal, ENVIRONMENT, Some(&review), 100));
 }
 #[test]
-fn another_failed_or_blocked_target_holds_the_whole_queue() {
+fn healthy_server_proceeds_when_another_target_is_failed_blocked_or_rolled_back() {
     let (mut journal, review) = checked_journal();
     let mut other = Server::new(DEVICE.into());
-    for phase in [
-        Phase::Failed,
-        Phase::RolledBack,
-        Phase::Blocked,
-        Phase::NeedsAttention,
-    ] {
-        other.state = phase;
+    other.policy = journal.servers[ENVIRONMENT].policy.clone();
+    other.operation_id = Some(OPERATION.into());
+    other.review_id = Some(DEVICE.into());
+    other.release_id = Some("host-aaaaaaaaaaaaaaaaaaaa".into());
+    let mut other_review = review.clone();
+    other_review["environmentId"] = json!(DEVICE);
+    for phase in [Phase::Failed, Phase::RolledBack, Phase::Blocked] {
+        other.state = phase.clone();
         journal.servers.insert(DEVICE.into(), other.clone());
         journal.targets = vec![ENVIRONMENT.into(), DEVICE.into()];
-        assert!(!should_launch(&journal, ENVIRONMENT, Some(&review), 100));
+        assert!(
+            should_launch(&journal, ENVIRONMENT, Some(&review), 100),
+            "Server B should proceed when Server A is {phase:?}"
+        );
+        assert!(
+            !should_launch(&journal, DEVICE, Some(&other_review), 100),
+            "Server A itself must not relaunch while {phase:?}"
+        );
     }
+    // Global pause remains when another server is Unknown/Enrolling or owns active_environment_id.
+    for phase in [Phase::Unknown, Phase::Enrolling] {
+        other.state = phase.clone();
+        journal.servers.insert(DEVICE.into(), other.clone());
+        journal.targets = vec![ENVIRONMENT.into(), DEVICE.into()];
+        assert!(
+            !should_launch(&journal, ENVIRONMENT, Some(&review), 100),
+            "Server B must stay paused when Server A is {phase:?}"
+        );
+    }
+    other.state = Phase::NeedsAttention;
+    journal.servers.insert(DEVICE.into(), other);
+    journal.active_environment_id = Some(DEVICE.into());
+    assert!(!should_launch(&journal, ENVIRONMENT, Some(&review), 100));
 }
 #[test]
 fn failed_or_unknown_receipts_are_adopted_not_replaced() {
-    for phase in [
-        "failed",
-        "rolled_back",
-        "unknown",
-        "authorizing",
-        "waiting_for_idle",
+    for (phase, holds_queue) in [
+        ("failed", false),
+        ("rolled_back", false),
+        ("unknown", true),
+        ("authorizing", true),
+        ("waiting_for_idle", true),
     ] {
         let mut journal = journal();
         let review = receipt(phase);
         adopt_receipt(&mut journal, ENVIRONMENT, &review).unwrap();
-        assert_eq!(journal.active_environment_id.as_deref(), Some(ENVIRONMENT));
+        let expected_owner = holds_queue.then_some(ENVIRONMENT);
+        assert_eq!(journal.active_environment_id.as_deref(), expected_owner);
         assert_eq!(
             journal.servers[ENVIRONMENT].operation_id.as_deref(),
             Some(OPERATION)
@@ -416,7 +444,7 @@ fn failed_or_unknown_receipts_are_adopted_not_replaced() {
                 .unwrap()
                 .active_environment_id
                 .as_deref(),
-            Some(ENVIRONMENT)
+            expected_owner
         );
     }
 }
@@ -1610,4 +1638,172 @@ fn legacy_host_install_policy_blocks_updates_and_offers_renewal() {
         enrollment_action(None, &legacy, &current).unwrap(),
         EnrollmentAction::Renew(legacy)
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn recover_host_inspection_invokes_setup_ssh_program_fixture() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = Fixture::new();
+    let mut setup = Setup::new(fixture.0.clone()).unwrap();
+    let mut key = b"\x00\x00\x00\x0bssh-ed25519\x00\x00\x00\x20".to_vec();
+    key.extend([9; 32]);
+    let (key, fingerprint) =
+        parse_key(&format!("fixture ssh-ed25519 {}", STANDARD.encode(key))).unwrap();
+    let setup_id = Uuid::new_v4().to_string();
+    setup.inner.lock().unwrap().challenges.insert(
+        setup_id.clone(),
+        Challenge {
+            scan: Scan {
+                id: setup_id.clone(),
+                target: Target {
+                    host: "fixture.example".into(),
+                    user: "fixture".into(),
+                    port: 22,
+                    identity_file: None,
+                },
+                fingerprint: fingerprint.clone(),
+            },
+            key,
+            created: Instant::now(),
+        },
+    );
+    let entry = setup
+        .trust(setup_id, fingerprint, "Recovery fixture".into())
+        .unwrap();
+    let marker = fixture.0.join("ssh-invoked.json");
+    let script = fixture.0.join("ssh-fixture");
+    let expected_release = "host-aaaaaaaaaaaaaaaaaaaa";
+    let digest = "b".repeat(64);
+    fs::write(
+        &script,
+        format!(
+            r#"#!/usr/bin/python3
+import json, pathlib, sys
+pathlib.Path({marker:?}).write_text(json.dumps(sys.argv))
+print(json.dumps({{
+    'environmentId': {ENVIRONMENT:?},
+    'operationId': {OPERATION:?},
+    'failureStage': 'staging',
+    'expectedRelease': {expected_release:?},
+    'sha256': {digest:?},
+    'state': 'safe_to_recheck',
+    'updaterState': 'inactive',
+}}))
+"#
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).unwrap();
+    setup.ssh_fixture = Some(script.display().to_string());
+
+    let observed = inspect_failed_host_over_ssh(
+        &setup,
+        &entry,
+        ENVIRONMENT,
+        OPERATION,
+        expected_release,
+        &digest,
+        false,
+    )
+    .unwrap();
+    assert_eq!(observed["state"], "safe_to_recheck");
+    assert_eq!(observed["failureStage"], "staging");
+    let argv: Vec<String> = serde_json::from_str(&fs::read_to_string(&marker).unwrap()).unwrap();
+    assert!(argv.iter().any(|arg| arg == "fixture.example"));
+    assert!(argv
+        .last()
+        .is_some_and(|cmd| cmd.contains("sudo -n -- /usr/bin/python3 -I -c")));
+    // Verify the production recovery function has no hardcoded /usr/bin/ssh literal.
+    assert!(
+        !include_str!("server_auto_update.rs").contains(r#"run("/usr/bin/ssh""#),
+        "server_auto_update.rs must use setup.ssh_program() instead of hardcoded /usr/bin/ssh"
+    );
+}
+
+#[test]
+fn partial_subset_enrollment_and_per_server_disable_preserve_unselected_and_remaining_targets() {
+    let saved = vec![ENVIRONMENT.to_string(), DEVICE.to_string()];
+    // Selecting a single server succeeds without requiring all saved servers.
+    let subset = resolve_enrollment_targets(&saved, vec![ENVIRONMENT.into()]).unwrap();
+    assert_eq!(subset, vec![ENVIRONMENT.to_string()]);
+    assert!(resolve_enrollment_targets(&saved, vec![OPERATION.into()]).is_err());
+    assert!(resolve_enrollment_targets(&saved, vec![ENVIRONMENT.into(), ENVIRONMENT.into()]).is_err());
+
+    let mut journal = Journal::default();
+    // Complete enrollment for ENVIRONMENT only; DEVICE stays unselected.
+    let env_policy = public_policy(&policy(
+        ENVIRONMENT,
+        DEVICE,
+        &STANDARD.encode([7; 32]),
+        "operator",
+    ));
+    let mut server_a = Server::new(ENVIRONMENT.into());
+    server_a.policy = Some(env_policy);
+    server_a.state = Phase::Checked;
+    server_a.operation_id = Some(OPERATION.into());
+    server_a.review_id = Some(DEVICE.into());
+    server_a.release_id = Some("host-aaaaaaaaaaaaaaaaaaaa".into());
+    journal.servers.insert(ENVIRONMENT.into(), server_a);
+    merge_enrollment_targets(&mut journal, &saved, &subset);
+    assert!(journal.enabled);
+    assert_eq!(journal.targets, vec![ENVIRONMENT.to_string()]);
+    assert!(journal.servers.contains_key(ENVIRONMENT));
+    assert!(!journal.servers.contains_key(DEVICE));
+
+    let mut review_a = receipt("review");
+    review_a["available"] = json!(true);
+    review_a["reviewId"] = json!(DEVICE);
+    review_a["expiresAt"] = json!(1000);
+    assert!(should_launch(&journal, ENVIRONMENT, Some(&review_a), 100));
+    let mut review_b = review_a.clone();
+    review_b["environmentId"] = json!(DEVICE);
+    assert!(!should_launch(&journal, DEVICE, Some(&review_b), 100));
+
+    // Interrupted enrollment of DEVICE holds the queue via Phase::Enrolling without
+    // disabling already-enrolled ENVIRONMENT or prematurely adding DEVICE to targets.
+    let mut enrolling_b = Server::new(DEVICE.into());
+    enrolling_b.policy = Some(public_policy(&policy(
+        DEVICE,
+        DEVICE,
+        &STANDARD.encode([7; 32]),
+        "operator",
+    )));
+    journal.servers.insert(DEVICE.into(), enrolling_b);
+    journal.hold(DEVICE, Phase::Enrolling, "Enrollment reserved");
+    assert!(journal.validate().is_ok());
+    assert!(journal.enabled);
+    assert_eq!(journal.targets, vec![ENVIRONMENT.to_string()]);
+    assert!(!should_launch(&journal, ENVIRONMENT, Some(&review_a), 100));
+    assert_eq!(
+        journal.status()["servers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["environmentId"] == DEVICE)
+            .unwrap()["state"],
+        "enrolling"
+    );
+
+    // Completing enrollment of DEVICE preserves already-enrolled ENVIRONMENT in targets.
+    journal.active_environment_id = None;
+    journal.servers.get_mut(DEVICE).unwrap().state = Phase::Ready;
+    let second = resolve_enrollment_targets(&saved, vec![DEVICE.into()]).unwrap();
+    merge_enrollment_targets(&mut journal, &saved, &second);
+    assert!(journal.enabled);
+    assert_eq!(journal.targets, vec![ENVIRONMENT.to_string(), DEVICE.to_string()]);
+
+    // Disabling ENVIRONMENT leaves DEVICE enabled; disabling DEVICE turns enabled off.
+    disable_targets(&mut journal, Some(ENVIRONMENT)).unwrap();
+    assert!(journal.enabled);
+    assert_eq!(journal.targets, vec![DEVICE.to_string()]);
+    assert_eq!(journal.status()["servers"].as_array().unwrap().len(), 2);
+    disable_targets(&mut journal, Some(DEVICE)).unwrap();
+    assert!(!journal.enabled);
+    assert!(journal.targets.is_empty());
+
+    // Re-enabling only ENVIRONMENT after a global disable does not silently re-enable DEVICE.
+    merge_enrollment_targets(&mut journal, &saved, &subset);
+    assert!(journal.enabled);
+    assert_eq!(journal.targets, vec![ENVIRONMENT.to_string()]);
 }
