@@ -300,10 +300,10 @@ export class Coordinator {
     }
     if (type === 'recovery.diagnostics') { RecoveryInput.parse(payload); return wire(this.recoveryDiagnostics()); }
     if (type === 'browser.frame') {
-      const { taskId } = z.strictObject({ taskId: z.uuid() }).parse(payload);
+      const { taskId, lastFrameId } = z.strictObject({ taskId: z.uuid(), lastFrameId: z.string().min(1).max(128).optional() }).parse(payload);
       this.db.need('task',taskId);
       requireThat(this.browsers,'browser_unavailable');
-      return this.browsers.frame(taskId).then(frame => wire({ ...frame, control: this.browserControl?.status(taskId) ?? null, controlEpoch: this.browserControl?.epoch ?? null }));
+      return this.browsers.frame(taskId, lastFrameId).then(frame => wire({ ...frame, control: this.browserControl?.status(taskId) ?? null, controlEpoch: this.browserControl?.epoch ?? null }));
     }
     if (type === 'environment') return wire(this.environmentDescriptor());
     if (type === 'runtime') return wire({ ...this.runtimeStatus(), sharedMemory: true });

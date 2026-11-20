@@ -52,8 +52,13 @@ test('Pi tools and signed viewer use real Camoufox with fresh isolated profiles'
     assert.notEqual((await query('unsigned')).status, 200);
     const signature = sign(null, bytes, keys.privateKey).toString('base64'), before = db.cursor();
     const response = await query(signature); assert.equal(response.status, 200);
-    const frame = await response.json() as { frame: string; capturedAt: string; session: { engine: string } };
+    const frame = await response.json() as { frame: string; frameId: string; capturedAt: string; session: { engine: string } };
     assert.equal(frame.session.engine, 'camoufox'); assert.ok(Buffer.from(frame.frame, 'base64').length > 1000);
+    const repeatBytes = Buffer.from(JSON.stringify({ deviceId, issuedAt: Date.now(), type: 'browser.frame', payload: { taskId: task.id, lastFrameId: frame.frameId } }));
+    const repeatResponse = await fetch(`http://127.0.0.1:${address.port}/v1/query`, { method: 'POST', body: repeatBytes, headers: { 'x-outpost-signature': sign(null, repeatBytes, keys.privateKey).toString('base64') } });
+    assert.equal(repeatResponse.status, 200);
+    const unchanged = await repeatResponse.json() as { unchanged?: boolean; frame?: string; frameId?: string; capturedAt?: string };
+    assert.equal(unchanged.unchanged, true); assert.equal('frame' in unchanged, false); assert.equal(unchanged.frameId, frame.frameId);
     assert.equal(db.cursor(), before, 'Live frames are not durable records');
     coordinator.devices.revoke(deviceId, 1); assert.notEqual((await query(signature)).status, 200);
     await assert.rejects(async () => coordinator.query('browser.frame', { taskId: id() }), /task not found/);
