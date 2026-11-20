@@ -1441,3 +1441,91 @@ fn embedded_python_compiles_without_executing_network_or_privileged_work() {
         String::from_utf8_lossy(&result.stderr)
     );
 }
+
+#[test]
+fn postverify_tools_queries_tools_directly_without_snapshot() {
+    use std::io::{Read, Write};
+    tauri::async_runtime::block_on(async {
+        for (status, reply, expected_some) in [
+            (
+                "200 OK",
+                json!([{"name":"automation.list"},{"name":"automation.save"},{"name":"automation.set_paused"}]),
+                true,
+            ),
+            (
+                "400 Bad Request",
+                json!({"error":"invalid_request","message":"taskId required"}),
+                false,
+            ),
+        ] {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let endpoint = format!("http://{}", listener.local_addr().unwrap());
+            let status = status.to_string();
+            let reply_text = reply.to_string();
+            let server = std::thread::spawn(move || {
+                let (mut socket, _) = listener.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut bytes = Vec::new();
+                let mut buffer = [0u8; 4096];
+                let (header_end, length) = loop {
+                    let count = socket.read(&mut buffer).unwrap();
+                    assert!(count > 0);
+                    bytes.extend_from_slice(&buffer[..count]);
+                    if let Some(end) = bytes.windows(4).position(|part| part == b"\r\n\r\n") {
+                        let headers = String::from_utf8_lossy(&bytes[..end]);
+                        let length: usize = headers
+                            .lines()
+                            .find_map(|line| {
+                                line.to_lowercase()
+                                    .strip_prefix("content-length: ")
+                                    .map(str::to_owned)
+                            })
+                            .unwrap()
+                            .parse()
+                            .unwrap();
+                        break (end + 4, length);
+                    }
+                };
+                while bytes.len() < header_end + length {
+                    let count = socket.read(&mut buffer).unwrap();
+                    assert!(count > 0);
+                    bytes.extend_from_slice(&buffer[..count]);
+                }
+                let headers = String::from_utf8(bytes[..header_end].to_vec()).unwrap();
+                let body: Value =
+                    serde_json::from_slice(&bytes[header_end..header_end + length]).unwrap();
+                write!(
+                    socket,
+                    "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{reply_text}",
+                    reply_text.len()
+                )
+                .unwrap();
+                (headers, body)
+            });
+
+            let fixture = Fixture::new();
+            let state = crate::transport::State::new(fixture.0.clone()).unwrap();
+            {
+                let mut client = state.client.lock().unwrap();
+                client.endpoint = endpoint;
+                client.identity = Some(crate::transport::Identity {
+                    id: DEVICE.into(),
+                    key: SigningKey::from_bytes(&[7; 32]),
+                });
+            }
+
+            let tools = fetch_postverify_tools(&state).await;
+            if expected_some {
+                assert_eq!(tools, Some(reply));
+            } else {
+                assert!(tools.is_none());
+            }
+            let (headers, body) = server.join().unwrap();
+            assert!(headers.starts_with("POST /v1/query HTTP/1.1"));
+            assert_eq!(body["type"], "tools");
+            assert_eq!(body["payload"], json!({}));
+        }
+    });
+}

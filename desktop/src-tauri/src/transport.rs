@@ -103,6 +103,7 @@ struct Client {
 pub struct State {
     client: Mutex<Client>,
     http: reqwest::Client,
+    stream_http: reqwest::Client,
     directory: PathBuf,
     environment_id: Option<String>,
     mutation: std::sync::Arc<tokio::sync::Mutex<()>>,
@@ -196,6 +197,17 @@ fn legacy_endpoint(directory: &std::path::Path) -> Result<String, String> {
     }
 }
 
+fn build_stream_http(
+    connect_timeout: Duration,
+    read_timeout: Duration,
+) -> Result<reqwest::Client, reqwest::Error> {
+    reqwest::Client::builder()
+        .connect_timeout(connect_timeout)
+        .read_timeout(read_timeout)
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+}
+
 impl State {
     pub fn mutation_gate(&self) -> std::sync::Arc<tokio::sync::Mutex<()>> {
         self.mutation.clone()
@@ -212,6 +224,7 @@ impl State {
                 .timeout(Duration::from_secs(20))
                 .redirect(reqwest::redirect::Policy::none())
                 .build()?,
+            stream_http: build_stream_http(Duration::from_secs(15), Duration::from_secs(90))?,
             directory,
             environment_id: None,
             mutation: std::sync::Arc::new(tokio::sync::Mutex::new(())),
@@ -419,14 +432,15 @@ impl State {
             let signature = STANDARD.encode(identity.key.sign(&body).to_bytes());
             (client.endpoint.clone(), body, signature)
         };
-        let mut request = self
-            .http
+        let http = if path.ends_with("/stream") {
+            &self.stream_http
+        } else {
+            &self.http
+        };
+        let mut request = http
             .post(format!("{endpoint}/{path}"))
             .header("content-type", "application/json")
             .body(body);
-        if path.ends_with("/stream") {
-            request = request.timeout(Duration::from_secs(90));
-        }
         if signed {
             request = request.header("x-outpost-signature", signature);
         }
@@ -1783,5 +1797,121 @@ mod tests {
         assert!(State::cipher(&other)
             .decrypt(nonce, bytes.as_ref())
             .is_err());
+    }
+
+    #[test]
+    fn sse_stream_uses_read_timeout_without_total_body_timeout() {
+        use std::io::{Read, Write};
+        tauri::async_runtime::block_on(async {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let endpoint = format!("http://{}", listener.local_addr().unwrap());
+            let server = std::thread::spawn(move || {
+                let (mut socket, _) = listener.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut bytes = Vec::new();
+                let mut buffer = [0u8; 4096];
+                let (header_end, length) = loop {
+                    let count = socket.read(&mut buffer).unwrap();
+                    assert!(count > 0);
+                    bytes.extend_from_slice(&buffer[..count]);
+                    if let Some(end) = bytes.windows(4).position(|part| part == b"\r\n\r\n") {
+                        let headers = String::from_utf8_lossy(&bytes[..end]);
+                        let length: usize = headers
+                            .lines()
+                            .find_map(|line| {
+                                line.to_lowercase()
+                                    .strip_prefix("content-length: ")
+                                    .map(str::to_owned)
+                            })
+                            .unwrap()
+                            .parse()
+                            .unwrap();
+                        break (end + 4, length);
+                    }
+                };
+                while bytes.len() < header_end + length {
+                    let count = socket.read(&mut buffer).unwrap();
+                    assert!(count > 0);
+                    bytes.extend_from_slice(&buffer[..count]);
+                }
+                write!(
+                    socket,
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nTransfer-Encoding: chunked\r\n\r\n"
+                )
+                .unwrap();
+                let send_chunk = |socket: &mut std::net::TcpStream, payload: &str| {
+                    write!(socket, "{:x}\r\n{payload}\r\n", payload.len()).unwrap();
+                    socket.flush().unwrap();
+                };
+                send_chunk(
+                    &mut socket,
+                    concat!(r#"data: {"type":"snapshot","cursor":1,"records":[],"live":[]}"#, "\n\n"),
+                );
+                // Exceed the 180ms read_timeout in total elapsed time (~350ms) using keepalive comments.
+                for _ in 0..5 {
+                    std::thread::sleep(Duration::from_millis(70));
+                    send_chunk(&mut socket, ": keepalive\n\n");
+                }
+                send_chunk(
+                    &mut socket,
+                    concat!(r#"data: {"type":"records","cursor":2,"records":[]}"#, "\n\n"),
+                );
+                // Hold the socket open silently so the client's idle read_timeout triggers.
+                std::thread::sleep(Duration::from_millis(450));
+            });
+
+            let directory =
+                std::env::temp_dir().join(format!("outpost-stream-timeout-test-{}", Uuid::new_v4()));
+            fs::create_dir(&directory).unwrap();
+            let mut state = State::new(directory).unwrap();
+            state.stream_http =
+                build_stream_http(Duration::from_secs(5), Duration::from_millis(180)).unwrap();
+            {
+                let mut client = state.client.lock().unwrap();
+                client.endpoint = endpoint;
+                client.identity = Some(Identity {
+                    id: "11111111-1111-4111-8111-111111111111".into(),
+                    key: SigningKey::from_bytes(&[7; 32]),
+                });
+            }
+
+            let started = std::time::Instant::now();
+            let mut response = state
+                .request(
+                    "v1/stream",
+                    json!({ "type": "subscribe", "payload": {} }),
+                    true,
+                )
+                .await
+                .unwrap();
+            assert!(response.status().is_success());
+            let mut decoder = crate::sse::Decoder::default();
+            let mut frames = Vec::new();
+            let mut timed_out = false;
+            loop {
+                match response.chunk().await {
+                    Ok(Some(chunk)) => frames.extend(decoder.push(&chunk).unwrap()),
+                    Ok(None) => break,
+                    Err(err) => {
+                        assert!(err.is_timeout() || err.to_string().contains("timed out"), "unexpected stream error: {err}");
+                        timed_out = true;
+                        break;
+                    }
+                }
+            }
+            assert!(
+                started.elapsed() >= Duration::from_millis(300),
+                "stream must survive beyond read_timeout while keepalives arrive"
+            );
+            assert_eq!(frames.len(), 2);
+            assert_eq!(frames[0]["type"], "snapshot");
+            assert_eq!(frames[1]["type"], "records");
+            assert!(timed_out, "idle stream must fail once read_timeout elapses");
+
+            server.join().unwrap();
+            fs::remove_dir_all(&state.directory).unwrap();
+        });
     }
 }

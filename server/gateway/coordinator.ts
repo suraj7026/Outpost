@@ -49,6 +49,7 @@ export class Coordinator {
   readonly devices: Devices; readonly tasks: Tasks; readonly artifacts: Artifacts; readonly memory: MemoryStore; readonly scheduler: Scheduler;
   private managementWrites = new Map<string, number>();
   private gates = new Map<string,Gate>(); private runtimes = new Map<string,PiRuntime | RemotePiRuntime>(); private jobs = new Set<string>();
+  private baseCatalogue: ReturnType<Gate['catalogue']> | undefined;
     private runtimeJobs = new Set<Promise<void>>();
       private drains = new Set<Promise<void>>();
     private closing = false;
@@ -97,15 +98,7 @@ export class Coordinator {
     if (!this.db.db.isOpen) return;
     for (const taskId of new Set([...this.gates.keys(), ...this.runtimes.keys()])) this.evictIfTerminal(taskId);
   }
-  gate(taskId: string) {
-    const task = this.db.need<Task>('task',taskId); z.uuid().parse(taskId);
-    let gate = this.gates.get(taskId); if (gate) return gate;
-    gate = new Gate(this.db,!!this.options.hosts, () => {
-      requireThat(!this.closing, 'coordinator_stopping');
-      requireThat(!this.maintenance.holding, 'maintenance_in_progress');
-      requireThat(this.dispatchEnabled, 'recovery_dispatch_disabled');
-    }, key => !!this.runtimes.get(key)?.isActive(key));
-    const workspace = new Workspace(join(this.options.workspaceRoot ?? join(this.root,'workspaces'),taskId),this.options.sharedWorkspaces);
+  private registerTools(gate: Gate, taskId: string, workspace: Workspace) {
     workspace.register(gate); registerInventory(gate); registerCommands(gate,workspace,new Set(this.options.executables ?? []),this.options.unrestrictedCommands);
     registerAutomationTools(gate,this.scheduler,{ workerAvailable: !!this.options.worker, assertWritable: () => {
       requireThat(!this.maintenance.holding,'maintenance_in_progress');
@@ -123,6 +116,28 @@ export class Coordinator {
     const ProfileInput = z.strictObject({ path: z.string() }), ReportInput = z.record(z.string(), z.json());
     registerBuiltin(gate, 'data.profile',{ version: 1,effects: ['workspace.read'],inputSchema: z.toJSONSchema(ProfileInput),description: 'Profiles a CSV file at a relative workspace path.',parse: input => ProfileInput.parse(input),target: args => String(args.path),execute: async args => profileCSV(workspace.read(String(args.path))) }, args => securityPath(String(args.path)) ? 'security' : 'routine');
     gate.register('document.report',{ version: 1,effects: ['workspace.write'],inputSchema: z.toJSONSchema(ReportInput),description: 'Publishes an HTML report from a JSON object.',parse: input => ReportInput.parse(input),target: () => 'task artifacts',execute: async args => wire(this.artifacts.publish(taskId,'report.html','text/html',Buffer.from(renderHTML(args)))) });
+  }
+  private toolCatalogue() {
+    if (this.baseCatalogue) return this.baseCatalogue;
+    // Build metadata on a discarded, non-executable gate without creating a task or workspace directory.
+    const gate = new Gate(this.db,!!this.options.hosts, () => {
+      throw new Fault('catalogue_only', 'Catalogue gate cannot execute actions', 500);
+    });
+    const workspace = Object.create(Workspace.prototype) as Workspace;
+    this.registerTools(gate, '', workspace);
+    this.baseCatalogue = gate.catalogue();
+    return this.baseCatalogue;
+  }
+  gate(taskId: string) {
+    const task = this.db.need<Task>('task',taskId); z.uuid().parse(taskId);
+    let gate = this.gates.get(taskId); if (gate) return gate;
+    gate = new Gate(this.db,!!this.options.hosts, () => {
+      requireThat(!this.closing, 'coordinator_stopping');
+      requireThat(!this.maintenance.holding, 'maintenance_in_progress');
+      requireThat(this.dispatchEnabled, 'recovery_dispatch_disabled');
+    }, key => !!this.runtimes.get(key)?.isActive(key));
+    const workspace = new Workspace(join(this.options.workspaceRoot ?? join(this.root,'workspaces'),taskId),this.options.sharedWorkspaces);
+    this.registerTools(gate, taskId, workspace);
     this.gates.set(taskId,gate); return gate;
   }
   private queueOperation(taskId: string, topic: string, payload: Record<string,Json>) {
@@ -283,7 +298,10 @@ export class Coordinator {
       const page = this.db.events(z.number().int().parse(payload.after),200);
       return wire({ events: page.filter(event => publicKinds.includes(z.object({ kind: z.string() }).parse(event.payload).kind)),nextCursor: page.at(-1)?.feedCursor ?? payload.after,hasMore: page.length === 200 });
     }
-    if (type === 'tools') return wire(this.gate(z.string().parse(payload.taskId)).catalogue());
+    if (type === 'tools') {
+      const { taskId } = z.strictObject({ taskId: z.string().optional() }).parse(payload);
+      return wire(taskId !== undefined ? this.gate(taskId).catalogue() : this.toolCatalogue());
+    }
     throw new Fault('unknown_query','Unsupported query',400);
   }
   async close() {

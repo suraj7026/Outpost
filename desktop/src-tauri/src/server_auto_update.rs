@@ -1698,6 +1698,16 @@ fn verify_postupdate_health(
     Ok(())
 }
 
+async fn fetch_postverify_tools(state: &crate::transport::State) -> Option<Value> {
+    // Query the task-independent coordinator tool catalogue directly without
+    // downloading a full ledger snapshot or requiring existing task history.
+    // Keep best-effort (.ok()) so older servers that still require taskId do not
+    // invalidate the bound root qualification.
+    environments::query_value(state, "tools".into(), json!({}))
+        .await
+        .ok()
+}
+
 async fn postverify(
     app: &tauri::AppHandle,
     setup: Arc<Setup>,
@@ -1719,24 +1729,7 @@ async fn postverify(
         .agent_request(json!({"type":"runtime.inventory"}))
         .await
         .map_err(|_| "Authenticated worker verification unavailable; queue held")?;
-    // This server API has no task-independent Gate catalogue endpoint. An existing
-    // task provides an optional stronger check; absent/inaccessible history does not
-    // invalidate the bound root qualification. Never create a task to probe tools.
-    let snapshot = environments::query_value(&state, "snapshot".into(), json!({}))
-        .await
-        .ok();
-    let task = snapshot
-        .as_ref()
-        .and_then(|snapshot| snapshot["records"].as_array())
-        .and_then(|records| records.iter().find(|r| r["kind"] == "task"))
-        .and_then(|record| record["id"].as_str());
-    let tools = if let Some(task) = task {
-        environments::query_value(&state, "tools".into(), json!({"taskId":task}))
-            .await
-            .ok()
-    } else {
-        None
-    };
+    let tools = fetch_postverify_tools(&state).await;
     let entry = setup.entry(
         review["setupId"]
             .as_str()

@@ -47,6 +47,8 @@ try {
       async invoke(command, args = {}) {
         if (command.startsWith('plugin:') || command === 'set_sidebar_window_controls') return;
         if (command === 'sidebar_pointer_inside') return false;
+        if (command === 'setup_list' || command === 'setup_history_list') return [];
+        if (command === 'automatic_updates_status' || command === 'automatic_updates_tick') return { enabled: false, targets: [], activeEnvironmentId: null, servers: [] };
         window.__requests.push({ command, args: structuredClone(args) });
         if (command === 'environment_list') return { registry: structuredClone(registry), legacy: { endpoint: null, pending: false } };
         if (command === 'connections_wake') return;
@@ -108,7 +110,7 @@ try {
   await page.waitForTimeout(2500);
   check(await page.locator('.main-shell').getAttribute('data-owner-id') === B, 'Alpha recovery never retargets the active Beta chat');
   check(await page.getByRole('textbox', { name: 'Message Outpost' }).inputValue() === 'Beta stays selected', 'Another server recovering preserves the active draft');
-  await openSettings(page, { server: A, tab: 'general' });
+  await openSettings(page, { server: A, tab: 'setup' });
   await page.getByRole('button', { name: 'Pause connection', exact: true }).click();
   await page.getByRole('button', { name: 'Resume connection', exact: true }).waitFor();
   const queries = await page.evaluate(A => window.__requests.filter(request => request.command === 'environment_query' && request.args.environmentId === A).length, A);
