@@ -65,6 +65,8 @@ try {
       ctx.font = '24px sans-serif'; ctx.fillText('A live page frame appears here while Pi works.', 70, 190);
       const jpeg = canvas.toDataURL('image/jpeg').split(',')[1];
       window.__frameMode = 'direct'; window.__frameState = 'running'; window.__frameCalls = 0;
+      window.__framePayloads = []; window.__frameTimes = []; window.__frameUnchangedCount = 0;
+      window.__frameUnchangedMode = false; window.__lastServedFrameId = null;
       window.__frameError = false; window.__heldFrames = []; window.__holdFrames = false; window.__mutations = [];
       window.__control = null; window.__browserRequests = []; window.__inputError = false; window.__offline = false;
       window.isTauri = true;
@@ -95,13 +97,35 @@ try {
           if (args.kind === 'workspace.files') return { files: [], truncated: false };
           if (args.kind === 'browser.frame') {
             window.__frameCalls++;
+            window.__framePayloads.push(structuredClone(args.payload));
+            window.__frameTimes.push(Date.now());
             if (window.__frameError) throw new Error('Synthetic frame failure');
             const other = args.payload.taskId === 'other-task';
+            const baseSession = { state: window.__frameState, mode: other ? 'direct' : window.__frameMode,
+              url: other ? 'https://fixture.example/other' : 'https://fixture.example/research', action: 'Reading the page' };
+            if (!other && window.__frameUnchangedMode && window.__frameState !== 'closed'
+              && args.payload.lastFrameId && args.payload.lastFrameId === window.__lastServedFrameId) {
+              window.__frameUnchangedCount++;
+              const unchangedResult = {
+                unchanged: true,
+                capturedAt: new Date().toISOString(),
+                frameId: args.payload.lastFrameId,
+                width: 1280,
+                height: 800,
+                controlEpoch: 'fixture-epoch',
+                control: structuredClone(window.__control),
+                tabs: [{ tab: 0, url: 'https://fixture.example/research', active: true }],
+                session: baseSession,
+              };
+              if (window.__holdFrames) return new Promise(resolve => window.__heldFrames.push(() => resolve(unchangedResult)));
+              return unchangedResult;
+            }
+            const frameId = crypto.randomUUID();
+            if (!other) window.__lastServedFrameId = frameId;
             const result = { frame: window.__frameState === 'closed' ? null : jpeg, capturedAt: new Date().toISOString(),
-              frameId: crypto.randomUUID(), width: 1280, height: 800, controlEpoch: 'fixture-epoch', control: structuredClone(window.__control),
+              frameId, width: 1280, height: 800, controlEpoch: 'fixture-epoch', control: structuredClone(window.__control),
               tabs: [{ tab: 0, url: 'https://fixture.example/research', active: true }],
-              session: { state: window.__frameState, mode: other ? 'direct' : window.__frameMode,
-                url: other ? 'https://fixture.example/other' : 'https://fixture.example/research', action: 'Reading the page' } };
+              session: baseSession };
             if (window.__holdFrames && !other) return new Promise(resolve => window.__heldFrames.push(() => resolve(result)));
             return result;
           }
@@ -117,7 +141,7 @@ try {
     await viewer.getByRole('img', { name: 'Current page in this task’s server browser' }).waitFor();
     check(await viewer.getByText('Pi actions', { exact: true }).isVisible(), 'Direct Pi control is visible');
     check(await viewer.getByText('Camoufox · direct Pi control').isVisible(), 'The actual browser engine is advertised');
-    check(await viewer.getByText('View only · refreshes every second').isVisible(), 'Viewing cadence and authority are explicit');
+    check(await viewer.getByText('View only · live updates').isVisible(), 'Viewing cadence and authority are explicit');
     check(await viewer.locator('img').evaluate(image => image.complete && image.naturalWidth === 1280), 'Frame is rendered');
     await page.screenshot({ path: `${out}/${width}-camoufox.png` });
     const enlarged = page.getByRole('dialog', { name: 'Server browser' });
@@ -154,13 +178,40 @@ try {
     await page.keyboard.press('Escape');
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Viewer fits the viewport');
     check(await page.evaluate(() => window.__mutations.length) === 0, `Watching never sends mutations: ${JSON.stringify(await page.evaluate(() => window.__mutations))}`);
-    await page.evaluate(() => { window.__frameState = 'idle'; });
+    await page.evaluate(() => { window.__frameState = 'idle'; window.__frameUnchangedMode = true; });
     await viewer.locator('img').waitFor();
+    if (width === 1440) {
+      // Wait for at least one unchanged frame response and confirm lastFrameId + preserved image + idle backoff
+      await page.waitForFunction(() => window.__frameUnchangedCount >= 1);
+      check(await viewer.locator('img').evaluate(image => image.complete && image.naturalWidth === 1280), 'Unchanged frame keeps decoded image rendered without base64 transfer');
+      const lastPayload = await page.evaluate(() => window.__framePayloads.at(-1));
+      check(typeof lastPayload?.lastFrameId === 'string' && lastPayload.lastFrameId.length > 0, 'Client sends lastFrameId for change-gated polling');
+      const idleStart = await page.evaluate(() => window.__frameCalls);
+      await page.waitForTimeout(1100);
+      const idleDelta = await page.evaluate(start => window.__frameCalls - start, idleStart);
+      check(idleDelta <= 1, `Idle unchanged page backs off to 2000ms polling (got ${idleDelta} polls in 1100ms)`);
+    }
     await viewer.getByRole('button', { name: 'Take control', exact: true }).click();
     await viewer.getByText('Waiting for the current browser operation to finish. Pi is paused.').waitFor();
     check(await viewer.getByLabel('Text for focused field').count() === 0, 'Pending handoff has no input controls');
     await page.evaluate(() => { window.__control.state = 'human'; });
     await viewer.getByLabel('Text for focused field').waitFor();
+    const textField = viewer.getByLabel('Text for focused field');
+    const maskToggle = viewer.getByRole('button', { name: 'Mask input (password/secret)', exact: true });
+    check(await textField.getAttribute('type') === 'text', 'Takeover text input defaults to visible text');
+    check(await textField.getAttribute('autocomplete') === 'off', 'Takeover text input keeps autocomplete off');
+    check(await textField.getAttribute('spellcheck') === 'false', 'Takeover text input disables spellcheck');
+    check(await maskToggle.getAttribute('aria-pressed') === 'false', 'Mask input toggle defaults to unpressed');
+    await textField.fill('visible-search-query');
+    await maskToggle.click();
+    check(await maskToggle.getAttribute('aria-pressed') === 'true', 'Clicking mask toggle enables password masking');
+    check(await textField.getAttribute('type') === 'password', 'Masked input switches to type="password"');
+    check(await textField.inputValue() === 'visible-search-query', 'Toggling mask preserves typed text without submitting');
+    check(await page.evaluate(() => window.__browserRequests.filter(request => request.input?.action === 'text').length) === 0, 'Toggling mask never submits the form');
+    await maskToggle.click();
+    check(await maskToggle.getAttribute('aria-pressed') === 'false', 'Clicking mask toggle again unmasks input');
+    check(await textField.getAttribute('type') === 'text', 'Unmasked input returns to type="text"');
+    await textField.fill('');
     await page.screenshot({ path: `${out}/${width}-takeover.png` });
     await viewer.getByRole('button', { name: 'Enlarge browser view' }).click();
     await enlarged.getByRole('button', { name: 'Return control', exact: true }).waitFor();
@@ -185,11 +236,23 @@ try {
     await page.keyboard.press('Escape');
     await viewer.getByLabel('Text for focused field').waitFor();
     check(await viewer.getByRole('button', { name: 'Enlarge browser view' }).evaluate(button => button === document.activeElement), 'Escape restores focus to the enlarge button');
-    await viewer.getByLabel('Text for focused field').fill('synthetic-private-text');
+    await maskToggle.click();
+    check(await textField.getAttribute('type') === 'password', 'Mask toggle works before sending private text');
+    await textField.fill('synthetic-private-text');
     await viewer.getByRole('button', { name: 'Send text', exact: true }).click();
-    check(await viewer.getByLabel('Text for focused field').inputValue() === '', 'Sent private text is cleared');
+    check(await textField.inputValue() === '', 'Sent private text is cleared');
     await page.waitForFunction(() => window.__browserRequests.some(request => request.input?.action === 'text'));
     check(await page.evaluate(() => window.__browserRequests.find(request => request.input?.action === 'text').input.text) === 'synthetic-private-text', 'Text uses transient browser IPC');
+    if (width === 1440) {
+      // During active takeover input, refresh interval drops to <= 300ms (250ms target)
+      const beforeBoostCount = await page.evaluate(() => window.__frameCalls);
+      await page.waitForTimeout(650);
+      const afterBoost = await page.evaluate(start => ({
+        added: window.__frameCalls - start,
+        recentDeltas: window.__frameTimes.slice(start).map((time, index, list) => index ? time - list[index - 1] : null).filter(value => value !== null),
+      }), beforeBoostCount);
+      check(afterBoost.added >= 2, `Active takeover input polls at <=300ms cadence (got ${afterBoost.added} polls in 650ms, deltas=${JSON.stringify(afterBoost.recentDeltas)})`);
+    }
     const inputPage = viewer.getByRole('button', { name: 'Click server browser page', exact: true });
     await inputPage.click({ position: { x: 40, y: 30 } });
     check(await page.evaluate(() => window.__browserRequests.some(request => request.input?.action === 'click' && request.input.x > 40)), 'Clicks scale to the server viewport');
@@ -203,7 +266,7 @@ try {
     await viewer.getByText('Control returned. Resume Pi when ready.').waitFor();
     check(await viewer.getByLabel('Text for focused field').count() === 0, 'Return removes input controls');
     check(await page.evaluate(() => window.__mutations.length) === 0, 'Takeover never enters durable command IPC or resumes Pi');
-    await page.evaluate(() => { window.__control = { leaseId: 'other', holder: 'other-device', state: 'human', expiresAt: Date.now() + 30000 }; });
+    await page.evaluate(() => { window.__frameUnchangedMode = false; window.__control = { leaseId: 'other', holder: 'other-device', state: 'human', expiresAt: Date.now() + 30000 }; });
     await viewer.getByText('Another device controls this browser.').waitFor();
     check(await viewer.getByRole('button', { name: 'Take control', exact: true }).isDisabled(), 'Another device cannot be displaced');
     await page.evaluate(() => { window.__control.state = 'expired'; });

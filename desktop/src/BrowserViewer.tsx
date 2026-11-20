@@ -1,21 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronRight, Globe, Maximize2, X } from 'lucide-react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { ChevronRight, Eye, EyeOff, Globe, Maximize2, X } from 'lucide-react';
 import type { EnvironmentApi } from './api';
 import { recordedPreview } from './api';
+import {
+  FAST_POLL_MS,
+  INPUT_BOOST_MS,
+  mergeBrowserFrame,
+  nextBrowserPollDelayMs,
+  type BrowserFrame,
+} from './browser-polling';
 import type { ServerRecord } from './types';
 import { text } from './types';
 import './browser-viewer.css';
 
-interface Control {
-  leaseId: string; holder: string; state: 'pending' | 'human' | 'releasing' | 'released' | 'expired'; expiresAt: number;
-}
-interface Frame {
-  session: { state?: string; mode?: string; action?: string; url?: string } | null;
-  frame: string | null; capturedAt: string | null;
-  frameId?: string; width?: number; height?: number;
-  tabs?: { tab: number; url: string; active: boolean }[];
-  control?: Control | null; controlEpoch?: string;
-}
+type RefreshOutcome = 'updated' | 'unchanged' | 'error' | 'stale';
 
 export default function BrowserViewer({ taskId, api, connected, session, engine, takeover = false, deviceId = '', active: viewActive = true, embedded = false }: {
   taskId: string; api: EnvironmentApi; connected: boolean; session: ServerRecord | undefined; engine?: string | null;
@@ -26,6 +24,7 @@ export default function BrowserViewer({ taskId, api, connected, session, engine,
   const dialog = useRef<HTMLDialogElement>(null);
   const enlargeButton = useRef<HTMLButtonElement>(null);
   const wasEnlarged = useRef(false);
+  const textInputId = useId();
   useEffect(() => {
     if (!viewActive) { dialog.current?.close(); setEnlarged(false); }
   }, [viewActive]);
@@ -34,60 +33,110 @@ export default function BrowserViewer({ taskId, api, connected, session, engine,
     else if (wasEnlarged.current) enlargeButton.current?.focus({ preventScroll: true });
     wasEnlarged.current = enlarged;
   }, [enlarged]);
-  const [frame, setFrame] = useState<Frame | null>(null);
+  const [frame, setFrame] = useState<BrowserFrame | null>(null);
   const [error, setError] = useState('');
   const [controlError, setControlError] = useState('');
   const [busy, setBusy] = useState(false);
   const [inputText, setInputText] = useState('');
+  const [maskInput, setMaskInput] = useState(false);
   const [address, setAddress] = useState('');
   const [key, setKey] = useState('Enter');
   const [now, setNow] = useState(Date.now());
   const alive = useRef(false), sending = useRef(false), generation = useRef(0), lifetime = useRef(0);
-  const current = useRef<Frame | null>(null);
+  const current = useRef<BrowserFrame | null>(null);
+  const boostUntil = useRef(0);
+  const reschedulePoll = useRef<((delayMs: number) => void) | null>(null);
   const hasSession = !!session;
-  const refresh = useCallback(async () => {
+  const propState = session ? text(session, 'state') : '';
+  const sessionStateRef = useRef(propState);
+  sessionStateRef.current = propState;
+
+  const refresh = useCallback(async (): Promise<RefreshOutcome> => {
     const ticket = ++generation.current;
+    const previous = current.current;
+    const payload: Record<string, string> = { taskId };
+    if (previous?.frame && previous.frameId) payload.lastFrameId = previous.frameId;
     try {
-      const result = await api.query<Frame>('browser.frame', { taskId });
-      if (!alive.current || ticket !== generation.current) return;
-      current.current = result; setFrame(result); setError('');
+      const result = await api.query<BrowserFrame>('browser.frame', payload);
+      if (!alive.current || ticket !== generation.current) return 'stale';
+      const merged = mergeBrowserFrame(current.current, result);
+      current.current = merged; setFrame(merged); setError('');
+      return result.unchanged && !!merged.frame ? 'unchanged' : 'updated';
     } catch {
-      if (!alive.current || ticket !== generation.current) return;
+      if (!alive.current || ticket !== generation.current) return 'stale';
       current.current = null; setFrame(null); setError('Live view unavailable. Retrying…');
+      return 'error';
     }
   }, [api, taskId]);
+
+  useEffect(() => {
+    if (propState === 'running' || propState === 'starting') {
+      reschedulePoll.current?.(FAST_POLL_MS);
+    }
+  }, [propState]);
+
   useEffect(() => {
     alive.current = true; lifetime.current++;
-    current.current = null; setFrame(null); setError(''); setInputText(''); setAddress(''); setBusy(sending.current);
-    let cancelled = false, timer: ReturnType<typeof setTimeout> | undefined;
+    current.current = null; boostUntil.current = 0;
+    setFrame(null); setError(''); setInputText(''); setMaskInput(false); setAddress(''); setBusy(sending.current);
+    let cancelled = false, inFlight = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     let clock: ReturnType<typeof setInterval> | undefined;
-    const updateClock = () => {
-      clearInterval(clock);
-      if (viewActive && connected && hasSession && !document.hidden) {
+    const canPoll = connected && viewActive && expanded && hasSession && !recordedPreview();
+    const schedule = (delayMs: number) => {
+      clearTimeout(timer); timer = undefined;
+      if (cancelled || !canPoll || document.hidden || inFlight) return;
+      timer = setTimeout(() => { timer = undefined; void poll(); }, delayMs);
+    };
+    const poll = async () => {
+      if (cancelled || !canPoll || document.hidden || inFlight) return;
+      inFlight = true;
+      clearTimeout(timer); timer = undefined;
+      let outcome: RefreshOutcome = 'error';
+      try {
+        outcome = await refresh();
+        const latest = current.current, lease = latest?.control;
+        if (!cancelled && lease?.holder === deviceId && ['pending', 'human'].includes(lease.state)
+          && lease.expiresAt > Date.now() && lease.expiresAt - Date.now() < 15000 && latest?.controlEpoch) {
+          try {
+            await api.browserRequest({ type: 'renew', taskId, epoch: latest.controlEpoch, leaseId: lease.leaseId });
+          } catch { if (!cancelled) setControlError('Control could not be renewed. Refresh the view before continuing.'); }
+        }
+      } finally {
+        inFlight = false;
+      }
+      if (cancelled || document.hidden) return;
+      const latest = current.current;
+      schedule(nextBrowserPollDelayMs({
+        now: Date.now(),
+        boostUntil: boostUntil.current,
+        sessionState: latest?.session?.state ?? sessionStateRef.current,
+        controlState: latest?.control?.state,
+        unchanged: outcome === 'unchanged',
+        hasError: outcome === 'error',
+      }));
+    };
+    reschedulePoll.current = schedule;
+    const onVisibilityChange = () => {
+      clearInterval(clock); clock = undefined;
+      if (document.hidden) {
+        clearTimeout(timer); timer = undefined;
+        return;
+      }
+      if (viewActive && connected && hasSession) {
         setNow(Date.now());
         clock = setInterval(() => setNow(Date.now()), 1000);
       }
+      if (canPoll && !inFlight) void poll();
     };
-    updateClock();
-    document.addEventListener('visibilitychange', updateClock);
-    if (connected && viewActive && expanded && hasSession && !recordedPreview()) {
-      const poll = async () => {
-        if (cancelled) return;
-        if (!document.hidden) {
-          await refresh();
-          const latest = current.current, lease = latest?.control;
-          if (!cancelled && lease?.holder === deviceId && ['pending', 'human'].includes(lease.state)
-            && lease.expiresAt > Date.now() && lease.expiresAt - Date.now() < 15000 && latest?.controlEpoch) {
-            try {
-              await api.browserRequest({ type: 'renew', taskId, epoch: latest.controlEpoch, leaseId: lease.leaseId });
-            } catch { if (!cancelled) setControlError('Control could not be renewed. Refresh the view before continuing.'); }
-          }
-        }
-        if (!cancelled) timer = setTimeout(() => void poll(), 1000);
-      };
-      void poll();
-    }
-    return () => { cancelled = true; alive.current = false; lifetime.current++; generation.current++; clearTimeout(timer); clearInterval(clock); document.removeEventListener('visibilitychange', updateClock); };
+    onVisibilityChange();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      cancelled = true; alive.current = false; lifetime.current++; generation.current++;
+      reschedulePoll.current = null;
+      clearTimeout(timer); clearInterval(clock);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [api, taskId, connected, viewActive, expanded, hasSession, deviceId, refresh]);
 
   const state = frame?.session?.state ?? (session ? text(session, 'state') : '');
@@ -100,12 +149,13 @@ export default function BrowserViewer({ taskId, api, connected, session, engine,
   const held = !!lease && ['pending', 'human', 'releasing'].includes(lease.state);
   const mine = held && lease.holder === deviceId;
   const canInput = canShow && mine && lease.state === 'human' && lease.expiresAt > now && fresh && !!frame?.frameId && !busy;
-  useEffect(() => { if (!mine) setInputText(''); }, [mine]);
+  useEffect(() => { if (!mine) { setInputText(''); setMaskInput(false); } }, [mine]);
 
   const control = async (type: 'take' | 'release' | 'input', input?: Record<string, unknown>) => {
     const latest = current.current, scope = lifetime.current;
     if (sending.current || !connected || !latest?.controlEpoch || (type === 'input' && !canInput)) return;
     sending.current = true; setBusy(true); setControlError(''); generation.current++;
+    boostUntil.current = Date.now() + INPUT_BOOST_MS;
     try {
       await api.browserRequest({ type, taskId, epoch: latest.controlEpoch,
         ...(type !== 'take' ? { leaseId: latest.control?.leaseId } : {}),
@@ -115,7 +165,19 @@ export default function BrowserViewer({ taskId, api, connected, session, engine,
         ? 'Input outcome uncertain. Inspect the refreshed page before acting again; nothing is retried automatically.'
         : 'Control request did not confirm. Check the refreshed ownership status before trying again.');
     } finally {
-      if (alive.current && scope === lifetime.current) await refresh();
+      boostUntil.current = Date.now() + INPUT_BOOST_MS;
+      if (alive.current && scope === lifetime.current) {
+        const outcome = await refresh();
+        const nextLatest = current.current;
+        reschedulePoll.current?.(nextBrowserPollDelayMs({
+          now: Date.now(),
+          boostUntil: boostUntil.current,
+          sessionState: nextLatest?.session?.state ?? sessionStateRef.current,
+          controlState: nextLatest?.control?.state,
+          unchanged: outcome === 'unchanged',
+          hasError: outcome === 'error',
+        }));
+      }
       sending.current = false;
       if (alive.current) setBusy(false);
     }
@@ -126,7 +188,7 @@ export default function BrowserViewer({ taskId, api, connected, session, engine,
     : state === 'closed' ? 'Browser closed. The task profile and saved files are retained.'
     : state === 'interrupted' ? 'Browser interrupted. Ask Pi to reopen it before continuing.'
     : 'Waiting for a fresh page frame…');
-  const ownership = !connected ? 'Live view paused · offline' : !held ? lease?.state === 'expired' ? 'Control expired. Pi remains paused.' : lease?.state === 'released' ? 'Control returned. Resume Pi when ready.' : 'View only · refreshes every second'
+  const ownership = !connected ? 'Live view paused · offline' : !held ? lease?.state === 'expired' ? 'Control expired. Pi remains paused.' : lease?.state === 'released' ? 'Control returned. Resume Pi when ready.' : 'View only · live updates'
     : lease.state === 'pending' ? 'Waiting for the current browser operation to finish. Pi is paused.'
     : lease.state === 'releasing' ? 'Finishing the handoff. Pi remains paused.'
     : mine ? 'You control this browser. Pi is paused.' : 'Another device controls this browser.';
@@ -176,20 +238,52 @@ export default function BrowserViewer({ taskId, api, connected, session, engine,
         </div>
         {showInputs && <div className="browser-control">
           <p className="browser-control-note">Click the page to focus a field. Sent text is not saved in chat or input logs. This is the shared task profile; Pi can see the page after you resume.</p>
-          <form onSubmit={event => { event.preventDefault(); const value = inputText; setInputText(''); void control('input', { action: 'text', text: value }); }}>
-            <label>Text for focused field<input type="password" autoComplete="off" value={inputText} maxLength={20000} disabled={!canInput} onChange={event => setInputText(event.target.value)} /></label>
-            <button disabled={!canInput || !inputText}>Send text</button>
+          <form onSubmit={event => {
+            event.preventDefault();
+            if (!canInput || !inputText) return;
+            const value = inputText;
+            setInputText('');
+            void control('input', { action: 'text', text: value });
+          }}>
+            <div className="browser-text-field">
+              <label htmlFor={textInputId}>Text for focused field</label>
+              <div className="browser-text-input-row">
+                <input
+                  id={textInputId}
+                  type={maskInput ? 'password' : 'text'}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  value={inputText}
+                  maxLength={20000}
+                  disabled={!canInput}
+                  onChange={event => setInputText(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="browser-mask-toggle icon-button"
+                  aria-pressed={maskInput}
+                  aria-label="Mask input (password/secret)"
+                  title={maskInput ? 'Show input text' : 'Mask input (password/secret)'}
+                  onClick={() => setMaskInput(value => !value)}
+                >
+                  {maskInput ? <EyeOff size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />}
+                </button>
+              </div>
+            </div>
+            <button type="submit" disabled={!canInput || !inputText}>Send text</button>
           </form>
           <div className="browser-input-row">
             <label>Browser key<select value={key} disabled={!canInput} onChange={event => setKey(event.target.value)}>
               {['Enter', 'Tab', 'Shift+Tab', 'Escape', 'Backspace', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'ControlOrMeta+A'].map(value => <option key={value}>{value}</option>)}
-            </select></label><button disabled={!canInput} onClick={() => void control('input', { action: 'key', key })}>Send key</button>
+            </select></label><button type="button" disabled={!canInput} onClick={() => void control('input', { action: 'key', key })}>Send key</button>
           </div>
-          <div className="browser-input-row"><button disabled={!canInput} onClick={() => void control('input', { action: 'scroll', x: 0, y: -500 })}>Scroll up</button>
-            <button disabled={!canInput} onClick={() => void control('input', { action: 'scroll', x: 0, y: 500 })}>Scroll down</button></div>
+          <div className="browser-input-row"><button type="button" disabled={!canInput} onClick={() => void control('input', { action: 'scroll', x: 0, y: -500 })}>Scroll up</button>
+            <button type="button" disabled={!canInput} onClick={() => void control('input', { action: 'scroll', x: 0, y: 500 })}>Scroll down</button></div>
           <form onSubmit={event => { event.preventDefault(); void control('input', { action: 'navigate', url: address }); }}>
             <label>Go to URL<input type="url" value={address} disabled={!canInput} onChange={event => setAddress(event.target.value)} placeholder="https://" required /></label>
-            <button disabled={!canInput || !address}>Go</button>
+            <button type="submit" disabled={!canInput || !address}>Go</button>
           </form>
           {!!frame?.tabs?.length && <label>Browser tab<select disabled={!canInput} value={frame.tabs.find(tab => tab.active)?.tab ?? 0} onChange={event => void control('input', { action: 'switch_tab', tab: Number(event.target.value) })}>
             {frame.tabs.map(tab => <option key={tab.tab} value={tab.tab}>{tab.tab + 1}: {tab.url || 'Blank page'}</option>)}

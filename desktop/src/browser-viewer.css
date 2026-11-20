@@ -29,6 +29,12 @@
 .browser-control { display: grid; gap: 16px; min-width: 0; margin-top: 16px; }
 .browser-control form, .browser-input-row { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
 .browser-control label { display: grid; gap: 6px; min-width: 0; flex: 1; font-size: 12px; }
+.browser-text-field { display: grid; gap: 6px; min-width: 0; flex: 1 1 160px; }
+.browser-text-field > label { display: block; flex: none; }
+.browser-text-input-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.browser-text-input-row > input { flex: 1; min-width: 0; }
+.browser-mask-toggle { flex: none; --icon-button-size: 36px; --icon-glyph-size: 15px; }
+.browser-mask-toggle[aria-pressed="true"] { background: var(--active); color: var(--text); }
 .browser-control input, .browser-control select { width: 100%; min-width: 0; max-width: none; min-height: 36px; font-size: 12px; }
 .browser-control button { min-height: 36px; font-size: 12px; }
 .browser-control-note, .browser-control-error { font-size: 12px; line-height: 1.5; margin: 0; overflow-wrap: anywhere; }
@@ -57,6 +63,6 @@
   .browser-viewer-dialog .browser-control { margin-top: 20px; padding: 20px 0 0; border-left: 0; border-top: 1px solid var(--line); }
 }
 @media (pointer: coarse) {
-  .browser-enlarge { --icon-button-size: 44px; }
+  .browser-enlarge, .browser-mask-toggle { --icon-button-size: 44px; }
   .browser-control-toggle, .browser-control button, .browser-control input, .browser-control select { min-height: 44px; }
 }
