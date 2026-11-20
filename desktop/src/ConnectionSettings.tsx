@@ -18,7 +18,8 @@ export default function ConnectionSettings({ connection, tab, providerRequest, r
   const [copyNotice, setCopyNotice] = useState("");
   useEffect(() => { if (connection.info) setEndpoint(connection.info.endpoint); }, [connection.info?.endpoint]);
   const readOnly = recordedPreview() || !nativeApp() || connection.retired || !!connection.info?.pendingError;
-  const disabled = readOnly || connection.busy || !!connection.info?.pending || busy;
+  const toggleDisabled = readOnly || connection.busy || busy;
+  const disabled = toggleDisabled || !!connection.info?.pending;
   const saved = connection.environmentId ? registry.environments[connection.environmentId] : undefined;
   const active = connection.connected || connection.connecting || connection.reconnecting;
   const registerRoute = async (value: string) => {
@@ -32,7 +33,7 @@ export default function ConnectionSettings({ connection, tab, providerRequest, r
     finally { setBusy(false); }
   };
   const toggleConnection = async () => {
-    if (disabled) return;
+    if (toggleDisabled) return;
     setBusy(true); setError("");
     try { if (active) await connection.disconnect(); else await connection.connect(); }
     catch (error) { setError(String(error)); }
@@ -50,7 +51,7 @@ export default function ConnectionSettings({ connection, tab, providerRequest, r
         <SettingRow title={connection.connected ? "Connected to server" : connection.info?.lifecycle?.state === "paused" ? "Connection paused" : connection.reconnecting || connection.connecting ? "Connecting to server" : "Server offline"}
           description={connection.info?.lifecycle ? "Trusted SSH access reconnects automatically. Pausing lasts until you resume." : "Connect or disconnect this saved server without removing its data."} icon={<Server size={18} />}>
           <Badge tone={connection.connected ? "success" : "warning"}>{connection.connected ? "Connected" : connection.info?.lifecycle?.state === "paused" ? "Paused" : "Offline"}</Badge>
-          <Button disabled={disabled} onClick={() => void toggleConnection()}>{active ? <Pause size={16} /> : <Play size={16} />}{connection.info?.lifecycle ? active ? "Pause connection" : "Resume connection" : active ? "Disconnect environment" : "Reconnect environment"}</Button>
+          <Button disabled={toggleDisabled} onClick={() => void toggleConnection()}>{active ? <Pause size={16} /> : <Play size={16} />}{connection.info?.lifecycle ? active ? "Pause connection" : "Resume connection" : active ? "Disconnect environment" : "Reconnect environment"}</Button>
         </SettingRow>
         <div className="ui-form settings-route-form">
           <label>Connection route{saved ? <select id="verified-route" aria-label="Connection route" value={saved.activeRoute} disabled={disabled} onChange={event => void registerRoute(event.target.value)}>{saved.routes.map(value => <option key={value} value={value}>{value}</option>)}</select> : <input value={connection.info?.endpoint || "Not configured"} readOnly />}</label>

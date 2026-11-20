@@ -5,9 +5,18 @@ import { Channel } from "@tauri-apps/api/core";
 import { ollamaCloudModels } from "./models";
 import { controlCommandBlocker } from './control-mode';
 import { mergeRecords, overlayLive, type LiveFrame } from "./live";
+import { nextReconnectDelay } from "./reconnect-backoff";
 import type { ConnectionInfo, EventPage, Json, ModelCatalogue, RuntimeInfo, ServerRecord, Snapshot } from "./types";
 
 const transportFailure = (message: string) => /Cannot reach your server\.|Private SSH connection is unavailable|error sending request|error decoding response body|operation timed out/.test(message);
+
+function isServerRecord(value: unknown): value is ServerRecord {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.id === "string" && typeof record.kind === "string" &&
+    typeof record.revision === "number" && typeof record.updatedAt === "string" &&
+    !!record.data && typeof record.data === "object" && !Array.isArray(record.data);
+}
 
 /** One mounted supervisor per owner. Selection never changes this supervisor's identity. */
 export function useConnection(environmentId: EnvironmentId = null, route = "", retired = false) {
@@ -20,10 +29,39 @@ export function useConnection(environmentId: EnvironmentId = null, route = "", r
   const [error, setError] = useState(""), [lastSync, setLastSync] = useState<Date | null>(null);
   const generation = useRef(0), cursor = useRef(0), catalogueRevision = useRef(0), infoRevision = useRef(0);
   const alive = useRef(false), paused = useRef(false), executing = useRef(false), syncing = useRef(false), streamActive = useRef(false);
+  const connectedRef = useRef(false);
+  const reconnectAttempt = useRef(0);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectRef = useRef<(resume?: boolean) => Promise<void>>(async () => {});
   const authority = useRef({ connected, retired, pending: !!info?.pending || !!info?.pendingError });
   authority.current = { connected, retired, pending: !!info?.pending || !!info?.pendingError };
   const lifecycle = useRef(info?.lifecycle); lifecycle.current = info?.lifecycle;
   const current = useCallback((ticket: number) => alive.current && ticket === generation.current, []);
+  const clearReconnectTimer = useCallback(() => {
+    if (reconnectTimer.current !== null) {
+      clearTimeout(reconnectTimer.current);
+      reconnectTimer.current = null;
+    }
+  }, []);
+  const scheduleReconnect = useCallback(() => {
+    if (!alive.current || paused.current || syncing.current || streamActive.current || connectedRef.current) return;
+    if (reconnectTimer.current !== null) return;
+    const delay = nextReconnectDelay(reconnectAttempt.current);
+    reconnectAttempt.current += 1;
+    reconnectTimer.current = setTimeout(() => {
+      reconnectTimer.current = null;
+      if (!alive.current || paused.current || syncing.current || streamActive.current || connectedRef.current) return;
+      if (executing.current) {
+        reconnectAttempt.current = Math.max(0, reconnectAttempt.current - 1);
+        reconnectTimer.current = setTimeout(() => {
+          reconnectTimer.current = null;
+          scheduleReconnect();
+        }, 1000);
+        return;
+      }
+      void connectRef.current(false);
+    }, delay);
+  }, []);
   const refreshInfo = useCallback(async () => {
     const ticket = generation.current, revision = ++infoRevision.current;
     const next = await api.call<ConnectionInfo>("connection_info");
@@ -52,24 +90,37 @@ export function useConnection(environmentId: EnvironmentId = null, route = "", r
         cursor.current = snapshot.cursor;
         setRecords(snapshot.records);
       }
+      connectedRef.current = true;
+      reconnectAttempt.current = 0;
+      clearReconnectTimer();
       setConnected(true); setLastSync(new Date());
       await refreshInfo();
-    } catch (error) { if (current(ticket)) setConnected(false); throw error; }
-  }, [api, current, refreshInfo]);
+    } catch (error) {
+      if (current(ticket)) {
+        connectedRef.current = false;
+        setConnected(false);
+        if (!syncing.current && !paused.current && !streamActive.current) scheduleReconnect();
+      }
+      throw error;
+    }
+  }, [api, current, refreshInfo, clearReconnectTimer, scheduleReconnect]);
   const disconnect = useCallback(async () => {
     paused.current = true; ++generation.current; ++catalogueRevision.current;
-    streamActive.current = false; syncing.current = false;
+    streamActive.current = false; syncing.current = false; connectedRef.current = false;
+    clearReconnectTimer();
     setConnected(false); setConnecting(false); setStreaming(false); setLiveRecords([]);
     await api.disconnect(true);
     await refreshInfo();
-  }, [api, refreshInfo]);
+  }, [api, refreshInfo, clearReconnectTimer]);
   const connect = useCallback(async (resume = false) => {
     paused.current = false;
+    clearReconnectTimer();
+    if (resume) reconnectAttempt.current = 0;
     const ticket = ++generation.current;
     // A restored installation may rewind its ledger. Keep stale records visible,
     // but establish this lifecycle's cursor from its first authoritative snapshot.
     cursor.current = 0;
-    syncing.current = true; streamActive.current = false; setConnecting(true);
+    syncing.current = true; streamActive.current = false; connectedRef.current = false; setConnecting(true);
     setConnected(false); setStreaming(false); setLiveRecords([]);
     setModels([]); setRuntime(null); setAgentCatalogue(null); ++catalogueRevision.current;
     try {
@@ -109,7 +160,9 @@ export function useConnection(environmentId: EnvironmentId = null, route = "", r
       const channel = new Channel<LiveFrame>();
       channel.onmessage = (frame) => {
         if (!current(ticket)) return;
-        streamActive.current = true; setStreaming(true); setConnected(true); setLastSync(new Date());
+        streamActive.current = true; connectedRef.current = true;
+        reconnectAttempt.current = 0; clearReconnectTimer();
+        setStreaming(true); setConnected(true); setLastSync(new Date());
         if (frame.type === "snapshot") {
           if (frame.cursor < cursor.current) return;
           cursor.current = frame.cursor; setRecords(frame.records); setLiveRecords(frame.live);
@@ -126,26 +179,60 @@ export function useConnection(environmentId: EnvironmentId = null, route = "", r
       void api.call("stream_events", { channel }).catch(error => {
         if (current(ticket)) setError(lifecycle.current && transportFailure(String(error)) ? "" : `Live connection interrupted. ${String(error)}`);
       }).finally(() => {
-        if (current(ticket)) { streamActive.current = false; setStreaming(false); setConnected(false); setLiveRecords([]); }
+        if (current(ticket)) {
+          streamActive.current = false; connectedRef.current = false;
+          setStreaming(false); setConnected(false); setLiveRecords([]);
+          if (!paused.current && !syncing.current) scheduleReconnect();
+        }
       });
     } catch (error) { if (current(ticket)) {
+      connectedRef.current = false;
       setConnected(false);
       const message = String(error);
       setError(lifecycle.current && transportFailure(message) ? "" : message);
     } }
-    finally { if (current(ticket)) { syncing.current = false; setConnecting(false); } }
-  }, [api, current, refresh, refreshInfo, refreshAgent, environmentId, retired]);
+    finally {
+      if (current(ticket)) {
+        syncing.current = false; setConnecting(false);
+        if (!connectedRef.current && !paused.current && !streamActive.current) scheduleReconnect();
+      }
+    }
+  }, [api, current, refresh, refreshInfo, refreshAgent, environmentId, retired, clearReconnectTimer, scheduleReconnect]);
+  connectRef.current = connect;
   useEffect(() => {
     alive.current = true;
+    reconnectAttempt.current = 0;
+    clearReconnectTimer();
     void connect();
-    return () => { alive.current = false; ++generation.current; ++catalogueRevision.current; void api.disconnect().catch(() => {}); };
-  }, [connect, api, route]);
+    return () => {
+      alive.current = false;
+      clearReconnectTimer();
+      ++generation.current;
+      ++catalogueRevision.current;
+      void api.disconnect().catch(() => {});
+    };
+  }, [connect, api, route, clearReconnectTimer]);
   useEffect(() => {
+    const wake = () => {
+      reconnectAttempt.current = 0;
+      if (!alive.current || paused.current || syncing.current || executing.current || streamActive.current || connectedRef.current) return;
+      clearReconnectTimer();
+      void connectRef.current(false);
+    };
+    window.addEventListener("focus", wake);
+    window.addEventListener("online", wake);
+    return () => {
+      window.removeEventListener("focus", wake);
+      window.removeEventListener("online", wake);
+    };
+  }, [clearReconnectTimer]);
+  useEffect(() => {
+    if (!connected) return;
     const timer = setInterval(async () => {
       if (paused.current || syncing.current || executing.current || streamActive.current) return;
-      if (!connected) { void connect(); return; }
       const ticket = generation.current;
       syncing.current = true;
+      let failed = false;
       try {
         let page: EventPage;
         do {
@@ -155,11 +242,23 @@ export function useConnection(environmentId: EnvironmentId = null, route = "", r
           setRecords(previous => mergeRecords(previous, page.events.map(event => event.payload)));
         } while (page.hasMore);
         setLastSync(new Date());
-      } catch (error) { if (current(ticket)) { setConnected(false); setError(lifecycle.current && transportFailure(String(error)) ? "" : String(error)); } }
-      finally { if (current(ticket)) syncing.current = false; }
+      } catch (error) {
+        if (current(ticket)) {
+          failed = true;
+          connectedRef.current = false;
+          setConnected(false);
+          setError(lifecycle.current && transportFailure(String(error)) ? "" : String(error));
+        }
+      }
+      finally {
+        if (current(ticket)) {
+          syncing.current = false;
+          if (failed) scheduleReconnect();
+        }
+      }
     }, 2000);
     return () => clearInterval(timer);
-  }, [connected, connect, api, current]);
+  }, [connected, api, current, scheduleReconnect]);
   const perform = useCallback(async <T,>(operation: () => Promise<T>, recovery = false): Promise<T | undefined> => {
     if (executing.current || !alive.current || authority.current.retired || (!recovery && (!authority.current.connected || authority.current.pending))) return;
     executing.current = true; setBusy(true); setError("");
@@ -167,7 +266,14 @@ export function useConnection(environmentId: EnvironmentId = null, route = "", r
     try {
       const result = await operation();
       if (!current(ticket)) return result;
-      try { await refresh(); } catch (error) {
+      try {
+        if (streamActive.current) {
+          if (isServerRecord(result)) setRecords(previous => mergeRecords(previous, [result]));
+          await refreshInfo();
+        } else {
+          await refresh();
+        }
+      } catch (error) {
         if (current(ticket)) setError(`Command accepted. History refresh failed; do not submit it again. ${String(error)}`);
       }
       return result;
