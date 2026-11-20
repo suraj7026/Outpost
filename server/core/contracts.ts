@@ -27,6 +27,24 @@ export class Fault extends Error {
 export function requireThat(condition: unknown, code: string, message = code): asserts condition {
   if (!condition) throw new Fault(code, message);
 }
+export function formatErrorForLog(error: unknown): string {
+  const raw = error instanceof Fault
+    ? error.code
+    : error instanceof Error
+      ? (error.message || error.name || 'Error')
+      : String(error);
+  const redacted = raw
+    .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?(?:-----END [^-]*PRIVATE KEY-----|$)/g, '[redacted]')
+    .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9+/_=.:-]+/gi, '$1 [redacted]')
+    .replace(/(["']?(?:authorization|[a-z0-9_-]*(?:api[_-]?key|token|password|passwd|secret|cookie|credential))[a-z0-9_-]*["']?\s*[:=]\s*)(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;}]+)/gi, '$1[redacted]')
+    .replace(/\b(?:sk-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9_]+|xox[baprs]-[A-Za-z0-9-]+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\b/g, '[redacted]')
+    .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^/\s@]+@/gi, '$1[redacted]@')
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, '')
+    .trim();
+  return (redacted || 'unknown_error').slice(0, 500);
+}
 export const id = () => randomUUID();
 export const now = () => new Date().toISOString();
 export function canonical(value: unknown): string {

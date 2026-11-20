@@ -4,6 +4,18 @@ import { dirname } from 'node:path';
 import { canonical, digest, id, now, requireThat } from './contracts.js';
 import type { ClientCommand, Data, Event, Json, RecordValue } from './contracts.js';
 
+export interface CompactOptions {
+  retainDoneOutboxMs?: number;
+  retainEventsCount?: number;
+  nowMs?: number;
+}
+export interface CompactResult {
+  deletedOutbox: number;
+  deletedEvents: number;
+}
+const DEFAULT_RETAIN_DONE_OUTBOX_MS = 7 * 24 * 60 * 60 * 1000;
+const DEFAULT_RETAIN_EVENTS_COUNT = 10_000;
+
 export class Ledger {
   readonly db: DatabaseSync;
   private depth = 0;
@@ -13,6 +25,7 @@ export class Ledger {
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS records(kind TEXT NOT NULL, id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), data TEXT NOT NULL CHECK(json_valid(data)), updated_at TEXT NOT NULL, PRIMARY KEY(kind,id));
+      CREATE INDEX IF NOT EXISTS records_kind_updated ON records(kind, updated_at DESC, id);
       CREATE TABLE IF NOT EXISTS events(cursor INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE NOT NULL, aggregate_id TEXT NOT NULL, revision INTEGER NOT NULL, type TEXT NOT NULL, payload TEXT NOT NULL CHECK(json_valid(payload)), created_at TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS events_aggregate ON events(aggregate_id,cursor);
       CREATE TABLE IF NOT EXISTS commands(device_id TEXT NOT NULL, key TEXT NOT NULL, digest TEXT NOT NULL, result TEXT NOT NULL, PRIMARY KEY(device_id,key));
@@ -39,7 +52,15 @@ export class Ledger {
     const record = this.get<T>(kind, key); requireThat(record, 'not_found', `${kind} not found`); return record;
   }
   list<T = Data>(kind: string): RecordValue<T>[] {
-    return this.db.prepare('SELECT id FROM records WHERE kind=? ORDER BY updated_at DESC,id').all(kind).map(row => this.need<T>(kind, String(row.id)));
+    return this.db.prepare('SELECT id, revision, data, updated_at FROM records WHERE kind=? ORDER BY updated_at DESC, id')
+      .all(kind)
+      .map(row => ({
+        kind,
+        id: String(row.id),
+        revision: Number(row.revision),
+        data: JSON.parse(String(row.data)) as T,
+        updatedAt: String(row.updated_at),
+      }));
   }
   put<T extends object>(kind: string, key: string, expected: number, data: T, eventType = `${kind}.changed`): RecordValue<T> {
     if (this.depth === 0) return this.transaction(() => this.put(kind,key,expected,data,eventType));
@@ -72,6 +93,28 @@ export class Ledger {
     }));
   }
   cursor() { return Number(this.db.prepare('SELECT COALESCE(MAX(cursor),0) AS n FROM events').get()?.n ?? 0); }
+  compact(options: CompactOptions = {}): CompactResult {
+    const retainDoneOutboxMs = options.retainDoneOutboxMs ?? DEFAULT_RETAIN_DONE_OUTBOX_MS;
+    const retainEventsCount = options.retainEventsCount ?? DEFAULT_RETAIN_EVENTS_COUNT;
+    const nowMs = options.nowMs ?? Date.now();
+    requireThat(Number.isFinite(retainDoneOutboxMs) && retainDoneOutboxMs >= 0, 'invalid_retention');
+    requireThat(Number.isSafeInteger(retainEventsCount) && retainEventsCount >= 1, 'invalid_retention');
+    requireThat(Number.isFinite(nowMs), 'invalid_retention');
+    const cutoffDate = new Date(nowMs - retainDoneOutboxMs);
+    requireThat(!Number.isNaN(cutoffDate.getTime()), 'invalid_retention');
+    const cutoff = cutoffDate.toISOString();
+    return this.transaction(() => {
+      const outboxResult = this.db.prepare("DELETE FROM outbox WHERE state='done' AND created_at < ?").run(cutoff);
+      const threshold = this.db.prepare('SELECT cursor FROM events ORDER BY cursor DESC LIMIT 1 OFFSET ?').get(retainEventsCount);
+      const eventsResult = threshold
+        ? this.db.prepare('DELETE FROM events WHERE cursor <= ?').run(threshold.cursor as number)
+        : { changes: 0 };
+      return {
+        deletedOutbox: Number(outboxResult.changes),
+        deletedEvents: Number(eventsResult.changes),
+      };
+    });
+  }
   snapshot(kinds: string[]) {
     return this.transaction(() => ({ protocolVersion: 1, cursor: this.cursor(), records: kinds.flatMap(kind => this.list(kind)) }));
   }

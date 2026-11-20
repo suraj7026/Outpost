@@ -361,3 +361,22 @@ test('import source: directory read failures close handles and remove private st
     assert.deepEqual(readdirSync(realpathSync(tmpdir())).filter(n => n.startsWith('outpost-source-')).sort(), stagingBefore);
   } finally { t.mock.restoreAll(); f.clean(); }
 });
+
+test('import source: accepts both legacy v1 without records_kind_updated and indexed v1, while rejecting altered index SQL', () => {
+  const f = fixture(); f.close();
+  try {
+    // Current Ledger includes records_kind_updated
+    const indexed = dryRun(f.source);
+    assert.equal(indexed.schema.version, 1);
+
+    // Legacy v1 without records_kind_updated still validates cleanly
+    mutate(f.path, 'DROP INDEX records_kind_updated');
+    const legacy = dryRun(f.source);
+    assert.equal(legacy.schema.version, 1);
+    assert.deepEqual(legacy.tables, indexed.tables);
+
+    // Tampered records_kind_updated definition must fail closed
+    mutate(f.path, 'CREATE INDEX records_kind_updated ON records(kind)');
+    assert.throws(() => dryRun(f.source), /unsupported_schema/);
+  } finally { f.clean(); }
+});

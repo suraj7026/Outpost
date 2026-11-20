@@ -77,6 +77,26 @@ export class Coordinator {
     for (const action of db.list<Action>('action')) if (action.data.state === 'dispatching') db.put('action',action.id,action.revision,{ ...action.data,state: 'unknown',result: { error: 'Coordinator restarted; reconcile before retry' } });
   }
   get dispatchEnabled() { return recoveryAllowsDispatch(recoveryStatus(this.db)); }
+  private hasPendingOrDispatchingAction(taskId: string): boolean {
+    return !!this.db.db.prepare(
+      "SELECT 1 FROM records WHERE kind='action' AND json_extract(data,'$.taskId')=? AND json_extract(data,'$.state') IN ('pending','dispatching') LIMIT 1",
+    ).get(taskId);
+  }
+  private evictIfTerminal(taskId: string): boolean {
+    if (!this.db.db.isOpen) return false;
+    const task = this.db.get<Task>('task', taskId);
+    if (task && !['completed', 'cancelled'].includes(task.data.state)) return false;
+    if (this.runtimes.get(taskId)?.isActive(taskId)) return false;
+    if (this.gates.get(taskId)?.isActive(taskId)) return false;
+    if (this.hasPendingOrDispatchingAction(taskId)) return false;
+    this.gates.delete(taskId);
+    this.runtimes.delete(taskId);
+    return true;
+  }
+  private evictTerminalTasks(): void {
+    if (!this.db.db.isOpen) return;
+    for (const taskId of new Set([...this.gates.keys(), ...this.runtimes.keys()])) this.evictIfTerminal(taskId);
+  }
   gate(taskId: string) {
     const task = this.db.need<Task>('task',taskId); z.uuid().parse(taskId);
     let gate = this.gates.get(taskId); if (gate) return gate;
@@ -185,7 +205,11 @@ export class Coordinator {
     if (['task.pause','task.cancel'].includes(command.type)) {
       this.gates.get(command.aggregateId)?.stop(command.aggregateId);
       void this.browsers?.stop(command.aggregateId,'Task paused or cancelled');
-      void this.runtimes.get(command.aggregateId)?.abort(command.aggregateId);
+      const abort = this.runtimes.get(command.aggregateId)?.abort(command.aggregateId);
+      if (command.type === 'task.cancel') {
+        this.evictIfTerminal(command.aggregateId);
+        if (abort) void abort.then(() => this.evictIfTerminal(command.aggregateId), () => this.evictIfTerminal(command.aggregateId));
+      }
     }
     return accepted;
   }
@@ -290,10 +314,13 @@ export class Coordinator {
       pending = runtime.run(taskId,join(this.options.workspaceRoot ?? join(this.root,'workspaces'),taskId),prompt,this.options.apiKey ?? 'ollama',this.options.roles,inference);
     }
     this.runtimeJobs.add(pending);
-        void pending.catch(error => {
+    void pending.catch(error => {
       const current = this.db.need<Task>('task',taskId);
       if (!['paused','cancelled'].includes(current.data.state)) this.db.put('task',taskId,current.revision,{ ...current.data,state: 'interrupted',blocker: `Pi run failed: ${String(error).slice(0,800)}` });
-    }).finally(() => this.runtimeJobs.delete(pending));
+    }).finally(() => {
+      this.runtimeJobs.delete(pending);
+      this.evictIfTerminal(taskId);
+    });
   }
   drain() {
     const pending = this.drainWork();
@@ -303,60 +330,64 @@ export class Coordinator {
   }
   private async drainWork() {
     if (this.closing || !this.dispatchEnabled || this.maintenance.holding) return;
-    expireDueApprovals(this.db);
-    const rows = this.db.db.prepare("SELECT id,topic,payload FROM outbox WHERE state='pending' AND topic!='notice' ORDER BY created_at LIMIT 20").all();
-    const blockedTasks = new Set<string>();
-    for (const row of rows) {
-      const key = String(row.id), topic = String(row.topic); if (this.jobs.has(key) || topic === 'notice') continue;
-      const data = z.record(z.string(),z.json()).parse(JSON.parse(String(row.payload)));
-      if (topic === 'task.steer') {
-        const taskId = String(data.taskId), runtime = this.runtimes.get(taskId);
-        if (blockedTasks.has(taskId)) continue;
-                if (!runtime?.isActive(taskId) && this.db.need<Task>('task', taskId).data.state === 'waiting_for_approval') { blockedTasks.add(taskId); continue; }
-        if (this.browsers?.isHeld(taskId)) { blockedTasks.add(taskId); continue; }
-        if (runtime instanceof RemotePiRuntime && runtime.isActive(taskId) && data.modelRef && !runtime.canSteer(ModelRef.parse(data.modelRef))) {
-          blockedTasks.add(taskId); continue;
-        }
-      }
-      if (!this.db.db.prepare("UPDATE outbox SET state='claimed' WHERE id=? AND state='pending'").run(key).changes) continue;
-            this.jobs.add(key);
-      const operation = this.db.get('operation',key);
-      if (operation) this.db.put('operation',key,operation.revision,{ ...operation.data,state: 'running' });
-      try {
-        if (topic === 'action.propose') await this.gate(String(data.taskId)).propose(String(data.taskId),String(data.tool),data.arguments,String(data.operationId));
-        else if (topic === 'action.dispatch') { const action = this.db.need<Action>('action',String(data.actionId)); await this.gate(action.data.taskId).dispatch(String(data.actionId)); }
-        else if (topic === 'task.pause' || topic === 'task.cancel') await this.runtimes.get(String(data.taskId))?.abort(String(data.taskId));
-        else if (topic === 'task.steer') {
-          const taskId = String(data.taskId);
-          const runtime = this.runtimes.get(taskId);
-          if (runtime?.isActive(taskId)) await runtime.steer(taskId,String(data.text));
-          else if (this.options.worker || this.options.inference || (this.options.apiKey && this.options.roles)) {
-            const task = this.db.need<Task>('task',taskId);
-            if (!['paused','cancelled','completed'].includes(task.data.state)) {
-              this.db.put('task',taskId,task.revision,{ ...task.data,state: 'running',blocker: null });
-              this.runPi(taskId,String(data.text),data.modelRef ? ModelRef.parse(data.modelRef) : undefined);
-            }
+    try {
+      expireDueApprovals(this.db);
+      const rows = this.db.db.prepare("SELECT id,topic,payload FROM outbox WHERE state='pending' AND topic!='notice' ORDER BY created_at LIMIT 20").all();
+      const blockedTasks = new Set<string>();
+      for (const row of rows) {
+        const key = String(row.id), topic = String(row.topic); if (this.jobs.has(key) || topic === 'notice') continue;
+        const data = z.record(z.string(),z.json()).parse(JSON.parse(String(row.payload)));
+        if (topic === 'task.steer') {
+          const taskId = String(data.taskId), runtime = this.runtimes.get(taskId);
+          if (blockedTasks.has(taskId)) continue;
+          if (!runtime?.isActive(taskId) && this.db.need<Task>('task', taskId).data.state === 'waiting_for_approval') { blockedTasks.add(taskId); continue; }
+          if (this.browsers?.isHeld(taskId)) { blockedTasks.add(taskId); continue; }
+          if (runtime instanceof RemotePiRuntime && runtime.isActive(taskId) && data.modelRef && !runtime.canSteer(ModelRef.parse(data.modelRef))) {
+            blockedTasks.add(taskId); continue;
           }
         }
-        else if (topic === 'task.run' || topic === 'task.resume') {
-          const taskId = String(data.taskId), task = this.db.need<Task>('task',taskId);
-          if (task.data.state === 'queued') {
-            if (!this.options.worker && !this.options.inference && (!this.options.apiKey || !this.options.roles)) this.db.put('task',taskId,task.revision,{ ...task.data,state: 'waiting_for_capacity',blocker: 'Configure an Ollama endpoint and model, or qualified Cloud roles. Local tools can be proposed explicitly.' });
-            else {
-              this.tasks.claim(taskId,this.options.worker ? 'pi-server-worker' : 'pi-local');
-              this.runPi(taskId,task.data.goal,data.modelRef ? ModelRef.parse(data.modelRef) : undefined);
+        if (!this.db.db.prepare("UPDATE outbox SET state='claimed' WHERE id=? AND state='pending'").run(key).changes) continue;
+        this.jobs.add(key);
+        const operation = this.db.get('operation',key);
+        if (operation) this.db.put('operation',key,operation.revision,{ ...operation.data,state: 'running' });
+        try {
+          if (topic === 'action.propose') await this.gate(String(data.taskId)).propose(String(data.taskId),String(data.tool),data.arguments,String(data.operationId));
+          else if (topic === 'action.dispatch') { const action = this.db.need<Action>('action',String(data.actionId)); await this.gate(action.data.taskId).dispatch(String(data.actionId)); }
+          else if (topic === 'task.pause' || topic === 'task.cancel') await this.runtimes.get(String(data.taskId))?.abort(String(data.taskId));
+          else if (topic === 'task.steer') {
+            const taskId = String(data.taskId);
+            const runtime = this.runtimes.get(taskId);
+            if (runtime?.isActive(taskId)) await runtime.steer(taskId,String(data.text));
+            else if (this.options.worker || this.options.inference || (this.options.apiKey && this.options.roles)) {
+              const task = this.db.need<Task>('task',taskId);
+              if (!['paused','cancelled','completed'].includes(task.data.state)) {
+                this.db.put('task',taskId,task.revision,{ ...task.data,state: 'running',blocker: null });
+                this.runPi(taskId,String(data.text),data.modelRef ? ModelRef.parse(data.modelRef) : undefined);
+              }
             }
           }
+          else if (topic === 'task.run' || topic === 'task.resume') {
+            const taskId = String(data.taskId), task = this.db.need<Task>('task',taskId);
+            if (task.data.state === 'queued') {
+              if (!this.options.worker && !this.options.inference && (!this.options.apiKey || !this.options.roles)) this.db.put('task',taskId,task.revision,{ ...task.data,state: 'waiting_for_capacity',blocker: 'Configure an Ollama endpoint and model, or qualified Cloud roles. Local tools can be proposed explicitly.' });
+              else {
+                this.tasks.claim(taskId,this.options.worker ? 'pi-server-worker' : 'pi-local');
+                this.runPi(taskId,task.data.goal,data.modelRef ? ModelRef.parse(data.modelRef) : undefined);
+              }
+            }
+          }
+          this.db.db.prepare("UPDATE outbox SET state='done' WHERE id=?").run(key);
+          const finished = this.db.get('operation',key);
+          if (finished) this.db.put('operation',key,finished.revision,{ ...finished.data,state: 'handled' });
+        } catch (error) {
+          this.db.db.prepare("UPDATE outbox SET state='unknown' WHERE id=?").run(key);
+          const failed = this.db.get('operation',key);
+          if (failed) this.db.put('operation',key,failed.revision,{ ...failed.data,state: 'unknown',error: error instanceof Fault ? error.code : 'Operation failed; reconcile before retry' });
         }
-        this.db.db.prepare("UPDATE outbox SET state='done' WHERE id=?").run(key);
-        const finished = this.db.get('operation',key);
-        if (finished) this.db.put('operation',key,finished.revision,{ ...finished.data,state: 'handled' });
-      } catch (error) {
-        this.db.db.prepare("UPDATE outbox SET state='unknown' WHERE id=?").run(key);
-        const failed = this.db.get('operation',key);
-        if (failed) this.db.put('operation',key,failed.revision,{ ...failed.data,state: 'unknown',error: error instanceof Fault ? error.code : 'Operation failed; reconcile before retry' });
+        finally { this.jobs.delete(key); }
       }
-      finally { this.jobs.delete(key); }
+    } finally {
+      this.evictTerminalTasks();
     }
   }
 }

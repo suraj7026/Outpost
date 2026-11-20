@@ -15,6 +15,7 @@ const schemaSql = [
   "CREATE TABLE outbox(id TEXT PRIMARY KEY, topic TEXT NOT NULL, payload TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','claimed','done','unknown')), created_at TEXT NOT NULL)",
   'CREATE TABLE sqlite_sequence(name,seq)',
 ];
+const recordsIndexSql = 'CREATE INDEX records_kind_updated ON records(kind, updated_at DESC, id)';
 const ftsSql = [
   'CREATE VIRTUAL TABLE memory_search USING fts5(id UNINDEXED, project UNINDEXED, identity_id UNINDEXED, text)',
   "CREATE TABLE 'memory_search_config'(k PRIMARY KEY, v) WITHOUT ROWID",
@@ -51,7 +52,8 @@ export function inventorySqlite(database: string) {
     check(db.prepare('PRAGMA user_version').get()?.user_version === 0 && db.prepare('PRAGMA application_id').get()?.application_id === 0, 'unsupported_schema_version');
     const schema = db.prepare('SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY name COLLATE BINARY').all();
     const derivedMemoryIndex = schema.some(row => row.name === 'memory_search');
-    const expected = [...schemaSql, ...(derivedMemoryIndex ? ftsSql : [])].map(normalize).sort(byteOrder);
+    const hasRecordsIndex = schema.some(row => row.name === 'records_kind_updated');
+    const expected = [...schemaSql, ...(hasRecordsIndex ? [recordsIndexSql] : []), ...(derivedMemoryIndex ? ftsSql : [])].map(normalize).sort(byteOrder);
     const actual = schema.filter(row => row.sql !== null).map(row => normalize(text(row.sql))).sort(byteOrder);
     check(JSON.stringify(actual) === JSON.stringify(expected), 'unsupported_schema');
     const autoindexes = new Set(['sqlite_autoindex_records_1', 'sqlite_autoindex_events_1', 'sqlite_autoindex_commands_1', 'sqlite_autoindex_outbox_1']);
