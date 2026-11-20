@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -9,6 +10,7 @@ import { id } from '../core/contracts.js';
 import { Coordinator, publicKinds } from './coordinator.js';
 import { digest } from '../core/contracts.js';
 import { httpServer } from './http.js';
+import { LiveFeed } from './live.js';
 
 test('signed SSE streams partial output, reconnects from snapshots, and closes on device revocation',async () => {
   const root = mkdtempSync(join(tmpdir(),'outpost-live-')), db = new Ledger(join(root,'ledger.sqlite')), coordinator = new Coordinator(db,root);
@@ -43,6 +45,60 @@ test('signed SSE streams partial output, reconnects from snapshots, and closes o
     let ended = false; for (let attempt = 0; attempt < 20; attempt++) if ((await reader.read()).done) { ended = true; break; }
     assert.ok(ended,'Revocation closes an already open stream');
   } finally { abort.abort(); coordinator.live.close(); await new Promise<void>(resolve => server.close(() => resolve())); db.close(); rmSync(root,{ recursive: true,force: true }); }
+});
+
+test('SSE stream emits keepalive comments without disconnecting and cleans up timers on close', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'outpost-live-keepalive-'));
+  const db = new Ledger(join(root, 'ledger.sqlite'));
+  const deviceId = id(), taskId = id(), messageId = id();
+  db.put('device', deviceId, 0, { name: 'fixture', publicKey: 'unused', revoked: false });
+  const live = new LiveFeed(db, { keepaliveMs: 30, heartbeatMs: 60000 });
+  const server = createServer((_req, res) => live.serve(res, deviceId, publicKinds));
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address(); assert.ok(address && typeof address !== 'string');
+  const abort = new AbortController();
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/stream`, { method: 'POST', signal: abort.signal });
+    assert.equal(response.status, 200);
+    const reader = response.body!.getReader(), decoder = new TextDecoder();
+    let buffer = '';
+    const nextRaw = async (): Promise<string> => {
+      while (!buffer.includes('\n\n')) {
+        const chunk = await reader.read();
+        assert.equal(chunk.done, false, 'Stream should remain open across keepalives');
+        buffer += decoder.decode(chunk.value, { stream: true });
+      }
+      const end = buffer.indexOf('\n\n'), frame = buffer.slice(0, end);
+      buffer = buffer.slice(end + 2);
+      return frame;
+    };
+    const first = await nextRaw();
+    assert.ok(first.startsWith('data: '));
+    assert.equal(JSON.parse(first.slice(6)).type, 'snapshot');
+    let keepalives = 0;
+    while (keepalives < 3) {
+      const frame = await nextRaw();
+      if (frame === ': keepalive') keepalives++;
+    }
+    assert.equal(keepalives, 3);
+    live.publish('message', messageId, { taskId, author: 'assistant', text: 'after keepalive' });
+    let sawLive = false;
+    for (let i = 0; i < 10; i++) {
+      const frame = await nextRaw();
+      if (frame.startsWith('data: ')) {
+        const parsed = JSON.parse(frame.slice(6)) as { type?: string; record?: { data?: { text?: string } } };
+        if (parsed.type === 'live' && parsed.record?.data?.text === 'after keepalive') { sawLive = true; break; }
+      }
+    }
+    assert.ok(sawLive, 'Live frames continue flowing after SSE keepalive comments');
+    await reader.cancel();
+  } finally {
+    abort.abort();
+    live.close();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    db.close();
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('subagent snapshots persist and restart/interruption never invent terminal success', () => {

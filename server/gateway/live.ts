@@ -5,6 +5,11 @@ import type { Data, RecordValue } from '../core/contracts.js';
 import { Ledger } from '../core/ledger.js';
 import { interruptedSubagent } from '../pi-adapter/subagent-contract.js';
 
+export interface LiveFeedOptions {
+  keepaliveMs?: number;
+  heartbeatMs?: number;
+}
+
 /** Live projections are replaceable snapshots, not commands or replayable effects. */
 export class LiveFeed {
   private records = new Map<string,RecordValue>();
@@ -14,7 +19,7 @@ export class LiveFeed {
   private connections = new Map<string,number>();
   private responses = new Set<ServerResponse>();
   close() { for (const response of this.responses) response.end(); }
-  constructor(private db: Ledger) { this.events.setMaxListeners(32); }
+  constructor(private db: Ledger, private options: LiveFeedOptions = {}) { this.events.setMaxListeners(32); }
   snapshot() { return [...this.records.values()]; }
   subscribe(listener: (frame: unknown) => void) { this.events.on('frame',listener); return () => this.events.off('frame',listener); }
   publish(kind: string, id: string, data: Data) {
@@ -53,11 +58,12 @@ export class LiveFeed {
     response.writeHead(200,{ 'content-type': 'text/event-stream; charset=utf-8','cache-control': 'no-store','x-accel-buffering': 'no' });
     response.flushHeaders();
     let closed = false;
-    const send = (frame: unknown) => {
+    const write = (chunk: string) => {
       if (closed || response.writableEnded || response.destroyed) return;
       if (response.writableLength > 2*1024*1024) { response.destroy(); return; }
-      response.write(`data: ${JSON.stringify(frame)}\n\n`);
+      response.write(chunk);
     };
+    const send = (frame: unknown) => write(`data: ${JSON.stringify(frame)}\n\n`);
     const snapshot = this.db.snapshot(kinds); let cursor = snapshot.cursor;
     send({ type: 'snapshot',...snapshot,live: this.snapshot() });
     const unsubscribe = this.subscribe(send);
@@ -71,11 +77,11 @@ export class LiveFeed {
         if (records.length) send({ type: 'records',records,cursor });
       }
     },50);
-    const heartbeat = setInterval(() => send({ type: 'heartbeat' }),10000);
-    const lifetime = setTimeout(() => response.end(),60000);
+    const heartbeat = setInterval(() => send({ type: 'heartbeat' }),this.options.heartbeatMs ?? 10000);
+    const keepalive = setInterval(() => write(': keepalive\n\n'),this.options.keepaliveMs ?? 25000);
     response.once('error',() => response.destroy());
     response.once('close',() => {
-      closed = true; this.responses.delete(response); clearInterval(tick); clearInterval(heartbeat); clearTimeout(lifetime); unsubscribe();
+      closed = true; this.responses.delete(response); clearInterval(tick); clearInterval(heartbeat); clearInterval(keepalive); unsubscribe();
       const remaining = (this.connections.get(deviceId) ?? 1)-1;
       if (remaining) this.connections.set(deviceId,remaining); else this.connections.delete(deviceId);
     });

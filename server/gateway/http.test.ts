@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Ledger } from '../core/ledger.js';
@@ -53,4 +53,53 @@ for (const mode of [undefined,'ask_permission','auto','full_control']) test(`sig
     assert.equal(db.list('task').length,1);
     coordinator.devices.revoke(phone.id,1); assert.notEqual((await request('/v1/query',query('snapshot',{},phone),phone)).status,200);
   } finally { await new Promise<void>(resolve => server.close(() => resolve())); db.close(); rmSync(root,{ recursive: true,force: true }); }
+});
+
+test('tools query works without a taskId, matches task catalogue, and has no side effects', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'outpost-tools-query-'));
+  const db = new Ledger(join(root, 'db.sqlite'));
+  const coordinator = new Coordinator(db, root, {
+    hosts: { token: 't'.repeat(32), endpoints: { main: 'http://127.0.0.1:9999' } },
+  });
+  const server = httpServer(coordinator, 'unused');
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address(); assert.ok(address && typeof address !== 'string');
+  const base = `http://127.0.0.1:${address.port}`;
+  const keys = generateKeyPairSync('ed25519'), deviceId = id();
+  coordinator.devices.pair(deviceId, 'fixture', keys.publicKey.export({ format: 'der', type: 'spki' }).subarray(-32).toString('base64'));
+  const post = async (path: string, body: object) => {
+    const bytes = Buffer.from(JSON.stringify(body));
+    return fetch(base + path, { method: 'POST', headers: { 'x-outpost-signature': sign(null, bytes, keys.privateKey).toString('base64') }, body: bytes });
+  };
+  try {
+    assert.equal(db.list('task').length, 0);
+    const baseCatalogue = coordinator.query('tools', {});
+    assert.ok(Array.isArray(baseCatalogue));
+    const names = baseCatalogue.map(tool => (tool as { name: string }).name);
+    for (const required of ['file.read', 'file.write', 'command.run', 'system.inspect', 'automation.list', 'automation.save', 'automation.set_paused', 'host.execute', 'recovery.inspect']) {
+      assert.ok(names.includes(required), `Missing tool ${required}`);
+    }
+    assert.equal(db.list('task').length, 0, 'Task-independent tools query must not create tasks');
+    assert.equal(existsSync(join(root, 'workspaces')), false, 'Task-independent tools query must not create workspaces');
+
+    const v1 = await post('/v1/query', { deviceId, issuedAt: Date.now(), type: 'tools', payload: {} });
+    assert.equal(v1.status, 200);
+    assert.deepEqual(await v1.json(), baseCatalogue);
+
+    const v2 = await post('/v2/query', { protocolVersion: 2, environmentId: coordinator.environment.environmentId, deviceId, issuedAt: Date.now(), type: 'tools', payload: {} });
+    assert.equal(v2.status, 200);
+    assert.deepEqual(await v2.json(), baseCatalogue);
+
+    assert.throws(() => coordinator.query('tools', { taskId: id() }));
+    assert.throws(() => coordinator.query('tools', { unexpected: true }));
+
+    const taskId = id();
+    coordinator.tasks.create(taskId, { goal: 'Check catalogue parity', profile: 'code' });
+    assert.deepEqual(coordinator.query('tools', { taskId }), baseCatalogue);
+  } finally {
+    await coordinator.close();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    db.close();
+    rmSync(root, { recursive: true, force: true });
+  }
 });

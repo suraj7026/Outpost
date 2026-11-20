@@ -44,6 +44,19 @@ mod tests {
         assert_eq!(Decoder::default().push(input.as_bytes()).unwrap(), frames);
     }
     #[test]
+    fn ignores_keepalive_comments_without_buffering() {
+        let input = ": keepalive\n\ndata: {\"type\":\"snapshot\"}\n\n: keepalive\n\ndata: {\"type\":\"records\"}\n\n: keepalive\n\n";
+        let mut decoder = Decoder::default();
+        let mut frames = Vec::new();
+        for byte in input.as_bytes() {
+            frames.extend(decoder.push(&[*byte]).unwrap());
+        }
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0]["type"], "snapshot");
+        assert_eq!(frames[1]["type"], "records");
+        assert!(decoder.buffer.is_empty());
+    }
+    #[test]
     fn rejects_invalid_json_and_oversize_frames() {
         assert!(Decoder::default().push(b"data: not-json\n\n").is_err());
         assert!(Decoder::default()
