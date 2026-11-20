@@ -1,4 +1,4 @@
-"""Read-only host evidence for recovering an idle-timeout update from the desktop."""
+"""Read-only host evidence for recovering a pre-activation failed update from the desktop."""
 from __future__ import annotations
 
 import fcntl
@@ -9,9 +9,23 @@ import re
 import subprocess
 import sys
 
+PRE_ACTIVATION_FAILURE_CODES: dict[str, frozenset[str]] = {
+    'preflight': frozenset({
+        'preflight_failed',
+        'installation_changed',
+        'target_already_exists',
+        'release_paths_changed',
+        'unsupported_manifest',
+        'runtime_pins_mismatch',
+        'missing_service_files',
+    }),
+    'staging': frozenset({'staging_failed'}),
+    'waiting_for_idle': frozenset({'waiting_for_idle_failed'}),
+}
+
 
 def inspect_failed_update(environment: str, operation: str, expected: str, digest: str) -> dict[str, object]:
-    """Refuse recovery unless a stopped, bound idle-timeout kept the previous release."""
+    """Refuse recovery unless a stopped, bound pre-activation failure kept the previous release."""
     import uuid
     for value in (environment, operation):
         if str(uuid.UUID(value)) != value:
@@ -26,8 +40,11 @@ def inspect_failed_update(environment: str, operation: str, expected: str, diges
             raise ValueError('Operation path changed')
         receipt = json.loads((folder / 'status.json').read_text())
         request = json.loads((folder / 'request.json').read_text())
-        if (receipt.get('environmentId'), receipt.get('operationId'), receipt.get('state'), receipt.get('failureStage'), receipt.get('failureCode')) != (environment, operation, 'failed', 'waiting_for_idle', 'waiting_for_idle_failed'):
-            raise ValueError('Not a recoverable pre-activation idle timeout')
+        failure_stage = receipt.get('failureStage')
+        failure_code = receipt.get('failureCode')
+        allowed_codes = PRE_ACTIVATION_FAILURE_CODES.get(failure_stage) if isinstance(failure_stage, str) else None
+        if (receipt.get('environmentId'), receipt.get('operationId'), receipt.get('state')) != (environment, operation, 'failed') or allowed_codes is None or failure_code not in allowed_codes:
+            raise ValueError('Not a recoverable pre-activation failure')
         if (request.get('environmentId'), request.get('operationId'), request.get('expectedRelease'), request.get('sha256')) != (environment, operation, expected, digest):
             raise ValueError('Request binding changed')
         if receipt.get('releaseId') != request.get('releaseId'):
@@ -39,7 +56,7 @@ def inspect_failed_update(environment: str, operation: str, expected: str, diges
         current = Path('/opt/outpost-native/current').resolve(strict=True)
         if installation.get('environmentId') != environment or installation.get('release') != expected or current != Path('/opt/outpost-native/releases') / expected:
             raise ValueError('Previous release is not confirmed active')
-        return {'environmentId': environment, 'operationId': operation, 'expectedRelease': expected, 'sha256': digest, 'state': 'safe_to_recheck', 'updaterState': state}
+        return {'environmentId': environment, 'operationId': operation, 'expectedRelease': expected, 'sha256': digest, 'failureStage': failure_stage, 'state': 'safe_to_recheck', 'updaterState': state}
 
 
 def main() -> None:

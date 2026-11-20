@@ -71,30 +71,77 @@ test('browser and recorded previews never invoke native commands, including expl
   }
 });
 
-test('all saved nonretired IDs are enrolled only with consent, including offline and missing connections', async () => {
+test('per-server opt-in enrolls only the selected saved nonretired subset with explicit consent', async () => {
   const value = input();
   value.environments.push({ environmentId: 'gamma' }, { environmentId: 'retired', retired: true }, { environmentId: 'old' });
   value.connections.beta.connected = false;
   value.connections.old = { connected: true, retired: true, info: {} };
   value.connections.removed = { connected: true, info: {} };
-  const h = harness(value);
+  let targets: string[] = [];
+  let enabled = false;
+  const h = harness(value, async (command, args) => {
+    if (command === 'automatic_updates_enable') {
+      targets = [...new Set([...targets, ...((args?.environmentIds as string[]) ?? [])])].sort();
+      enabled = true;
+    } else if (command === 'automatic_updates_disable') {
+      const id = args?.environmentId as string | undefined;
+      if (id) {
+        targets = targets.filter(item => item !== id);
+        if (!targets.length) enabled = false;
+      } else {
+        enabled = false;
+      }
+    }
+    return status({ enabled, targets });
+  });
   await h.start();
   assert.deepEqual(automaticUpdateTargets(value), ['alpha', 'beta', 'gamma']);
   assert.deepEqual(automaticUpdateConnections(value), ['alpha']);
-  assert.equal(await h.controller.enable(false), false);
-  assert.equal(await h.controller.enable(true, true, ['alpha']), false);
+  assert.equal(await h.controller.enable(false, true, ['alpha']), false);
+  assert.equal(await h.controller.enable(true, true, []), false);
+  assert.equal(await h.controller.enable(true, true, ['retired']), false);
+  assert.equal(await h.controller.enable(true, true, ['old']), false);
+  assert.equal(await h.controller.enable(true, true, ['removed']), false);
   assert.equal(h.calls.length, 1);
-  await h.controller.enable(true);
-  assert.deepEqual(h.calls[1], { command: 'automatic_updates_enable', args: { environmentIds: ['alpha', 'beta', 'gamma'], approved: true, password: true } });
+
+  // Enroll only a single server first without requiring offline or unselected servers.
+  assert.equal(await h.controller.enable(true, true, ['alpha']), true);
+  assert.deepEqual(h.calls[1], { command: 'automatic_updates_enable', args: { environmentIds: ['alpha'], approved: true, password: true } });
+
+  // Re-enabling an already targeted server is a no-op.
+  assert.equal(await h.controller.enable(true, true, ['alpha']), false);
+
+  // Adding a second server later enrolls only that additional server.
+  assert.equal(await h.controller.enable(true, false, ['gamma']), true);
+  assert.deepEqual(h.calls.at(-1), { command: 'automatic_updates_enable', args: { environmentIds: ['gamma'], approved: true, password: false } });
+
+  // Per-server disable removes only the specified server while global disable keeps zero args.
+  assert.equal(await h.controller.disable('alpha'), true);
+  assert.deepEqual(h.calls.at(-1), { command: 'automatic_updates_disable', args: { environmentId: 'alpha' } });
+  assert.equal(h.controller.getSnapshot().status?.enabled, true);
+  assert.deepEqual(h.controller.getSnapshot().status?.targets, ['gamma']);
+  assert.equal(await h.controller.disable(), true);
+  assert.deepEqual(h.calls.at(-1), { command: 'automatic_updates_disable', args: undefined });
+  assert.equal(h.controller.getSnapshot().status?.enabled, false);
   h.controller.stop();
 });
 
-test('changed registry invalidates old consent instead of silently enrolling a newly added server', async () => {
-  const h = harness(); await h.start();
-  const next = input(); next.environments.push({ environmentId: 'new-server' });
-  h.change(next); await settle();
+test('newly added servers are never silently enrolled and removed servers invalidate stale consent', async () => {
+  const h = harness(input(), async (command, args) => command === 'automatic_updates_enable'
+    ? status({ enabled: true, targets: (args?.environmentIds as string[]) ?? [] })
+    : status());
+  await h.start();
+  const withAdded = input(); withAdded.environments.push({ environmentId: 'new-server' });
+  h.change(withAdded); await settle();
+  assert.equal(await h.controller.enable(true, true, ['alpha', 'beta']), true);
+  assert.deepEqual(h.calls.at(-1), { command: 'automatic_updates_enable', args: { environmentIds: ['alpha', 'beta'], approved: true, password: true } });
+
+  const withRemoved = input();
+  withRemoved.environments = [{ environmentId: 'alpha' }];
+  h.change(withRemoved); await settle();
+  const before = h.calls.length;
   assert.equal(await h.controller.enable(true, true, ['alpha', 'beta']), false);
-  assert.ok(!h.calls.some(call => call.command === 'automatic_updates_enable'));
+  assert.equal(h.calls.length, before);
   h.controller.stop();
 });
 
@@ -338,14 +385,15 @@ test('global provider and shared settings use the existing UI primitives and exp
   assert.match(ui, /not unrestricted sudo/);
   assert.match(ui, /No password enters this page or is stored/);
   assert.match(ui, /does not cancel an ongoing update or remove the restricted updater grant/);
-  assert.match(ui, /Global setting for all saved servers/);
+  assert.match(ui, /Choose which saved servers on this Mac receive automatic updates/);
   assert.match(ui, /automaticUpdatePresentation\(server, connected && !!updates\?\.available && !updates\.uncertain\)/);
   assert.match(ui, /Target status unknown/);
   assert.match(ui, /Enrollment unconfirmed/);
   assert.match(ui, /Enrollment is not confirmed for all servers/);
   assert.match(ui, /does not repeat enrollment or enable the remaining servers/);
   assert.match(ui, /dialog === 'enable' && enrollmentNotice/);
-  assert.match(ui, /enable\(approved, password, reviewedIds\)\.then\(confirmed => \{ if \(confirmed\) close\(\); \}\)/);
+  assert.match(ui, /enable\(approved, password, selectedIds\)\.then\(confirmed => \{ if \(confirmed\) close\(\); \}\)/);
+  assert.match(ui, /disable\(disableTarget \?\? undefined\)\.then\(confirmed => \{ if \(confirmed\) close\(\); \}\)/);
   assert.doesNotMatch(ui, /type="password"|environment_update_start|localStorage/);
 });
 
@@ -384,5 +432,18 @@ test('recovery is explicit, scoped, connected and never repeated after a lost re
   await h.fire();
   const recoveries = h.calls.filter(call => call.command === 'automatic_updates_recover');
   assert.deepEqual(recoveries, [{ command: 'automatic_updates_recover', args: { environmentId: 'alpha', approved: true, password: true } }]);
+  h.controller.stop();
+});
+
+test('recovery surfaces broadened pre-activation refusal messages without repeating the call', async () => {
+  const message = 'Only a verified pre-activation failure can use this recovery';
+  const h = harness(input(), async command => {
+    if (command === 'automatic_updates_recover') throw message;
+    return status();
+  });
+  await h.start();
+  assert.equal(await h.controller.recoverServer('alpha', true), false);
+  assert.equal(h.controller.getSnapshot().error, message);
+  assert.equal(h.calls.filter(call => call.command === 'automatic_updates_recover').length, 1);
   h.controller.stop();
 });

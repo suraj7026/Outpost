@@ -538,11 +538,11 @@ try {
   const automaticSection = outcomes.locator('section').filter({ has: outcomes.getByRole('heading', { name: 'Automatic server updates', exact: true }) });
   check(await automaticSection.getByText(/checks run only while this app is open and the server is connected/).isVisible(), 'Automatic checks disclose app-open and connection requirements');
   check(await automaticSection.getByText(/Newly saved servers are not silently enrolled/).isVisible(), 'Automatic updates explicitly exclude silent enrollment');
-  await automaticSection.getByRole('button', { name: 'Enable for all saved servers…', exact: true }).click();
-  const enrollment = outcomes.getByRole('dialog', { name: 'Enable updates for all saved servers?', exact: true });
-  check(await enrollment.getByText(/one-time opt-in for all saved, nonretired servers/).isVisible(), 'All-server opt-in scope remains explicit');
+  await automaticSection.getByRole('button', { name: 'Enable automatic updates…', exact: true }).click();
+  const enrollment = outcomes.getByRole('dialog', { name: 'Enable automatic server updates?', exact: true });
+  check(await enrollment.getByText(/Select the saved, nonretired servers to enroll for automatic updates/).isVisible(), 'Per-server opt-in scope remains explicit');
   assert.deepEqual(await enrollment.locator('li').allTextContents(), ['Studio server', 'Build server']); checks++;
-  check(await enrollment.getByRole('button', { name: 'Approve all-server automatic updates' }).isDisabled(), 'Opening enrollment cannot grant consent');
+  check(await enrollment.getByRole('button', { name: 'Approve selected servers' }).isDisabled(), 'Opening enrollment cannot grant consent');
   await enrollment.getByRole('button', { name: 'Back', exact: true }).click();
   check(await outcomes.evaluate(() => __calls.every(call => !['environment_update_start', 'automatic_updates_enable'].includes(call.command))), 'Checks and enrollment review never launch or enroll silently');
   await outcomes.close();
