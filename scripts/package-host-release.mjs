@@ -12,7 +12,7 @@ export function buildHostRelease({ outputDir = join(root, 'desktop/src-tauri/res
   sourceRoot = resolve(sourceRoot);
   outputDir = resolve(outputDir);
   const stage = mkdtempSync(join(tmpdir(), 'outpost-host-release-'));
-  const files = ['package.json', 'package-lock.json', 'deploy/environment/host_install.py', 'deploy/environment/host_update.py', 'deploy/environment/auto_update.py', 'deploy/environment/release-policy.json', 'deploy/environment/runtime-pins.json', 'deploy/agent/host-executor.mjs'];
+  const files = ['package.json', 'package-lock.json', 'deploy/environment/common.py', 'deploy/environment/host_install.py', 'deploy/environment/host_update.py', 'deploy/environment/auto_update.py', 'deploy/environment/release-policy.json', 'deploy/environment/runtime-pins.json', 'deploy/agent/host-executor.mjs'];
   function sources(directory) {
     for (const name of readdirSync(join(sourceRoot, directory)).sort()) {
       if (name.startsWith('.') || name === '__pycache__' || name === 'node_modules') continue;

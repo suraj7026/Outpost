@@ -360,27 +360,27 @@ class StagingSecurityTests(unittest.TestCase):
         path.write_bytes(self.archive_bytes if payload is None else payload)
         return path
 
-    def build(self, builder, argv, **kwargs):
-        self.assertEqual(builder.release, self.operation / 'dependency-build')
-        self.assertEqual(builder.node, self.updater.previous / 'node/bin/node')
+    def build(self, argv, **kwargs):
+        workspace = kwargs['cwd']
+        self.assertEqual(workspace, self.operation / 'dependency-build')
+        self.assertEqual(argv[0], str(self.updater.previous / 'node/bin/node'))
         self.assertEqual(kwargs['user'], 'outpost-build')
         self.assertIn('--ignore-scripts', argv)
         self.assertFalse(self.updater.release.exists())
         for name in ('package.json', 'package-lock.json'):
-            self.assertEqual((builder.release / name).stat().st_mode & 0o777, 0o644)
+            self.assertEqual((workspace / name).stat().st_mode & 0o777, 0o644)
         # Simulate a compromised build account replacing everything it controls and
         # retaining writable FDs. None of these inodes may become final runtime files.
         for name in ('node/bin/node', 'deploy/agent/host-executor.mjs', self.package_path + '/index.js'):
-            path = builder.release / name
+            path = workspace / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b'builder injected bytes')
             self.kept.append(path.open('r+b'))
-        (builder.release / 'package-lock.json').write_text('{"attacker":"lockfile"}')
+        (workspace / 'package-lock.json').write_text('{"attacker":"lockfile"}')
         self.kept.append(self.cache().open('r+b'))
 
     def stage(self, build=None):
-        with patch.object(update.Installer, 'run', autospec=True, side_effect=build or self.build), \
-                patch.object(update.Installer, 'dependencies', side_effect=AssertionError('recursive chown forbidden')), \
+        with patch.object(update, 'run_as_user', side_effect=build or self.build), \
                 patch.object(update.shutil, 'chown') as chown, patch.object(self.updater, 'qualify_runtime'):
             update.Updater.stage(self.updater)
             self.assertEqual({call.args[0] for call in chown.call_args_list},
@@ -443,7 +443,7 @@ class StagingSecurityTests(unittest.TestCase):
                              'privileged pathname chmod after handoff')
             return original_chmod(path, mode, **kwargs)
 
-        def build(builder, argv, **kwargs):
+        def build(argv, **kwargs):
             self.assertTrue(handed_off)
             for name, victim in protected.items():
                 self.assertEqual((workspace / name).readlink(), victim)
@@ -453,7 +453,7 @@ class StagingSecurityTests(unittest.TestCase):
 
         with patch.object(update.shutil, 'chown', side_effect=handoff), \
                 patch.object(update.shutil, 'copyfile', side_effect=copyfile), patch.object(Path, 'chmod', chmod), \
-                patch.object(update.Installer, 'run', autospec=True, side_effect=build), \
+                patch.object(update, 'run_as_user', side_effect=build), \
                 patch.object(self.updater, 'qualify_runtime'):
             update.Updater.stage(self.updater)
         for victim in protected.values():
@@ -471,13 +471,13 @@ class StagingSecurityTests(unittest.TestCase):
             self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
 
         with patch.object(update.shutil, 'chown', side_effect=handoff), \
-                patch.object(update.Installer, 'run', autospec=True, side_effect=self.build), \
+                patch.object(update, 'run_as_user', side_effect=self.build), \
                 patch.object(self.updater, 'qualify_runtime'):
             update.Updater.stage(self.updater)
 
     def test_cache_integrity_failure_never_promotes_or_activates(self):
-        def build(builder, argv, **kwargs):
-            self.build(builder, argv, **kwargs)
+        def build(argv, **kwargs):
+            self.build(argv, **kwargs)
             self.cache(b'attacker supplied tarball')
         with self.assertRaisesRegex(ValueError, 'integrity mismatch'):
             self.stage(build)
@@ -889,6 +889,295 @@ class HealthTests(unittest.TestCase):
                                         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
                 self.assertEqual(result.returncode, expected, result.stderr.decode()[-2000:])
 
+
+
+class Spec03StagingGcAndPortsTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        for name in ('CONFIG', 'DATA', 'PREFIX', 'UNIT_DIRECTORY', 'OPERATIONS'):
+            path = self.root / name
+            path.mkdir()
+            patcher = patch.object(update, name, path)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.source = dict(schema=2, id='host-' + 'a'*20, sequence=1, compatibility='native-v1',
+                           layoutVersion=1, protocolVersion=2, rollback=True, piVersion='1.4.0', extensions=[])
+        self.target = dict(self.source, id='host-' + 'b'*20, sequence=2)
+        self.request = dict(operationId=str(uuid.uuid4()), environmentId=str(uuid.uuid4()), deviceId=str(uuid.uuid4()),
+                            releaseId=self.target['id'], expectedRelease=self.source['id'], sha256='a'*64,
+                            size=100, target=self.target)
+        self.operation = update.OPERATIONS / self.request['operationId']
+        self.operation.mkdir()
+        (self.operation / 'request.json').write_text(json.dumps(self.request))
+        (self.operation / 'status.json').write_text(json.dumps(dict(state='queued')))
+        (self.operation / 'command.log').write_text('command log\n')
+        (self.operation / 'launch.log').write_text('launch log\n')
+        (update.CONFIG / 'installation.json').write_text(json.dumps(dict(
+            environmentId=self.request['environmentId'], release=self.source['id'], fullControl=True)))
+        (update.CONFIG / 'coordinator.env').write_text(f'OUTPOST_RUNTIME_RELEASE="{self.source["id"]}"\n')
+        (update.CONFIG / 'worker.env').write_text(f'OUTPOST_PI_RELEASE_FILE="{update.PREFIX}/releases/{self.source["id"]}/pi-release.json"\n')
+        for unit in ('outpost-native-worker.service', 'outpost-native-coordinator.service', 'outpost-native-host.service'):
+            (update.UNIT_DIRECTORY / unit).write_text(f'ExecStart={update.PREFIX}/releases/{self.source["id"]}/node/bin/node\n')
+        self.updater = update.Updater(self.operation)
+        self.updater.previous.mkdir(parents=True)
+        (update.PREFIX / 'current').symlink_to(self.updater.previous)
+        (self.updater.previous / 'host-manifest.json').write_text(json.dumps(self.source))
+        for root in (self.updater.previous, self.operation / 'source'):
+            (root / 'deploy/environment').mkdir(parents=True)
+            (root / 'deploy/environment/runtime-pins.json').write_text(json.dumps({
+                'nodeVersion': '22.14.0', 'nodeSha256': 'c' * 64,
+            }))
+            for entrypoint in ('server/main.ts', 'server/pi-worker/main.ts', 'deploy/agent/host-executor.mjs'):
+                path = root / entrypoint
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('// service fixture')
+        (self.updater.previous / 'node/bin').mkdir(parents=True)
+        (self.updater.previous / 'node/bin/node').write_bytes(b'trusted node binary')
+
+    def _populate_scratch(self):
+        for name in ('build-home', 'dependency-build', 'dependency-snapshot'):
+            directory = self.operation / name
+            (directory / 'nested').mkdir(parents=True, exist_ok=True)
+            (directory / 'nested/file.bin').write_bytes(b'x' * 64)
+
+    def _assert_scratch_cleaned_and_diagnostics_kept(self):
+        for name in ('build-home', 'dependency-build', 'dependency-snapshot'):
+            self.assertFalse((self.operation / name).exists(), name)
+        for name in ('status.json', 'request.json', 'command.log', 'launch.log'):
+            self.assertTrue((self.operation / name).is_file(), name)
+
+    def test_scratch_cleaned_after_complete_failed_and_rolled_back(self):
+        def fake_stage():
+            self._populate_scratch()
+            self.updater.release.mkdir(parents=True)
+            for entrypoint in ('server/main.ts', 'server/pi-worker/main.ts', 'deploy/agent/host-executor.mjs'):
+                path = self.updater.release / entrypoint
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('// service fixture')
+
+        # 1. Complete
+        with patch.object(self.updater, 'run'), patch.object(self.updater, 'checkpoint'), \
+                patch.object(self.updater, 'stage', side_effect=fake_stage), patch.object(self.updater, 'health'), \
+                patch.object(self.updater, 'release_hold'):
+            self.updater.execute()
+        self.assertEqual(json.loads((self.operation / 'status.json').read_text())['state'], 'complete')
+        self._assert_scratch_cleaned_and_diagnostics_kept()
+
+        # 2. Failed during stage
+        (update.PREFIX / 'current').unlink()
+        (update.PREFIX / 'current').symlink_to(self.updater.previous)
+        (update.CONFIG / 'installation.json').write_text(json.dumps(dict(
+            environmentId=self.request['environmentId'], release=self.source['id'], fullControl=True)))
+        shutil.rmtree(self.updater.release)
+        self.updater = update.Updater(self.operation)
+        def failing_stage():
+            self._populate_scratch()
+            raise RuntimeError('stage failure')
+        with patch.object(self.updater, 'run'), patch.object(self.updater, 'checkpoint'), \
+                patch.object(self.updater, 'stage', side_effect=failing_stage):
+            self.updater.execute()
+        self.assertEqual(json.loads((self.operation / 'status.json').read_text())['state'], 'failed')
+        self._assert_scratch_cleaned_and_diagnostics_kept()
+
+        # 3. Rolled back after health failure
+        self.updater = update.Updater(self.operation)
+        def fail_new_health(release):
+            if release == self.target['id']:
+                raise RuntimeError('unhealthy target')
+        with patch.object(self.updater, 'run'), patch.object(self.updater, 'checkpoint'), \
+                patch.object(self.updater, 'stage', side_effect=fake_stage), \
+                patch.object(self.updater, 'health', side_effect=fail_new_health), \
+                patch.object(self.updater, 'release_hold'):
+            self.updater.execute()
+        self.assertEqual(json.loads((self.operation / 'status.json').read_text())['state'], 'rolled_back')
+        self._assert_scratch_cleaned_and_diagnostics_kept()
+
+    def test_scratch_cleanup_skips_symlinks_without_touching_target(self):
+        external = self.root / 'protected-dir'
+        external.mkdir()
+        canary = external / 'keep.txt'
+        canary.write_bytes(b'untouched')
+        (self.operation / 'build-home').symlink_to(external)
+        (self.operation / 'dependency-build').mkdir()
+        self.updater.cleanup_scratch()
+        self.assertTrue((self.operation / 'build-home').is_symlink())
+        self.assertEqual(canary.read_bytes(), b'untouched')
+        self.assertFalse((self.operation / 'dependency-build').exists())
+
+    def test_prune_old_releases_keeps_current_previous_browser_ref_non_host_and_symlinks(self):
+        releases = update.PREFIX / 'releases'
+        self.updater.release.mkdir(parents=True)
+        (update.PREFIX / 'current').unlink()
+        (update.PREFIX / 'current').symlink_to(self.updater.release)
+        browser_ref = releases / ('host-' + '1'*20)
+        old_one = releases / ('host-' + '2'*20)
+        old_two = releases / ('host-' + '3'*20)
+        custom = releases / 'custom-keep'
+        for directory in (browser_ref, old_one, old_two, custom):
+            directory.mkdir(parents=True)
+            (directory / 'marker').write_text('x')
+        external = self.root / 'external-release-target'
+        external.mkdir()
+        canary = external / 'canary'
+        canary.write_bytes(b'protected')
+        symlink_entry = releases / ('host-' + '4'*20)
+        symlink_entry.symlink_to(external)
+        (update.CONFIG / 'coordinator.env').write_text(
+            f'OUTPOST_CAMOUFOX_PYTHON="{browser_ref}/browser/bin/python"\n'
+            f'XDG_CACHE_HOME="{browser_ref}/browser/cache"\n'
+        )
+        self.updater.prune_old_releases()
+        self.assertTrue(self.updater.release.is_dir())
+        self.assertTrue(self.updater.previous.is_dir())
+        self.assertTrue(browser_ref.is_dir())
+        self.assertTrue(custom.is_dir())
+        self.assertFalse(old_one.exists())
+        self.assertFalse(old_two.exists())
+        self.assertTrue(symlink_entry.is_symlink())
+        self.assertEqual(canary.read_bytes(), b'protected')
+
+    def test_shared_node_runtime_symlink_created_and_reused_when_pins_match(self):
+        self.updater.release.mkdir(parents=True)
+        previous_umask = os.umask(0o077)
+        try:
+            with patch.object(self.updater, 'run') as run_mock:
+                self.updater.prepare_node_runtime(self.operation / 'source')
+            shared = update.PREFIX / 'runtimes/node-22.14.0'
+            self.assertEqual((update.PREFIX / 'runtimes').stat().st_mode & 0o777, 0o755)
+            self.assertTrue(shared.is_dir() and not shared.is_symlink())
+            self.assertTrue((self.updater.release / 'node').is_symlink())
+            self.assertEqual((self.updater.release / 'node').readlink(), shared)
+            self.assertEqual((self.updater.release / 'node/bin/node').read_bytes(), b'trusted node binary')
+            self.assertEqual(run_mock.call_count, 1)
+            shared_inode = (shared / 'bin/node').stat().st_ino
+
+            # Second release reuses the already-populated shared runtime without re-copying.
+            second_id = 'host-' + 'c'*20
+            second_release = update.PREFIX / 'releases' / second_id
+            second_release.mkdir(parents=True)
+            self.updater.previous = self.updater.release
+            (self.updater.previous / 'deploy/environment').mkdir(parents=True, exist_ok=True)
+            (self.updater.previous / 'deploy/environment/runtime-pins.json').write_text(json.dumps({
+                'nodeVersion': '22.14.0', 'nodeSha256': 'c' * 64,
+            }))
+            self.updater.release = second_release
+            with patch.object(self.updater, 'run') as second_run:
+                self.updater.prepare_node_runtime(self.operation / 'source')
+            self.assertEqual(second_run.call_count, 0)
+            self.assertTrue((second_release / 'node').is_symlink())
+            self.assertEqual((second_release / 'node').readlink(), shared)
+            self.assertEqual((second_release / 'node/bin/node').stat().st_ino, shared_inode)
+        finally:
+            os.umask(previous_umask)
+
+    def test_shared_node_runtime_refuses_symlinked_runtimes_or_version_dir(self):
+        self.updater.release.mkdir(parents=True)
+        external = self.root / 'external-node'
+        (external / 'bin').mkdir(parents=True)
+        (external / 'bin/node').write_bytes(b'evil')
+        (update.PREFIX / 'runtimes').symlink_to(external)
+        with self.assertRaises(ValueError):
+            self.updater.prepare_node_runtime(self.operation / 'source')
+        (update.PREFIX / 'runtimes').unlink()
+        (update.PREFIX / 'runtimes').mkdir()
+        (update.PREFIX / 'runtimes/node-22.14.0').symlink_to(external)
+        with self.assertRaises(ValueError):
+            self.updater.prepare_node_runtime(self.operation / 'source')
+
+    def test_read_env_port_edge_cases(self):
+        env_file = update.CONFIG / 'test.env'
+        self.assertEqual(update.read_env_port(env_file, 'PORT', 4518), 4518)
+        for content, expected in (
+            ('PORT=5518\n', 5518),
+            ('PORT="5519"\n', 5519),
+            ("PORT='5520'\n", 5520),
+            ('# comment\n; another\n  PORT = "6000"  \n', 6000),
+            ('PORT=4000\nPORT=5000\n', 5000),
+            ('PORT=5000\nPORT=invalid\n', 4518),
+            ('PORT=0\n', 4518),
+            ('PORT=65536\n', 4518),
+            ('PORT=-1\n', 4518),
+            ('PORT=4518abc\n', 4518),
+            ('OTHER=5518\n', 4518),
+            ('PORT=5518\n' + ('# ' + 'a' * 70000), 4518),
+        ):
+            with self.subTest(content=content[:40]):
+                env_file.write_text(content)
+                self.assertEqual(update.read_env_port(env_file, 'PORT', 4518), expected)
+        real_env = self.root / 'real.env'
+        real_env.write_text('PORT=5999\n')
+        env_file.unlink()
+        env_file.symlink_to(real_env)
+        self.assertEqual(update.read_env_port(env_file, 'PORT', 4518), 4518)
+
+    def test_health_and_release_hold_use_configured_env_ports(self):
+        (update.CONFIG / 'coordinator.env').write_text('PORT=5518\n')
+        (update.CONFIG / 'worker.env').write_text('OUTPOST_PI_WORKER_PORT="5520"\n')
+        (update.CONFIG / 'host.env').write_text("OUTPOST_HOST_PORT='5519'\n")
+        (update.CONFIG / 'coordinator').mkdir(exist_ok=True)
+        (update.CONFIG / 'coordinator/worker-token').write_text('worker-secret\n')
+        (update.CONFIG / 'coordinator/host-token').write_text('host-secret\n')
+        seen_urls = []
+        clock = [0.0]
+
+        class Response:
+            def __init__(self, body, headers=None):
+                self._body = json.dumps(body).encode()
+                self.headers = headers or {}
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+            def read(self, limit):
+                return self._body
+
+        class Opener:
+            def open(self, req, timeout=None):
+                url = req.full_url if hasattr(req, 'full_url') else req
+                seen_urls.append(url)
+                if url == 'http://127.0.0.1:5518/v2/environment':
+                    return Response(
+                        {'environmentId': self.request['environmentId'], 'protocolVersion': 2,
+                         'runtime': {'release': self.target['id']}},
+                        {'x-outpost-environment-id': self.request['environmentId']},
+                    )
+                if url == 'http://127.0.0.1:5520/v1':
+                    payload = json.loads(req.data.decode())
+                    kind = payload['request']['type']
+                    worker_kinds.append(kind)
+                    if kind == 'maintenance.release':
+                        return Response({'released': True})
+                    return Response({'releaseId': self.target['id']})
+                if url == 'http://127.0.0.1:5519/health':
+                    return Response({'ready': True, 'host': 'local'})
+                if url == 'http://127.0.0.1:5519/outpost-update-auth-probe':
+                    code = 404 if req.get_header('Authorization') == 'Bearer host-secret' else 401
+                    raise urllib.error.HTTPError(url, code, 'status', {}, io.BytesIO(b''))
+                raise AssertionError(f'Unexpected URL: {url}')
+
+        worker_kinds = []
+        opener = Opener()
+        opener.request = self.request
+        opener.target = self.target
+        stable = (('outpost-native-worker.service', 101, 0),
+                  ('outpost-native-coordinator.service', 102, 0),
+                  ('outpost-native-host.service', 103, 0))
+        with patch.object(update.urllib.request, 'build_opener', return_value=opener), \
+                patch.object(self.updater, 'service_pids', return_value=stable), \
+                patch.object(self.updater, 'checkpoint'), \
+                patch.object(update.time, 'monotonic', side_effect=lambda: clock[0]), \
+                patch.object(update.time, 'sleep', side_effect=lambda s: clock.__setitem__(0, clock[0] + s)):
+            self.updater.health(self.target['id'])
+            self.updater.release_hold()
+        self.assertIn('http://127.0.0.1:5518/v2/environment', seen_urls)
+        self.assertIn('http://127.0.0.1:5520/v1', seen_urls)
+        self.assertIn('http://127.0.0.1:5519/health', seen_urls)
+        self.assertIn('http://127.0.0.1:5519/outpost-update-auth-probe', seen_urls)
+        self.assertIn('runtime.inventory', worker_kinds)
+        self.assertIn('maintenance.release', worker_kinds)
+        self.assertFalse(any(':4518/' in u or ':4519/' in u or ':4520/' in u for u in seen_urls))
 
 if __name__ == '__main__':
     unittest.main()

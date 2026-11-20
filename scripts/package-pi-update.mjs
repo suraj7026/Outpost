@@ -26,6 +26,7 @@ const serviceEntrypoints = ['server/main.ts', 'server/pi-worker/main.ts', 'deplo
 const piVersion = '1.5.2';
 const overlays = Object.freeze([
   'deploy/environment/auto_update.py',
+  'deploy/environment/common.py',
   'deploy/environment/host_install.py',
   'deploy/environment/host_update.py',
   'server/artifacts/files.ts',

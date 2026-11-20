@@ -16,14 +16,14 @@ import sys
 import tarfile
 import tempfile
 import time
+import urllib.error
+import urllib.request
 import uuid
 from pathlib import Path, PurePosixPath
 
 # The desktop bootstrap preloads this reviewed module; detached jobs import its adjacent file.
-from host_install import (CONFIG, DATA, PREFIX, UNIT_DIRECTORY, OPERATIONS, Installer,
-                          atomic_json, extract_source, NoRedirect)
-import urllib.request
-import urllib.error
+from common import (CONFIG, DATA, PREFIX, UNIT_DIRECTORY, OPERATIONS,
+                    atomic_json, extract_source, NoRedirect, run_as_user)
 
 
 CATALOGUE_FIXTURE = r'''
@@ -60,6 +60,9 @@ PREFLIGHT_FAILURES = {
     'missing_service_files': 'Release service entrypoints are missing or unsafe; no activation occurred',
 }
 
+SCRATCH_DIRECTORIES = ('build-home', 'dependency-build', 'dependency-snapshot')
+ENV_FILE_LIMIT = 65536
+
 
 class PreflightFailure(ValueError):
     """Identify a known refusal without exposing arbitrary exception text in receipts."""
@@ -69,6 +72,42 @@ class PreflightFailure(ValueError):
         self.code = code
 
 
+def read_env_port(env_file: Path, var_name: str, default: int) -> int:
+    """Read a validated TCP port (1-65535) from a systemd EnvironmentFile, or return default."""
+    try:
+        fd = os.open(env_file, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0))
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                return default
+            with os.fdopen(fd, 'rb', closefd=False) as source:
+                raw = source.read(ENV_FILE_LIMIT + 1)
+        finally:
+            os.close(fd)
+        if len(raw) > ENV_FILE_LIMIT:
+            return default
+        text = raw.decode('utf-8')
+    except (OSError, UnicodeDecodeError):
+        return default
+    found: int | None = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith(('#', ';')):
+            continue
+        key, sep, value = stripped.partition('=')
+        if not sep or key.strip() != var_name:
+            continue
+        candidate = value.strip()
+        if len(candidate) >= 2 and candidate[0] == candidate[-1] and candidate[0] in ('"', "'"):
+            candidate = candidate[1:-1]
+        if re.fullmatch(r'[0-9]{1,5}', candidate):
+            port = int(candidate)
+            if 1 <= port <= 65535:
+                found = port
+                continue
+        found = None
+    return default if found is None else found
+
+
 def validate(request: dict) -> dict:
     """Bind a bounded packet to one source, target, installation and operation."""
     if set(request) != {'operationId', 'environmentId', 'deviceId', 'releaseId', 'expectedRelease', 'sha256', 'size', 'target'}:
@@ -76,7 +115,6 @@ def validate(request: dict) -> dict:
     for name in ('operationId', 'environmentId', 'deviceId'):
         if str(uuid.UUID(request[name])) != request[name]:
             raise ValueError('Invalid identity')
-    import re
     for name in ('releaseId', 'expectedRelease'):
         if not re.fullmatch(r'host-[a-f0-9]{20}', request[name]):
             raise ValueError('Invalid release')
@@ -358,6 +396,41 @@ class Updater:
                 time.sleep(2)
         raise TimeoutError('Idle deadline exceeded')
 
+    def prepare_node_runtime(self, source: Path) -> None:
+        """Share an immutable Node runtime across releases when nodeSha256 is unchanged."""
+        prev_pins = json.loads((self.previous / 'deploy/environment/runtime-pins.json').read_text())
+        new_pins = json.loads((source / 'deploy/environment/runtime-pins.json').read_text())
+        version = new_pins.get('nodeVersion')
+        sha256 = new_pins.get('nodeSha256')
+        if (isinstance(version, str) and re.fullmatch(r'[0-9]+(?:\.[0-9]+){1,2}', version)
+                and isinstance(sha256, str) and re.fullmatch(r'[a-f0-9]{64}', sha256)
+                and prev_pins.get('nodeVersion') == version and prev_pins.get('nodeSha256') == sha256):
+            runtimes = PREFIX / 'runtimes'
+            if runtimes.is_symlink():
+                raise ValueError('Unsafe runtimes directory')
+            runtimes.mkdir(mode=0o755, exist_ok=True)
+            if not runtimes.is_dir():
+                raise ValueError('Unsafe runtimes directory')
+            runtimes.chmod(0o755)
+            shared = runtimes / f'node-{version}'
+            if not shared.exists() and not shared.is_symlink():
+                staging = runtimes / f".node-{version}.{self.request['operationId']}.tmp"
+                if staging.exists() or staging.is_symlink():
+                    raise ValueError('Conflicting runtime staging path')
+                try:
+                    shutil.copytree(self.previous / 'node', staging, symlinks=True)
+                    self.run(['/bin/chmod', '-R', 'a+rX,go-w', str(staging)])
+                    os.rename(staging, shared)
+                except Exception:
+                    if staging.exists() and not staging.is_symlink():
+                        shutil.rmtree(staging, ignore_errors=True)
+                    raise
+            if shared.is_symlink() or not shared.is_dir() or (shared / 'bin/node').is_symlink() or not (shared / 'bin/node').is_file():
+                raise ValueError('Unsafe shared Node runtime')
+            (self.release / 'node').symlink_to(shared)
+            return
+        shutil.copytree(self.previous / 'node', self.release / 'node', symlinks=True)
+
     def stage(self) -> None:
         """Build in disposable user storage; promote only verified bytes into fresh root inodes."""
         source = self.operation / 'source'
@@ -377,20 +450,21 @@ class Updater:
         # directories are permitted after this point.
         for directory in (home, workspace):
             shutil.chown(directory, user='outpost-build', group='outpost-build')
-        # Never call Installer.dependencies(): its recursive chown is appropriate only
-        # for fresh installation, not for a release later used by root services.
-        builder = object.__new__(Installer)
-        builder.operation, builder.release = self.operation, workspace
-        builder.node = self.previous / 'node/bin/node'
-        builder.environment = {'PATH': str(self.previous / 'node/bin') + ':/usr/bin:/bin', 'HOME': str(home), 'LANG': 'C.UTF-8'}
-        builder.run([str(builder.node), str(self.previous / 'node/lib/node_modules/npm/bin/npm-cli.js'),
-                     'ci', '--ignore-scripts', '--no-audit', '--no-fund', '--cache', str(home / 'cache')],
-                    command_id='dependencies.npm-ci', user='outpost-build', timeout=1200)
+        run_as_user(
+            [str(self.previous / 'node/bin/node'),
+             str(self.previous / 'node/lib/node_modules/npm/bin/npm-cli.js'),
+             'ci', '--ignore-scripts', '--no-audit', '--no-fund', '--cache', str(home / 'cache')],
+            user='outpost-build',
+            cwd=workspace,
+            env={'PATH': str(self.previous / 'node/bin') + ':/usr/bin:/bin', 'HOME': str(home), 'LANG': 'C.UTF-8'},
+            operation=self.operation,
+            timeout=1200,
+        )
         snapshot = self.operation / 'dependency-snapshot'
         snapshot.mkdir(mode=0o755)
         promote_dependencies(lock, workspace, home / 'cache', snapshot)
         shutil.copytree(source, self.release)
-        shutil.copytree(self.previous / 'node', self.release / 'node', symlinks=True)
+        self.prepare_node_runtime(source)
         (snapshot / 'node_modules').rename(self.release / 'node_modules')
         if package['dependencies']['@earendil-works/pi-coding-agent'] != self.request['target']['piVersion']:
             raise ValueError('Pi version does not match reviewed release')
@@ -486,7 +560,8 @@ class Updater:
 
     def verify_host_listener(self, opener) -> None:
         """Test listener and token enforcement without ever sending an executable command."""
-        with opener.open('http://127.0.0.1:4519/health', timeout=2) as response:
+        host_port = read_env_port(CONFIG / 'host.env', 'OUTPOST_HOST_PORT', 4519)
+        with opener.open(f'http://127.0.0.1:{host_port}/health', timeout=2) as response:
             value = json.loads(response.read(32768))
             if value.get('ready') is not True or value.get('host') != 'local':
                 raise ValueError('Host listener mismatch')
@@ -494,7 +569,7 @@ class Updater:
         if not token:
             raise ValueError('Missing host authentication')
         for supplied, expected in (('', 401), ('Bearer ' + token, 404)):
-            request = urllib.request.Request('http://127.0.0.1:4519/outpost-update-auth-probe',
+            request = urllib.request.Request(f'http://127.0.0.1:{host_port}/outpost-update-auth-probe',
                                              headers={'Authorization': supplied})
             try:
                 with opener.open(request, timeout=2):
@@ -509,12 +584,14 @@ class Updater:
     def health(self, release: str) -> None:
         """Require eight consecutive seconds of authenticated readiness and stable service PIDs."""
         verified_tools = self.verify_catalogue(release)
+        coordinator_port = read_env_port(CONFIG / 'coordinator.env', 'PORT', 4518)
+        worker_port = read_env_port(CONFIG / 'worker.env', 'OUTPOST_PI_WORKER_PORT', 4520)
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
         deadline = time.monotonic() + 180
         previous, stable_since, observations = None, None, 0
         while time.monotonic() < deadline:
             try:
-                with opener.open('http://127.0.0.1:4518/v2/environment', timeout=2) as response:
+                with opener.open(f'http://127.0.0.1:{coordinator_port}/v2/environment', timeout=2) as response:
                     value = json.loads(response.read(32768))
                     if (value.get('environmentId') != self.request['environmentId'] or value.get('protocolVersion') != 2
                             or response.headers.get('x-outpost-environment-id') != self.request['environmentId']
@@ -522,7 +599,7 @@ class Updater:
                         raise ValueError('Unexpected environment or release')
                 token = (CONFIG / 'coordinator/worker-token').read_text().strip()
                 packet = {'type': 'management', 'owner': self.request['deviceId'], 'request': {'type': 'runtime.inventory'}}
-                request = urllib.request.Request('http://127.0.0.1:4520/v1', data=json.dumps(packet).encode(), headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
+                request = urllib.request.Request(f'http://127.0.0.1:{worker_port}/v1', data=json.dumps(packet).encode(), headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
                 with opener.open(request, timeout=3) as response:
                     if json.loads(response.read(32768)).get('releaseId') != release:
                         raise ValueError('Worker release mismatch')
@@ -549,9 +626,10 @@ class Updater:
 
     def release_hold(self) -> None:
         """Release the worker and coordinator only after independently verified health."""
+        worker_port = read_env_port(CONFIG / 'worker.env', 'OUTPOST_PI_WORKER_PORT', 4520)
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
         packet = {'type': 'management', 'owner': self.request['deviceId'], 'request': {'type': 'maintenance.release', 'operationId': self.request['operationId']}}
-        request = urllib.request.Request('http://127.0.0.1:4520/v1', data=json.dumps(packet).encode(), headers={
+        request = urllib.request.Request(f'http://127.0.0.1:{worker_port}/v1', data=json.dumps(packet).encode(), headers={
             'Authorization': 'Bearer ' + (CONFIG / 'coordinator/worker-token').read_text().strip(), 'Content-Type': 'application/json'})
         with opener.open(request, timeout=5) as response:
             if not json.loads(response.read(32768)).get('released'):
@@ -571,6 +649,79 @@ class Updater:
         self.health(self.request['expectedRelease'])
         self.switched = False
         self.release_hold()
+
+    def cleanup_scratch(self) -> None:
+        """Delete disposable build scratch directories while retaining receipts and logs."""
+        for name in SCRATCH_DIRECTORIES:
+            path = self.operation / name
+            try:
+                info = path.lstat()
+            except OSError:
+                continue
+            if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+                continue
+            try:
+                shutil.rmtree(path)
+            except OSError:
+                pass
+
+    def _referenced_releases(self) -> set[str]:
+        """Retain any release still referenced by coordinator.env (e.g. shared browser runtime)."""
+        referenced: set[str] = set()
+        env_path = CONFIG / 'coordinator.env'
+        try:
+            fd = os.open(env_path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0))
+            try:
+                if not stat.S_ISREG(os.fstat(fd).st_mode):
+                    return referenced
+                with os.fdopen(fd, 'rb', closefd=False) as source:
+                    raw = source.read(ENV_FILE_LIMIT + 1)
+            finally:
+                os.close(fd)
+            if len(raw) > ENV_FILE_LIMIT:
+                return referenced
+            text = raw.decode('utf-8')
+        except (OSError, UnicodeDecodeError):
+            return referenced
+        releases_prefix = str(PREFIX / 'releases') + '/'
+        for match in re.finditer(re.escape(releases_prefix) + r'(host-[a-f0-9]{20})(?:/|["\'\s]|$)', text):
+            referenced.add(match.group(1))
+        return referenced
+
+    def prune_old_releases(self) -> None:
+        """Retain current and previous releases; remove older host-* release directories safely."""
+        try:
+            if PREFIX.is_symlink():
+                return
+            releases_dir = PREFIX / 'releases'
+            if not releases_dir.exists() or releases_dir.is_symlink() or not releases_dir.is_dir():
+                return
+            keep = {self.release.name, self.previous.name}
+            current = PREFIX / 'current'
+            if current.exists() or current.is_symlink():
+                try:
+                    resolved = current.resolve(strict=True)
+                    if resolved.parent == releases_dir.resolve(strict=True):
+                        keep.add(resolved.name)
+                except OSError:
+                    return
+            keep.update(self._referenced_releases())
+            with os.scandir(releases_dir) as entries:
+                for entry in entries:
+                    if not re.fullmatch(r'host-[a-f0-9]{20}', entry.name) or entry.name in keep:
+                        continue
+                    try:
+                        info = os.lstat(entry.path)
+                    except OSError:
+                        continue
+                    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+                        continue
+                    try:
+                        shutil.rmtree(entry.path)
+                    except OSError:
+                        pass
+        except OSError:
+            pass
 
     def execute(self) -> None:
         """Never auto-resume an interrupted transaction or discard partial staging."""
@@ -603,6 +754,8 @@ class Updater:
             self.release_hold()
             failure_stage = 'final_receipt'
             self.publish('complete', 'Release and authenticated worker health verified')
+            self.cleanup_scratch()
+            self.prune_old_releases()
         except Exception as error:
             code = error.code if failure_stage == 'preflight' and isinstance(error, PreflightFailure) else failure_stage + '_failed'
             # Legacy abort records cancellation on the coordinator; retain the actual
@@ -618,11 +771,13 @@ class Updater:
                     self.installation['release'] = self.request['expectedRelease']
                     atomic_json(CONFIG / 'installation.json', self.installation, 0o644)
                     self.publish('rolled_back', 'Previous release health verified; credentials and history retained')
+                    self.cleanup_scratch()
                 else:
                     # No activation occurred. Abort only an unheld operation;
                     # never clear a worker hold whose acquisition was ambiguous.
                     self.checkpoint('abort')
                     self.publish('failed', PREFLIGHT_FAILURES.get(code, 'Update stopped before activation; previous release remains active'))
+                    self.cleanup_scratch()
             except Exception:
                 self.publish('needs_attention', 'Recovery could not be verified. Maintenance hold and private diagnostics retained')
 

@@ -95,7 +95,7 @@ class AutoUpdateTests(unittest.TestCase):
         self.db.executescript('CREATE TABLE installation_identity(singleton INTEGER PRIMARY KEY, environment_id TEXT); CREATE TABLE records(kind TEXT,id TEXT,data TEXT,PRIMARY KEY(kind,id));')
         self.db.execute('INSERT INTO installation_identity VALUES(1,?)', (self.policy['environmentId'],))
         self.put('device', self.policy['deviceId'], dict(publicKey=self.device['public'], revoked=False))
-        self.sources = (b'"""Audited helper fixture."""\n', b'"""Audited installer fixture."""\n', b'"""Audited updater fixture."""\n')
+        self.sources = (b'"""Audited helper fixture."""\n', b'"""Audited updater fixture."""\n', b'"""Audited common fixture."""\n')
         self.public = auto.enroll(self.policy, *self.sources)
         self.files = {name: b'// fixture service\n' for name in auto.REQUIRED_FILES}
         for name in ('server/gateway/coordinator.ts', 'server/policy/trust.ts', 'server/core/ledger.ts', 'server/scheduler/tools.ts'):
@@ -733,7 +733,7 @@ class AutoUpdateTests(unittest.TestCase):
         self.stage(state='finished')
         original = auto.write_new
         def interrupt(path, content, mode):
-            if path.parent.name == '.staging' and path.name == 'host_install.py':
+            if path.parent.name == '.staging' and path.name == 'common.py':
                 raise OSError('simulated interruption')
             original(path, content, mode)
         with patch.object(auto, 'write_new', side_effect=interrupt), self.assertRaises(OSError):
@@ -867,12 +867,12 @@ class AutoUpdateTests(unittest.TestCase):
         staging.mkdir()
         canary = self.root / 'protected-refresh-canary'
         canary.write_bytes(b'private-preserve')
-        (staging / 'host_install.py').symlink_to(canary)
+        (staging / 'common.py').symlink_to(canary)
         with self.assertRaises(ValueError):
             self.refresh()
         self.assertEqual(canary.read_bytes(), b'private-preserve')
-        self.assertTrue((staging / 'host_install.py').is_symlink())
-        (staging / 'host_install.py').unlink()
+        self.assertTrue((staging / 'common.py').is_symlink())
+        (staging / 'common.py').unlink()
         staging.rmdir()
         (versions / 'unreviewed').mkdir()
         with self.assertRaises(ValueError):
@@ -894,6 +894,115 @@ class AutoUpdateTests(unittest.TestCase):
         self.assertEqual(len(launch), 1)
         self.assertEqual(launch[0][-3], str(root / 'auto_update.py'))
 
+
+    def test_editing_host_install_does_not_change_sources_sha256_or_block_updates(self):
+        self.assertEqual(set(self.public['sourcesSha256']), {'auto_update.py', 'host_update.py', 'common.py'})
+        self.assertNotIn('host_install.py', self.public['sourcesSha256'])
+        # Changing an unrelated host_install.py on disk never alters enrolled pins or intake.
+        (self.root / 'host_install.py').write_bytes(b'print("edited installer")\n')
+        _, recomputed = auto.source_policy(self.policy, *self.sources)
+        self.assertEqual(recomputed['sourcesSha256'], self.public['sourcesSha256'])
+        auto.verify_sources(auto.active_library(self.public), self.public)
+        self.assertEqual(self.receive()['state'], 'queued')
+
+    def test_refused_main_writes_structured_refusal_log_redacts_secrets_rotates_and_rejects_symlink(self):
+        log_path = auto.OPERATIONS.parent / 'refusals.log'
+        secret = 'TOP_SECRET_CANARY_TOKEN_98765'
+        bad_frame = io.BytesIO(f'{{"not_json": "{secret}"\n'.encode())
+        stdout = io.StringIO()
+        with patch.object(auto.sys, 'stdin', SimpleNamespace(buffer=bad_frame)), \
+                patch.object(auto.sys, 'stdout', stdout):
+            code = auto.main([])
+        self.assertEqual(code, 1)
+        self.assertNotIn(secret, stdout.getvalue())
+        self.assertEqual(json.loads(stdout.getvalue()), {'state': 'refused', 'stage': 'Auto-update refused; inspect existing operation if submitted'})
+        self.assertTrue(log_path.is_file())
+        self.assertEqual(log_path.stat().st_mode & 0o777, 0o600)
+        lines = [json.loads(line) for line in log_path.read_text().splitlines()]
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(set(lines[0]), {'ts', 'reason', 'stage'})
+        self.assertEqual(lines[0]['reason'], 'invalid_json')
+        self.assertEqual(lines[0]['stage'], 'intake')
+        self.assertNotIn(secret, log_path.read_text())
+
+        # Refusal with invalid signature records a fixed non-secret code.
+        bad_header = self.header()
+        bad_header['deviceSignature'] = b64(b'\x00' * 64)
+        bad_sig_frame = io.BytesIO(json.dumps(bad_header).encode() + b'\n' + self.payload)
+        stdout = io.StringIO()
+        with patch.object(auto.sys, 'stdin', SimpleNamespace(buffer=bad_sig_frame)), \
+                patch.object(auto.sys, 'stdout', stdout):
+            code = auto.main([])
+        self.assertEqual(code, 1)
+        lines = [json.loads(line) for line in log_path.read_text().splitlines()]
+        self.assertEqual(lines[-1]['reason'], 'signature_invalid')
+        self.assertEqual(lines[-1]['stage'], 'signature')
+
+        # Rotation at REFUSAL_LOG_LIMIT preserves previous log as refusals.log.1.
+        log_path.write_bytes(b'x' * 128)
+        with patch.object(auto, 'REFUSAL_LOG_LIMIT', 64):
+            auto.log_refusal('test_rotation', 'receive')
+        rotated = auto.OPERATIONS.parent / 'refusals.log.1'
+        self.assertTrue(rotated.is_file())
+        self.assertEqual(rotated.read_bytes(), b'x' * 128)
+        self.assertEqual(log_path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(json.loads(log_path.read_text().strip())['reason'], 'test_rotation')
+
+        # Symlink at refusals.log is refused without touching target.
+        canary = self.root / 'protected-refusal-target'
+        canary.write_bytes(b'do-not-overwrite')
+        log_path.unlink()
+        log_path.symlink_to(canary)
+        auto.log_refusal('symlink_attempt', 'receive')
+        self.assertEqual(canary.read_bytes(), b'do-not-overwrite')
+
+    def test_release_path_accepts_shared_node_runtime_and_rejects_tampered_or_other_symlinks(self):
+        shared = auto.PREFIX / 'runtimes/node-22.14.0'
+        shared.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(self.previous / 'node'), str(shared))
+        (self.previous / 'node').symlink_to(shared)
+        self.assertEqual(auto.release_path(self.installation), self.previous)
+        # Real Ed25519 signature verification through the shared Node runtime succeeds.
+        self.assertEqual(self.receive()['state'], 'queued')
+
+        # Group-writable file inside shared runtime is refused.
+        (shared / 'bin/node').chmod(0o775)
+        with self.assertRaises(ValueError):
+            auto.release_path(self.installation)
+        (shared / 'bin/node').chmod(0o755)
+        self.assertEqual(auto.release_path(self.installation), self.previous)
+
+        # Symlink outside root for non-node directory is still refused.
+        external = self.root / 'external-dir'
+        external.mkdir()
+        (self.previous / 'other').symlink_to(external)
+        with self.assertRaises(ValueError):
+            auto.release_path(self.installation)
+
+    def test_reauthorize_migrates_legacy_host_install_policy_to_common_policy(self):
+        self.stage(state='finished')
+        for launcher in (auto.LEGACY_LAUNCHER, auto.LEGACY_VERSIONED_LAUNCHER):
+            with self.subTest(legacy_flat=(launcher == auto.LEGACY_LAUNCHER)):
+                # Reset library to a legacy host_install.py enrollment.
+                shutil.rmtree(auto.LIBRARY)
+                auto.LIBRARY.mkdir()
+                legacy_sources = {
+                    'auto_update.py': b'"""Legacy helper."""\n',
+                    'host_install.py': b'"""Legacy installer."""\n',
+                    'host_update.py': b'"""Legacy updater."""\n',
+                }
+                for name, data in legacy_sources.items():
+                    (auto.LIBRARY / name).write_bytes(data)
+                legacy_public = {
+                    'schema': 1, **self.policy,
+                    'sourcesSha256': {name: auto.digest(data) for name, data in legacy_sources.items()},
+                }
+                auto.atomic_json(auto.CONFIG / 'auto-update.json', legacy_public, 0o644)
+                auto.HELPER.write_bytes(launcher)
+                migrated = auto.reauthorize(self.policy, legacy_public, *self.refreshed_sources(9))
+                self.assertEqual(set(migrated['sourcesSha256']), {'auto_update.py', 'host_update.py', 'common.py'})
+                self.assertEqual(auto.HELPER.read_bytes(), auto.LAUNCHER)
+                self.assertEqual(self.dispatch_path(), auto.active_library(migrated) / 'auto_update.py')
 
 if __name__ == '__main__':
     unittest.main()

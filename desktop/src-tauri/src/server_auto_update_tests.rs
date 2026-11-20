@@ -256,9 +256,9 @@ fn enrollment_only_loads_pinned_bundled_modules_and_fixed_no_arg_launcher() {
     assert!(isolated_python(BOOTSTRAP_LOADER).len() < 4096);
     let policy = policy(ENVIRONMENT, DEVICE, &STANDARD.encode([7; 32]), "operator");
     let source = enrollment_source(&policy, None, None).unwrap();
-    assert!(source.contains(".enroll(p,raw['auto_update'],raw['host_install'],raw['host_update'])"));
+    assert!(source.contains(".enroll(p,raw['auto_update'],raw['host_update'],raw['common'])"));
     assert!(source.contains(&sha(HELPER.as_bytes())));
-    assert!(source.contains(&sha(INSTALLER.as_bytes())));
+    assert!(source.contains(&sha(COMMON.as_bytes())));
     assert!(source.contains(&sha(UPDATER.as_bytes())));
     assert_eq!(policy.as_object().unwrap().len(), 4);
     let public = public_policy(&policy);
@@ -1076,7 +1076,7 @@ fn helper_upgrade_blocks_before_submission_without_an_active_latch() {
     assert!(restored.active_environment_id.is_none());
     assert_eq!(restored.servers[ENVIRONMENT].policy, Some(old));
     assert_eq!(restored.status()["servers"][0]["state"], "blocked");
-    for name in ["auto_update.py", "host_install.py", "host_update.py"] {
+    for name in ["auto_update.py", "common.py", "host_update.py"] {
         let mut changed = current.clone();
         changed["sourcesSha256"][name] = json!("b".repeat(64));
         assert!(verify_current_helper(&current, &changed).is_err());
@@ -1128,7 +1128,7 @@ fn renewal_bootstrap_binds_exact_old_policy_without_invoking_the_update_helper()
     old["sourcesSha256"]["host_update.py"] = json!("f".repeat(64));
     let source = enrollment_source(&identity, Some(&old), Some(OPERATION)).unwrap();
     assert!(source.contains(
-        ".reauthorize(p,previous,raw['auto_update'],raw['host_install'],raw['host_update'])"
+        ".reauthorize(p,previous,raw['auto_update'],raw['host_update'],raw['common'])"
     ));
     assert!(!source.contains(".enroll(p,"));
     assert!(!source.contains(LAUNCH));
@@ -1148,9 +1148,9 @@ for mode in ['success','before','after','killed','corrupt']:
    assert path==pathlib.Path(directory)/'auto-update-native-renewal.json' and permissions==0o644
    if value['state']!='running': assert not inside[0] and events[-1]=='returned'
    receipts.append(copy.deepcopy(value))
-  def reauthorize(policy,previous,helper,installer,updater):
+  def reauthorize(policy,previous,helper,updater,common):
    assert policy==packet['identity'] and previous==packet['previous']
-   assert (helper,installer,updater)==(b'helper',b'installer',b'updater')
+   assert (helper,updater,common)==(b'helper',b'updater',b'common')
    assert receipts[-1]['state']=='running' and receipts[-1]['attemptId']==packet['attemptId']
    calls.append(previous); inside[0]=True
    try:
@@ -1159,12 +1159,12 @@ for mode in ['success','before','after','killed','corrupt']:
     return packet['desired']
    finally:
     inside[0]=False; events.append('returned')
-  def verify_sources(root,policy):
+  def verify_sources(root,policy,**kwargs):
    assert policy==packet['previous']
    if mode=='corrupt': raise ValueError('Corrupt previous helper')
-  helper=types.SimpleNamespace(CONFIG=pathlib.Path(directory),os=types.SimpleNamespace(geteuid=lambda:0),require=require,validate_public_policy=lambda p:require(p in [packet['previous'],packet['desired']]),secure_path=lambda *a,**k:None,atomic_json=atomic_json,reauthorize=reauthorize,read_public=lambda p:packet['desired'] if mode=='after' else packet['previous'],active_library=lambda p:pathlib.Path(directory),verify_sources=verify_sources)
+  helper=types.SimpleNamespace(CONFIG=pathlib.Path(directory),os=types.SimpleNamespace(geteuid=lambda:0),require=require,validate_public_policy=lambda p,**k:require(p in [packet['previous'],packet['desired']]),secure_path=lambda *a,**k:None,atomic_json=atomic_json,reauthorize=reauthorize,read_public=lambda p:packet['desired'] if mode=='after' else packet['previous'],active_library=lambda p,**k:pathlib.Path(directory),verify_sources=verify_sources)
   fake=types.SimpleNamespace(modules={'auto_update':helper})
-  namespace={'base64':base64,'json':json,'sys':fake,'p':packet['identity'],'raw':{'auto_update':b'helper','host_install':b'installer','host_update':b'updater'}}
+  namespace={'base64':base64,'json':json,'sys':fake,'p':packet['identity'],'raw':{'auto_update':b'helper','common':b'common','host_update':b'updater'}}
   try:
    with contextlib.redirect_stdout(io.StringIO()): exec(packet['source'],namespace)
    assert mode=='success'
@@ -1251,11 +1251,12 @@ def list_grant(args,**kwargs):
  assert kwargs['timeout']==5
  return types.SimpleNamespace(returncode=0)
 subprocess.run=list_grant
-for versioned,tampered in [(False,False),(True,False),(True,True)]:
+for versioned,tampered,legacy_modules in [(False,False,True),(True,False,False),(True,False,True),(True,True,False)]:
  with tempfile.TemporaryDirectory() as directory:
   root=pathlib.Path(directory); config=root/'config'; library=root/'library'; executable=root/'bin'
   for p in [config,library,executable]: p.mkdir()
-  modules={name:('fixture '+name).encode() for name in ['auto_update.py','host_install.py','host_update.py']}
+  names=['auto_update.py','host_install.py','host_update.py'] if legacy_modules else ['auto_update.py','common.py','host_update.py']
+  modules={name:('fixture '+name).encode() for name in names}
   policy={'schema':1,'environmentId':'fixture','deviceId':'fixture','publisherPublicKey':'fixture','sshUser':'operator','sourcesSha256':{name:hashlib.sha256(data).hexdigest() for name,data in modules.items()}}
   selected=library
   if versioned:
@@ -1528,4 +1529,85 @@ fn postverify_tools_queries_tools_directly_without_snapshot() {
             assert_eq!(body["payload"], json!({}));
         }
     });
+}
+
+#[test]
+fn service_probe_reads_configured_host_port_from_host_env() {
+    let script = r#"import json,sys,pathlib,stat,types,subprocess,time,urllib.request,urllib.error
+from unittest.mock import patch
+packet=json.load(sys.stdin)
+root=pathlib.Path('/opt/outpost-native/releases/host-aaaaaaaaaaaaaaaaaaaa')
+files={str(root/'host-manifest.json'):json.dumps({'id':root.name}).encode(),str(root/'deploy/environment/runtime-pins.json'):b'{}','/etc/outpost-native/installation.json':json.dumps({'environmentId':'11111111-1111-4111-8111-111111111111','release':root.name,'fullControl':True}).encode()}
+if packet['hostEnv'] is not None:
+ files['/etc/outpost-native/host.env']=packet['hostEnv'].encode()
+clock=[0.0];urls=[]
+def resolve(path,*args,**kwargs): return root if str(path)=='/opt/outpost-native/current' else path
+def read(path):
+ if str(path)=='/etc/outpost-native/host.env' and packet['denyHostEnv']:
+  raise PermissionError('root only')
+ return files[str(path)]
+def sleep(seconds): clock[0]+=seconds
+def run(args,**kwargs):
+ pid=5000+['outpost-native-worker.service','outpost-native-coordinator.service','outpost-native-host.service'].index(args[2])
+ return types.SimpleNamespace(stdout=f'ActiveState=active\nSubState=running\nMainPID={pid}\nNRestarts=0\n'.encode())
+class Response:
+ def __enter__(self): return self
+ def __exit__(self,*args): pass
+ def read(self,limit): return b'{"ready":true,"host":"local"}'
+class Opener:
+ def open(self,url,**kwargs):
+  urls.append(url)
+  if url.endswith('/health'): return Response()
+  raise urllib.error.HTTPError(url,401,'Unauthorized',{},None)
+with patch.object(pathlib.Path,'resolve',resolve),patch.object(pathlib.Path,'lstat',lambda _:types.SimpleNamespace(st_uid=0,st_mode=stat.S_IFREG|0o600)),patch.object(pathlib.Path,'read_bytes',read),patch.object(subprocess,'run',run),patch.object(time,'sleep',sleep),patch.object(time,'monotonic',lambda:clock[0]),patch.object(urllib.request,'build_opener',lambda *args:Opener()):
+ exec(compile(packet['source'],'service-probe','exec'))
+assert urls==[f"http://127.0.0.1:{packet['expectedPort']}/health",f"http://127.0.0.1:{packet['expectedPort']}/outpost-update-auth-probe"], urls
+"#;
+    for (host_env, deny, expected_port) in [
+        (Some("# comment\nOUTPOST_HOST_PORT=\"5519\"\n"), false, 5519),
+        (Some("OUTPOST_HOST_PORT='5520'\n"), false, 5520),
+        (Some("OUTPOST_HOST_PORT=99999\n"), false, 4519),
+        (Some("OUTPOST_HOST_PORT=5519\n"), true, 4519),
+        (None, false, 4519),
+    ] {
+        let input = serde_json::to_vec(&json!({
+            "source": SERVICE_PROBE,
+            "hostEnv": host_env,
+            "denyHostEnv": deny,
+            "expectedPort": expected_port
+        }))
+        .unwrap();
+        let output = run(
+            "python3",
+            &["-I".into(), "-c".into(), script.into()],
+            &input,
+            Duration::from_secs(5),
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        let observed: Value = serde_json::from_slice(&output).unwrap();
+        assert_eq!(observed["hostAuthEnforced"], true);
+    }
+}
+#[test]
+fn legacy_host_install_policy_blocks_updates_and_offers_renewal() {
+    let current = current_enrollment_policy();
+    let mut legacy = current.clone();
+    legacy["sourcesSha256"] = json!({
+        "auto_update.py": "a".repeat(64),
+        "host_install.py": "b".repeat(64),
+        "host_update.py": "c".repeat(64),
+    });
+    assert_eq!(
+        verify_current_helper(&legacy, &legacy).unwrap_err(),
+        RENEW_HELPER
+    );
+    assert_eq!(
+        enrollment_action(Some(&legacy), &legacy, &current).unwrap(),
+        EnrollmentAction::Renew(legacy.clone())
+    );
+    assert_eq!(
+        enrollment_action(None, &legacy, &current).unwrap(),
+        EnrollmentAction::Renew(legacy)
+    );
 }
