@@ -30,13 +30,36 @@ const entry = `
     const connection = { environmentId: owner, connected: true, busy: false, retired: false, error: '', info: { pending: false, deviceId: 'self' },
       runtime, records, models: ['fixture:cloud'], agentCatalogue: { defaultModel: { providerId: 'fixture', modelId: 'managed' },
         models: [{ providerId: 'fixture', modelId: 'managed', name: 'Managed model' }] }, ...flags,
-      api: { async query(kind) { queries.push(kind); if (kind !== 'recovery.diagnostics') throw Error(kind); return report; } },
+      api: {
+        async query(kind, payload) {
+          queries.push(kind);
+          if (kind === 'recovery.diagnostics') return report;
+          if (kind === 'automation.preview') {
+            return {
+              definition: payload?.calendar,
+              afterAt: Date.parse('2026-03-06T12:00:00Z'),
+              status: 'limit',
+              occurrences: [
+                { scheduledAt: Date.parse('2026-03-06T14:00:00Z'), wallTime: '2026-03-06T09:00', offset: '-05:00', fold: 'unique' },
+                { scheduledAt: Date.parse('2026-03-09T13:00:00Z'), wallTime: '2026-03-09T09:00', offset: '-04:00', fold: 'unique' },
+                { scheduledAt: Date.parse('2026-03-10T13:00:00Z'), wallTime: '2026-03-10T09:00', offset: '-04:00', fold: 'unique' },
+              ],
+            };
+          }
+          throw Error(kind);
+        },
+      },
       async command(kind, id, revision, payload) {
         commands.push({ kind, id, revision, payload });
         if (params.get('receipt') === 'unknown') return undefined;
         if (kind === 'automation.save') {
           const next = { ...row('automation', id, payload), revision: revision + 1 };
           setRecords(rows => [...rows.filter(row => row.id !== id), next]); return next;
+        }
+        if (kind === 'automation.delete') {
+          const deleted = { kind: 'automation', id, revision: revision + 1, updatedAt: '2026-11-17T12:01:00Z', deleted: true, data: { deleted: true } };
+          setRecords(rows => rows.filter(row => !(row.kind === 'automation' && row.id === id)));
+          return deleted;
         }
         if (kind === 'recovery.investigate') return row('task', id, { goal: 'Investigate recovery', state: 'queued' });
         throw Error(kind);
@@ -94,6 +117,46 @@ test(`schedule and recovery mode forms (${engine.name()})`, { timeout: 120000 },
         const calls = await commands(page); assert.equal(calls.length, 1);
         assert.deepEqual(calls[0], { kind: 'automation.save', id: calls[0].id, revision: 0,
           payload: { name: 'New audit', timezone, nextAt, intervalMs: null, missed: 'coalesce', paused: false, task: { goal: 'Audit dependencies', profile: 'code', mode } } });
+      } finally { await page.close(); }
+    });
+    await t.test('calendar schedule renders server preview and saves exact calendar payload', async () => {
+      const page = await open('screen=schedule');
+      try {
+        await page.getByRole('button', { name: 'New schedule', exact: true }).click();
+        const dialog = page.getByRole('dialog');
+        await dialog.getByLabel('Schedule name', { exact: true }).fill('Weekday briefing');
+        await dialog.getByLabel('What should it do?', { exact: true }).fill('Prepare morning briefing');
+        await dialog.getByLabel('How often', { exact: true }).selectOption('calendar');
+        await dialog.getByRole('combobox', { name: 'Schedule time zone', exact: true }).selectOption('America/New_York');
+        await dialog.getByText(/UTC-05:00/).waitFor();
+        await dialog.getByText(/UTC-04:00/).first().waitFor();
+        const seenQueries = await page.evaluate('window.fixture.queries') as string[];
+        assert.ok(seenQueries.includes('automation.preview'));
+        await dialog.getByRole('button', { name: 'Create schedule', exact: true }).click();
+        await dialog.waitFor({ state: 'hidden' });
+        const calls = await commands(page); assert.equal(calls.length, 1);
+        assert.equal(calls[0].kind, 'automation.save');
+        assert.equal(calls[0].revision, 0);
+        assert.equal(calls[0].payload.intervalMs, null);
+        assert.equal(calls[0].payload.timezone, 'America/New_York');
+        assert.deepEqual(calls[0].payload.calendar, {
+          kind: 'cron', expression: '0 9 * * 1-5', timezone: 'America/New_York', gap: 'skip', fold: 'earlier',
+        });
+      } finally { await page.close(); }
+    });
+    await t.test('deleting a schedule requires confirmation, sends automation.delete with expectedRevision, and removes row', async () => {
+      const page = await open('screen=schedule');
+      try {
+        const item = page.locator('.workspace-item');
+        await item.getByRole('button', { name: 'Delete', exact: true }).click();
+        const dialog = page.getByRole('dialog');
+        assert.match(await dialog.innerText(), /Saved Auto schedule/);
+        assert.deepEqual(await commands(page), []);
+        await dialog.getByRole('button', { name: 'Delete schedule', exact: true }).click();
+        await dialog.waitFor({ state: 'hidden' });
+        const calls = await commands(page);
+        assert.deepEqual(calls, [{ kind: 'automation.delete', id: 'saved', revision: 3, payload: {} }]);
+        assert.equal(await page.locator('.workspace-item').count(), 0);
       } finally { await page.close(); }
     });
     for (const capability of ['supported', 'old']) await t.test(`saved legacy schedule ${capability}`, async () => {

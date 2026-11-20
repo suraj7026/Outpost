@@ -1,6 +1,26 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { automationBlocker, buildSchedule, intervalLabel, legacyModelSelection, localDateInput, modelRefSelection, readSchedule, saveAutomation, scheduleDraft, scheduleTime, type AutomationClient, type AutomationSchedule } from './src/automation-form.ts';
+import {
+  automationBlocker,
+  buildSchedule,
+  compileCalendarExpression,
+  deleteAutomation,
+  detectCalendarPreset,
+  formatCalendarSlot,
+  intervalLabel,
+  legacyModelSelection,
+  localDateInput,
+  modelRefSelection,
+  previewCalendarOnServer,
+  readSchedule,
+  saveAutomation,
+  scheduleDraft,
+  scheduleFrequencyLabel,
+  scheduleTime,
+  type AutomationClient,
+  type AutomationSchedule,
+} from './src/automation-form.ts';
+import { mergeRecords } from './src/live.ts';
 import type { ServerRecord } from './src/types.ts';
 import { readFileSync } from 'node:fs';
 import { actionSummary, chatStatus, displayTimeZones, loadedMessageCount, relativeTime, saveServerNote, serverNotePayload } from './src/workspace-presentation.ts';
@@ -110,6 +130,133 @@ test('unsupported records remain read-only rather than silently dropping unknown
     const row = record(); Object.assign(row.data, changes); assert.equal(readSchedule(row), null);
   }
   assert.ok(readSchedule(record()));
+});
+
+test('calendar schedules compile presets, round-trip strictly, and reject invalid calendar records', () => {
+  assert.equal(compileCalendarExpression('daily', '08:15', [], ''), '15 8 * * *');
+  assert.equal(compileCalendarExpression('weekdays', '09:00', [], ''), '0 9 * * 1-5');
+  assert.equal(compileCalendarExpression('weekly', '14:30', [5, 1, 3, 1], ''), '30 14 * * 1,3,5');
+  assert.equal(compileCalendarExpression('custom', '09:00', [], '  */15  9-17 * * 1-5  '), '*/15 9-17 * * 1-5');
+  assert.throws(() => compileCalendarExpression('weekly', '09:00', [], ''));
+  assert.throws(() => compileCalendarExpression('custom', '09:00', [], '* * * * * *'));
+  assert.throws(() => compileCalendarExpression('daily', '25:00', [], ''));
+
+  assert.deepEqual(detectCalendarPreset('0 9 * * 1-5'), { preset: 'weekdays', time: '09:00', days: [1, 2, 3, 4, 5], expression: '0 9 * * 1-5' });
+  assert.deepEqual(detectCalendarPreset('15 8 * * *'), { preset: 'daily', time: '08:15', days: [1, 3, 5], expression: '15 8 * * *' });
+  assert.deepEqual(detectCalendarPreset('30 14 * * 1,3,7'), { preset: 'weekly', time: '14:30', days: [0, 1, 3], expression: '30 14 * * 1,3,7' });
+  assert.deepEqual(detectCalendarPreset('0 */2 * * 1-5'), { preset: 'custom', time: '09:00', days: [1, 3, 5], expression: '0 */2 * * 1-5' });
+
+  const now = Date.parse('2026-03-06T12:00:00Z');
+  const draft = scheduleDraft();
+  Object.assign(draft, {
+    name: 'Weekday digest', goal: 'Summarize issues', frequency: 'calendar',
+    calendarPreset: 'weekdays', calendarTime: '09:00', timezone: 'America/New_York', calendarFold: 'later',
+  });
+  const built = buildSchedule(draft, undefined, now);
+  assert.deepEqual(built, {
+    name: 'Weekday digest',
+    timezone: 'America/New_York',
+    nextAt: now,
+    intervalMs: null,
+    missed: 'coalesce',
+    paused: false,
+    calendar: { kind: 'cron', expression: '0 9 * * 1-5', timezone: 'America/New_York', gap: 'skip', fold: 'later' },
+    task: { goal: 'Summarize issues', profile: 'code', mode: 'full_control' },
+  });
+  assert.equal(scheduleFrequencyLabel(built), 'Weekdays at 09:00');
+  const parsed = readSchedule(record(built));
+  assert.deepEqual(parsed, built);
+
+  // Untouched calendar edit preserves server nextAt; changing expression/timezone re-anchors to now.
+  const untouched = buildSchedule({ ...scheduleDraft(built), name: 'Renamed' }, built, now + 60_000);
+  assert.equal(untouched.nextAt, built.nextAt);
+  const changedTz = buildSchedule({ ...scheduleDraft(built), timezone: 'Europe/London' }, built, now + 60_000);
+  assert.equal(changedTz.nextAt, now + 60_000);
+  assert.equal(changedTz.calendar?.timezone, 'Europe/London');
+
+  // Invalid calendar definitions are rejected on build and read.
+  assert.throws(() => buildSchedule({ ...draft, timezone: '+05:30' }, undefined, now));
+  assert.throws(() => buildSchedule({ ...draft, timezone: 'Invalid/Zone' }, undefined, now));
+  for (const bad of [
+    { ...built, intervalMs: 60000 },
+    { ...built, timezone: 'UTC' },
+    { ...built, calendar: { ...built.calendar!, timezone: '+05:30' } },
+    { ...built, calendar: { ...built.calendar!, gap: 'shift' } },
+    { ...built, calendar: { ...built.calendar!, extra: true } },
+  ]) {
+    assert.equal(readSchedule(record(bad as AutomationSchedule)), null);
+  }
+});
+
+test('server preview query and slot formatting validate server responses without a client cron parser', async () => {
+  const calendar = { kind: 'cron' as const, expression: '0 9 * * 1-5', timezone: 'America/New_York', gap: 'skip' as const, fold: 'earlier' as const };
+  const queries: { kind: string; payload: unknown }[] = [];
+  const slot = { scheduledAt: Date.parse('2026-11-01T05:30:00Z'), wallTime: '2026-11-01T01:30', offset: '-04:00', fold: 'earlier' as const };
+  const result = await previewCalendarOnServer({
+    connected: true,
+    api: {
+      query: async (kind, payload) => {
+        queries.push({ kind, payload });
+        return { status: 'limit', occurrences: [slot] } as never;
+      },
+    },
+  }, calendar, 3);
+  assert.deepEqual(queries, [{ kind: 'automation.preview', payload: { calendar, limit: 3 } }]);
+  assert.deepEqual(result, { status: 'limit', occurrences: [slot] });
+  assert.match(formatCalendarSlot(slot, 'America/New_York'), /UTC-04:00 · earlier occurrence/);
+
+  await assert.rejects(previewCalendarOnServer({ connected: false, api: { query: async () => ({} as never) } }, calendar), /Connect this server/);
+  await assert.rejects(previewCalendarOnServer({ connected: true, api: { query: async () => ({ status: 'bad', occurrences: [] } as never) } }, calendar), /unexpected preview/);
+});
+
+test('deleteAutomation enforces guards, revisions, confirmation, and allows deleting legacy Auto schedules', async () => {
+  const autoRow = record({ ...schedule, task: { ...schedule.task, mode: 'auto' } }, 4);
+  const calls: { kind: string; id: string; revision: number; payload: unknown }[] = [];
+  const client: AutomationClient = {
+    connected: true, retired: false, busy: false, info: { pending: false }, runtime: {}, records: [autoRow],
+    command: async (kind, id, revision, payload) => {
+      calls.push({ kind, id, revision, payload });
+      return { kind: 'automation', id, revision: revision + 1, updatedAt: new Date().toISOString(), deleted: true, data: { deleted: true } };
+    },
+  };
+  const deleted = await deleteAutomation(client, 'fixture-schedule', 4, true, false);
+  assert.equal(deleted.revision, 5);
+  assert.equal(deleted.deleted, true);
+  assert.deepEqual(calls, [{ kind: 'automation.delete', id: 'fixture-schedule', revision: 4, payload: {} }]);
+
+  // Stale, missing, zero-revision, and blocked mutations are rejected before calling command.
+  await assert.rejects(deleteAutomation(client, 'fixture-schedule', 3, true, false), /changed/);
+  await assert.rejects(deleteAutomation(client, 'fixture-schedule', 0, true, false), /changed/);
+  await assert.rejects(deleteAutomation(client, 'missing', 4, true, false), /changed/);
+  await assert.rejects(deleteAutomation({ ...client, connected: false }, 'fixture-schedule', 4, true, false));
+  await assert.rejects(deleteAutomation(client, 'fixture-schedule', 4, false, false));
+  assert.equal(calls.length, 1);
+
+  // Unconfirmed delete responses never report success.
+  for (const bad of [undefined, { ...autoRow, revision: 5 }, { ...autoRow, revision: 4, deleted: true, data: { deleted: true } }]) {
+    const unconfirmed: AutomationClient = { ...client, command: async () => bad };
+    await assert.rejects(deleteAutomation(unconfirmed, 'fixture-schedule', 4, true, false), /Couldn’t confirm the deletion/);
+  }
+});
+
+test('mergeRecords drops deleted automations while respecting revision ordering', () => {
+  const existing = record(schedule, 3);
+  const other: ServerRecord = { kind: 'automation', id: 'other-schedule', revision: 1, updatedAt: '', data: { ...schedule } };
+  // Stale deletion (revision <= existing) is ignored.
+  assert.equal(mergeRecords([existing, other], [{ kind: 'automation', id: 'fixture-schedule', revision: 3, updatedAt: '', deleted: true, data: { deleted: true } }]).length, 2);
+  // Newer deletion drops the record and preserves siblings.
+  const afterDelete = mergeRecords([existing, other], [{ kind: 'automation', id: 'fixture-schedule', revision: 4, updatedAt: '', deleted: true, data: { deleted: true } }]);
+  assert.deepEqual(afterDelete.map(r => r.id), ['other-schedule']);
+  // Also handles data.deleted === true without top-level flag.
+  const afterDataDelete = mergeRecords([existing], [{ kind: 'automation', id: 'fixture-schedule', revision: 4, updatedAt: '', data: { deleted: true } }]);
+  assert.deepEqual(afterDataDelete, []);
+});
+
+test('Automations UI no longer claims deletion and wall-clock recurrence are unsupported', () => {
+  const source = readFileSync(new URL('./src/Automations.tsx', import.meta.url), 'utf8');
+  assert.equal(source.includes('Deleting schedules and wall-clock recurrence are not supported by this server API.'), false);
+  assert.match(source, /Calendar schedule/);
+  assert.match(source, /DeleteScheduleDialog/);
 });
 
 test('save, edit, pause and resume use automation.save on the owning client with expected revisions', async () => {
