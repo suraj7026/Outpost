@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { browserEngine, openTaskBrowser } from './engine.js';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { HumanInput } from './control-contracts.js';
 import { Ledger } from '../core/ledger.js';
 import { requireThat } from '../core/contracts.js';
@@ -28,13 +28,24 @@ interface Session {
   refs: Map<string, ElementHandle>;
   observed: boolean;
   lastUsed: number;
-  capture?: { page: Page; observation: number; promise: Promise<Buffer> };
-  frames: Map<string, { page: Page; observation: number; at: number }>;
+  capture?: { page: Page; observation: number; promise: Promise<{ bytes: Buffer; hash: string }> };
+  frames: Map<string, { page: Page; observation: number; at: number; hash: string }>;
+}
+export interface BrowserFrameResult {
+  unchanged?: boolean;
+  session: Record<string, unknown> | null;
+  frame?: string | null;
+  frameId?: string;
+  width?: number;
+  height?: number;
+  tabs?: { tab: number; url: string; active: boolean }[];
+  capturedAt: string | null;
 }
 export interface BrowserSessionOptions {
   python?: string;
   maxSessions?: number;
   idleMs?: number;
+  openContext?: (directory: string, python?: string, signal?: AbortSignal) => Promise<BrowserContext>;
 }
 
 export class BrowserSessions {
@@ -92,7 +103,8 @@ export class BrowserSessions {
     requireThat(new Set([...this.sessions.keys(), ...this.busy.keys()]).size <= (this.options.maxSessions ?? 4), 'browser_capacity');
     const directory = join(this.root, 'workspaces', taskId, 'browser-profile-camoufox');
     await mkdir(directory, { recursive: true, mode: 0o700 });
-    const context = await openTaskBrowser(directory, this.options.python, signal);
+    const open = this.options.openContext ?? openTaskBrowser;
+    const context = await open(directory, this.options.python, signal);
     try {
       signal.throwIfAborted();
       const session: Session = { context, page: context.pages()[0] ?? await context.newPage(), observation: 0, observed: false, refs: new Map(), frames: new Map(), lastUsed: Date.now() };
@@ -215,25 +227,45 @@ export class BrowserSessions {
     return this.observe(session);
   }
 
-  async frame(taskId: string) {
+  async frame(taskId: string, lastFrameId?: string): Promise<BrowserFrameResult> {
     const record = this.db.get('browser', taskId), session = this.sessions.get(taskId);
     if (!session) return { session: record?.data ?? null, frame: null, capturedAt: null };
     const page = this.activePage(session), observation = session.observation;
     // Coalesce requests from multiple clients; never write frame bytes to the ledger.
     if (!session.capture || session.capture.page !== page || session.capture.observation !== observation) {
-      const capture = { page, observation, promise: page.screenshot({ type: 'jpeg', quality: 65, timeout: 4000 }) };
+      const capture = {
+        page,
+        observation,
+        promise: page.screenshot({ type: 'jpeg', quality: 65, timeout: 4000 }).then(bytes => ({
+          bytes,
+          hash: createHash('sha256').update(bytes).digest('hex'),
+        })),
+      };
       session.capture = capture;
       void capture.promise.finally(() => { if (session.capture === capture) delete session.capture; }).catch(() => {});
     }
-    const bytes = await session.capture.promise;
+    const { bytes, hash } = await session.capture.promise;
     requireThat(this.sessions.get(taskId) === session && page === session.page && observation === session.observation, 'stale_browser_frame');
-    const frameId = randomUUID(), at = Date.now();
-    session.frames.set(frameId, { page, observation, at });
-    while (session.frames.size > 20) session.frames.delete(session.frames.keys().next().value!);
-    return { session: { ...this.db.get('browser', taskId)?.data, url: page.url() }, frame: bytes.toString('base64'),
-      frameId, width: page.viewportSize()?.width ?? 1280, height: page.viewportSize()?.height ?? 800,
+    const at = Date.now();
+    const metadata = {
+      session: { ...this.db.get('browser', taskId)?.data, url: page.url() },
+      width: page.viewportSize()?.width ?? 1280,
+      height: page.viewportSize()?.height ?? 800,
       tabs: session.context.pages().map((tab, index) => ({ tab: index, url: tab.url(), active: tab === page })),
-      capturedAt: new Date(at).toISOString() };
+      capturedAt: new Date(at).toISOString(),
+    };
+    if (lastFrameId) {
+      const previous = session.frames.get(lastFrameId);
+      if (previous && previous.page === page && previous.observation === observation && previous.hash === hash) {
+        session.frames.delete(lastFrameId);
+        session.frames.set(lastFrameId, { page, observation, at, hash });
+        return { unchanged: true, ...metadata, frameId: lastFrameId };
+      }
+    }
+    const frameId = randomUUID();
+    session.frames.set(frameId, { page, observation, at, hash });
+    while (session.frames.size > 20) session.frames.delete(session.frames.keys().next().value!);
+    return { ...metadata, frame: bytes.toString('base64'), frameId };
   }
 
   async capture(session: Session) { return this.activePage(session).screenshot({ type: 'png', timeout: 5000 }); }
