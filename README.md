@@ -63,13 +63,14 @@ Native background work remains tracked while sessions drain, and unresolved work
 
 ### Agent automation tools
 
-The coordinator exposes `automation.list`, `automation.save`, and `automation.set_paused` through `outpost_action` in both direct and worker-backed agent sessions. Each has a description and JSON input schema. They manage the same server-owned records as the desktop **Automations** page, not Linux cron files.
+The coordinator exposes `automation.list`, `automation.save`, `automation.set_paused`, and `automation.delete` through `outpost_action` in both direct and worker-backed agent sessions. Each has a description and JSON input schema. They manage the same server-owned records as the desktop **Automations** page, not Linux cron files.
 
 - `automation.list`: inspect schedules, IDs, revisions, and the server clock; supports `automationId`, `limit`, and `offset`.
 - `automation.save`: create with a stable `automationId` and `expectedRevision: 0`, or replace a complete schedule using its latest revision. Each occurrence creates a new agent task with self-contained instructions.
 - `automation.set_paused`: pause/resume using the latest revision without replacing the task configuration. Pausing does not cancel existing tasks; resuming may immediately admit overdue work.
+- `automation.delete`: permanently delete a schedule using its latest revision without cancelling already-created tasks.
 
-All calls use the existing action approval/evidence gate. Writes recheck revisions and recovery/maintenance holds at execution. Scheduled task mode defaults to `ask_permission`; the agent cannot save or resume a schedule with greater authority than its current task. Provider-qualified models require a configured Pi worker.
+All calls use the existing action approval/evidence gate. Writes recheck revisions, authority ceilings, and recovery/maintenance holds at execution. Tasks support two modes (`full_control` and `auto`); scheduled task mode defaults to `full_control`, and an `auto`-mode task cannot save or resume a `full_control` schedule (it must specify `task.mode: "auto"`). Provider-qualified models require a configured Pi worker.
 
 Supported timing remains one-time or fixed intervals of at least one minute. Calendar cron expressions are not wired into the scheduler; every 24 hours is not a fixed local hour across DST. The Outpost server must be running. The agent is instructed to use these tools for scheduled agent work and only use OS cron when explicitly requested. Source changes require a server deployment/restart and a new agent run; they do not update already-running installations or import existing OS cron entries.
 
@@ -87,10 +88,10 @@ Tauri now exposes **Connection → Recovery Hold** with revision-bound acknowled
 npm run check                         # backend and client-retirement regression tests
 
 npm --prefix desktop run build        # Tauri frontend type-check and bundle
-node desktop/test-connection-administration.mjs # synthetic IPC administration checks
-node desktop/test-environments.mjs    # synthetic two-environment isolation and recovery
+node desktop/tests/test-connection-administration.mjs # synthetic IPC administration checks
+node desktop/tests/test-environments.mjs    # synthetic two-environment isolation and recovery
 # After: npx playwright install webkit
-OUTPOST_TEST_BROWSER=webkit node desktop/test-environments.mjs
+OUTPOST_TEST_BROWSER=webkit node desktop/tests/test-environments.mjs
 cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked --no-default-features
 npm --prefix desktop run desktop:build # packaged Tauri app
 npm run qualify                       # local pins/probes → .outpost/qualification.json; not live qualification
@@ -106,6 +107,7 @@ Use disposable fixtures for tests, not live accounts or server data. The recover
 | `OUTPOST_ENVIRONMENT_LABEL`, `OUTPOST_RUNTIME_RELEASE` | Non-secret descriptor label (default `Outpost`) and optional release identifier; neither changes installation identity |
 | `OUTPOST_ALLOW_LEGACY_PROTOCOL` | Defaults to `true` while installed clients use `/v1`; set `false` only after upgrading clients to environment-bound `/v2` |
 | `OUTPOST_PAIRING_TOKEN` | First-device bootstrap secret; route closes after first enrollment |
+| `OUTPOST_APPROVAL_TTL_MS` | Pending approval expiration window in milliseconds (default 30 minutes; clamped between 1 minute and 24 hours) |
 | `OUTPOST_OLLAMA_BASE_URL`, `OUTPOST_OLLAMA_MODEL` | Direct Ollama-compatible endpoint and exact model name; the homelab uses the existing daemon for local/Cloud models |
 | `OUTPOST_FULL_CONTROL` | `true` permits arbitrary workspace executables; task policy still controls dispatch |
 | `OUTPOST_HOST_ENDPOINTS`, `OUTPOST_HOST_TOKEN_FILE` | Named root executors and a protected token file; native full-control setup enrolls `{"local":"http://127.0.0.1:4519"}`. No public executor listener |

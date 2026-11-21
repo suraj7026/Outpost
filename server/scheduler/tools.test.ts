@@ -19,7 +19,7 @@ const DeletedAutomationRecord = z.strictObject({ kind: z.literal('automation'), 
 const AutomationPage = z.strictObject({ serverTime: z.number(), automations: z.array(AutomationRecord), total: z.number().int().nonnegative(), hasMore: z.boolean() });
 const schedule = (overrides: Partial<z.input<typeof Schedule>> = {}) => ({
   name: 'Inspect service', timezone: 'UTC', nextAt: 1000, intervalMs: 60000, missed: 'coalesce' as const,
-  task: { goal: 'Inspect service health', profile: 'operations' as const }, ...overrides,
+  task: { goal: 'Inspect service health', profile: 'operations' as const, mode: 'auto' as const }, ...overrides,
 });
 
 function fixture(mode: 'full_control' | 'auto' | 'ask_permission' = 'full_control', options: ConstructorParameters<typeof Coordinator>[2] = {}) {
@@ -115,7 +115,7 @@ test('save, list, update, pause, resume and delete reuse the UI automation recor
     const automationId = 'service-health/every-minute';
     const saved = AutomationRecord.parse(await f.run('automation.save', { automationId, expectedRevision: 0, schedule: schedule() }));
     assert.equal(saved.id, automationId); assert.equal(saved.revision, 1);
-    assert.equal(saved.data.task.mode, 'full_control'); assert.equal(saved.data.paused, false);
+    assert.equal(saved.data.task.mode, 'auto'); assert.equal(saved.data.paused, false);
     assert.deepEqual(saved, f.db.need('automation', automationId));
     const snapshot = z.object({ records: z.array(z.object({ kind: z.string() }).passthrough()) }).parse(f.coordinator.query('snapshot', {}));
     assert.deepEqual(snapshot.records.filter(record => record.kind === 'automation'), [saved]);
@@ -249,7 +249,7 @@ test('tool-created automations run through the existing Scheduler with full_cont
   const f = fixture();
   try {
     const automationId = 'scheduled-health';
-    await f.run('automation.save', { automationId, expectedRevision: 0, schedule: schedule({ paused: true }) });
+    await f.run('automation.save', { automationId, expectedRevision: 0, schedule: schedule({ paused: true, task: { goal: 'Inspect service health', profile: 'operations', mode: 'full_control' } }) });
     assert.deepEqual(f.coordinator.scheduler.tick(1000), []);
     await f.run('automation.set_paused', { automationId, expectedRevision: 1, paused: false });
     const started = f.coordinator.scheduler.tick(181000);
@@ -372,7 +372,15 @@ for (const sourceMode of ['ask_permission', 'auto', 'full_control'] as const) te
     for (const childMode of ['ask_permission', 'auto', 'full_control'] as const) {
       const automationId = `child-${childMode}`;
       const child = schedule({ task: { goal: 'Inspect', profile: 'operations', mode: childMode } });
-      const saved = AutomationRecord.parse(await f.run('automation.save', { automationId, expectedRevision: 0, schedule: child }));
+      const input = { automationId, expectedRevision: 0, schedule: child };
+      if (sourceMode !== 'full_control' && childMode === 'full_control') {
+        await assert.rejects(f.propose('automation.save', input), /authority_escalation_denied/);
+        f.coordinator.scheduler.save(automationId, 0, { ...child, paused: true });
+        await assert.rejects(f.propose('automation.set_paused', { automationId, expectedRevision: 1, paused: false }), /authority_escalation_denied/);
+        assert.equal(f.db.need<Schedule>('automation', automationId).data.paused, true);
+        continue;
+      }
+      const saved = AutomationRecord.parse(await f.run('automation.save', input));
       assert.equal(saved.data.task.mode, childMode === 'full_control' ? 'full_control' : 'auto');
       await f.run('automation.set_paused', { automationId, expectedRevision: 1, paused: true });
       assert.equal(f.db.need<Schedule>('automation', automationId).data.paused, true);
@@ -385,16 +393,16 @@ for (const sourceMode of ['ask_permission', 'auto', 'full_control'] as const) te
   } finally { f.close(); }
 });
 
-test('omitting child mode uses full_control even for a legacy ask_permission source', async () => {
+test('a legacy ask_permission source can save an omitted mode after review, defaulting to Auto', async () => {
   const f = fixture('ask_permission');
   try {
-    const action = await f.propose('automation.save', { automationId: 'default-mode', expectedRevision: 0, schedule: schedule() });
+    const input = { automationId: 'default-mode', expectedRevision: 0, schedule: schedule({ task: { goal: 'Inspect', profile: 'operations' } }) };
+    const action = await f.propose('automation.save', input);
     assert.equal(action.data.state, 'pending');
     assert.equal(f.db.list('automation').length, 0);
     f.approve(action);
     const observed = await f.gate.dispatch(action.id);
-    assert.equal(observed.data.state, 'succeeded');
-    assert.equal(AutomationRecord.parse(observed.data.result).data.task.mode, 'full_control');
+    assert.equal(AutomationRecord.parse(observed.data.result).data.task.mode, 'auto');
   } finally { f.close(); }
 });
 

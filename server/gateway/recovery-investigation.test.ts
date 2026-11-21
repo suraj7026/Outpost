@@ -13,7 +13,7 @@ import { WorkerClient } from '../pi-worker/client.js';
 import { RecoveryReport } from '../diagnostics/recovery.js';
 
 const inference = InferenceConfiguration.parse({ baseUrl: 'http://127.0.0.1:1/v1', model: 'fixture' });
-function fixture(options: ConstructorParameters<typeof Coordinator>[2] = { inference }) {
+function fixture(options: ConstructorParameters<typeof Coordinator>[2] = { inference, worker: new WorkerClient('http://127.0.0.1:1', 'fixture-worker-token'.repeat(2)) }) {
   const root = mkdtempSync(join(tmpdir(), 'outpost-investigate-')), db = new Ledger();
   const coordinator = new Coordinator(db, root, options);
   return { db, coordinator, close() { coordinator.live.close(); db.close(); rmSync(root, { recursive: true, force: true }); } };
@@ -119,11 +119,11 @@ for (const state of ['draining', 'holding', 'prepared']) test(`investigation adm
   } finally { f.close(); }
 });
 
-test('investigation requires a configured runtime and a worker for ModelRef', () => {
-  const unconfigured = fixture({}), local = fixture();
+test('investigation requires a worker even with legacy inference settings', () => {
+  const unconfigured = fixture({}), local = fixture({ inference });
   try {
     assert.throws(() => unconfigured.coordinator.command(command()), { code: 'runtime_not_configured' });
-    assert.throws(() => local.coordinator.command(command({ modelRef: { providerId: 'provider', modelId: 'model' } })), { code: 'pi_worker_required' });
+    assert.throws(() => local.coordinator.command(command({ modelRef: { providerId: 'provider', modelId: 'model' } })), { code: 'runtime_not_configured' });
     for (const f of [unconfigured, local]) {
       assert.equal(f.db.list('task').length, 0);
       assert.equal(f.db.get('recovery', 'server'), undefined);

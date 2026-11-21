@@ -3,20 +3,19 @@ import { readFileSync } from 'node:fs';
 import { Ledger } from './core/ledger.js';
 import { formatErrorForLog } from './core/contracts.js';
 import { Coordinator } from './gateway/coordinator.js';
+import { browserEngineFromEnvironment } from './browser/engine.js';
 import { httpServer } from './gateway/http.js';
 import { Notifications } from './notifier/apns.js';
 import type { APNsConfig } from './notifier/apns.js';
 import { InferenceConfiguration } from './models/inference.js';
+import { startLocalWorker } from './pi-worker/local.js';
 import { WorkerClient } from './pi-worker/client.js';
 import { EnvironmentOptions } from './environment/contracts.js';
 import { hostAdministrationFromEnvironment } from './operations/hosts.js';
 const root = resolve(process.env.OUTPOST_DATA ?? '.outpost');
 const db = new Ledger(join(root,'ledger.sqlite'));
-const roles = process.env.OUTPOST_ROLES_FILE ? JSON.parse(readFileSync(process.env.OUTPOST_ROLES_FILE,'utf8')) as unknown : undefined;
 const inference = process.env.OUTPOST_OLLAMA_MODEL ? InferenceConfiguration.parse({ baseUrl: process.env.OUTPOST_OLLAMA_BASE_URL ?? 'http://127.0.0.1:11434/v1',model: process.env.OUTPOST_OLLAMA_MODEL }) : undefined;
 const hosts = hostAdministrationFromEnvironment(process.env);
-const worker = process.env.OUTPOST_PI_WORKER_URL ? new WorkerClient(process.env.OUTPOST_PI_WORKER_URL,
-  readFileSync(process.env.OUTPOST_PI_WORKER_TOKEN_FILE ?? '', 'utf8').trim()) : undefined;
 const allowLegacy = process.env.OUTPOST_ALLOW_LEGACY_PROTOCOL;
 if (allowLegacy !== undefined && allowLegacy !== 'true' && allowLegacy !== 'false') {
   throw new Error('OUTPOST_ALLOW_LEGACY_PROTOCOL must be true or false');
@@ -26,13 +25,18 @@ const environment = EnvironmentOptions.parse({
   runtimeRelease: process.env.OUTPOST_RUNTIME_RELEASE,
   allowLegacyProtocol: allowLegacy !== 'false',
 });
+const externalWorker = process.env.OUTPOST_PI_WORKER_URL ? new WorkerClient(process.env.OUTPOST_PI_WORKER_URL,
+  readFileSync(process.env.OUTPOST_PI_WORKER_TOKEN_FILE ?? '', 'utf8').trim()) : undefined;
+const workspaceRoot = process.env.OUTPOST_WORKSPACE_ROOT ? resolve(process.env.OUTPOST_WORKSPACE_ROOT) : join(root, 'workspaces');
+const localWorker = externalWorker ? undefined : await startLocalWorker(root, workspaceRoot, !!process.env.OUTPOST_WORKSPACE_ROOT, inference);
+const worker = externalWorker ?? localWorker?.worker;
 const coordinator = new Coordinator(db,root,{
   environment,
   ...(process.env.OUTPOST_WORKSPACE_ROOT ? { workspaceRoot: resolve(process.env.OUTPOST_WORKSPACE_ROOT), sharedWorkspaces: true } : {}),
   ...(worker ? { worker } : {}),
-  ...(process.env.OLLAMA_API_KEY ? { apiKey: process.env.OLLAMA_API_KEY } : {}),...(roles ? { roles } : {}),
   ...(inference ? { inference } : {}),...(hosts ? { hosts } : {}),
   ...(process.env.OUTPOST_BROWSER_ENABLED === 'true' ? { browser: {
+      engine: browserEngineFromEnvironment(process.env),
     ...(process.env.OUTPOST_CAMOUFOX_PYTHON ? { python: process.env.OUTPOST_CAMOUFOX_PYTHON } : {}),
   } } : {}),
   unrestrictedCommands: process.env.OUTPOST_FULL_CONTROL === 'true',
@@ -67,6 +71,6 @@ server.requestTimeout = 15000; server.headersTimeout = 10000;
 server.listen(Number(process.env.PORT ?? 4318),'127.0.0.1',() => console.log(`Outpost coordinator: http://127.0.0.1:${process.env.PORT ?? 4318} (loopback only); inference=${inference?.model ?? 'legacy/unconfigured'}; host administration=${!!hosts}`));
 for (const signal of ['SIGINT','SIGTERM']) process.once(signal,() => {
   clearInterval(timer); clearInterval(compactionTimer); coordinator.live.close();
-  const finish = () => server.close(() => { db.close(); process.exit(0); });
+  const finish = () => { localWorker?.close(); server.close(() => { db.close(); process.exit(0); }); };
   void coordinator.close().finally(finish);
 });

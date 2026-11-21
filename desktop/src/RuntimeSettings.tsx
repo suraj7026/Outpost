@@ -8,7 +8,8 @@ import { automaticUpdatesPending } from './automatic-updates';
 import './provider-runtime-parity.css';
 
 type Manifest = { id: string; piVersion: string; sequence: number; extensions: { name: string; version: string }[] };
-type Inventory = { piVersion: string; releaseId: string; extensions: Manifest['extensions']; extensionStates?: Record<string, string>; manifest: Manifest | null };
+type RuntimeConfig = { revision: number; defaultTaskMode: 'auto' | 'full_control'; extensions: { enabled: Record<string, boolean> } };
+type Inventory = { piVersion: string; releaseId: string; extensions: Manifest['extensions']; extensionStates?: Record<string, string>; manifest: Manifest | null; config?: RuntimeConfig };
 type Review = { reviewId: string; operationId: string; state: string; message: string; available: boolean; checkOutcome?: 'update_available' | 'up_to_date' | 'blocked'; installed: Inventory; artifact: { manifest: Manifest; extensionPolicy?: string }; progress?: { stage: string } };
 const completedReceipt = (environmentId: Connection['environmentId'], review: Review | null) => review && ['complete', 'rolled_back'].includes(review.state) ? JSON.stringify([environmentId, review.operationId, review.state]) : null;
 const terminal = ['review', 'complete', 'rolled_back', 'failed', 'cancelled'];
@@ -125,7 +126,18 @@ export default function RuntimeSettings({ connection, startRequested = false }: 
   const current = inventory ?? review?.installed;
   const uncertain = !!review && ['unknown', 'needs_attention'].includes(review.state);
   const observed = !!current && connection.connected && !connection.retired;
-  const camoufox = connection.runtime?.browserDirect && connection.runtime.browserEngine === 'camoufox';
+  const engine = connection.runtime?.browserDirect ? connection.runtime.browserEngine : null;
+  const config = inventory?.config;
+  const changeRuntime = (request: Record<string, unknown>) => void operate(async active => {
+    if (!config || !connection.connected || updating || automaticOwnsServer) return;
+    try {
+      await connection.api.agentRequest({ ...request, expectedRevision: config.revision });
+    } finally {
+      const next = await connection.api.agentRequest<Inventory>({ type: 'runtime.inventory' });
+      if (active()) setInventory(next);
+      await connection.refresh();
+    }
+  });
   const start = () => void operate(async current => {
     if (!review || review.state !== 'review' || !updateAvailable || !approved) return;
     const reviewId = review.reviewId; setReview({ ...review, state: 'unknown' });
@@ -187,14 +199,24 @@ export default function RuntimeSettings({ connection, startRequested = false }: 
     <Section title="Pi runtime" description="Pi runs tasks on this server, not on your Mac.">
       <SettingRow title={`Pi ${current?.piVersion ?? connection.agentCatalogue?.piVersion ?? 'version unavailable'}`} description="Included in the Outpost server release." icon={<Cpu size={18} />} />
     </Section>
-    <Section title="Extensions & browser tools" description="Managed with the Outpost server release.">
+    <Section title="Extensions & browser tools" description="Changes apply to new runs on this server.">
+      {config && <SettingRow title="Default task mode" description="Used for new tasks unless a mode is selected explicitly.">
+        <select aria-label="Default task mode" value={config.defaultTaskMode} disabled={blocked || busy || !connection.connected || updating || automaticOwnsServer} onChange={event => changeRuntime({ type: 'runtime.set_default_task_mode', mode: event.target.value })}>
+          <option value="auto">Auto</option><option value="full_control">Full control</option>
+        </select>
+      </SettingRow>}
       {current ? current.extensions.length ? current.extensions.map(extension => {
         const state = current.extensionStates?.[extension.name];
+        if (config && (extension.name === 'pi-ollama-cloud' || extension.name === 'pi-subagents') && (state === 'enabled' || state === 'disabled')) {
+          return <SettingRow key={extension.name} title={extension.name} description={extension.version} icon={<Puzzle size={18} />}>
+            <input type="checkbox" aria-label={`Enable ${extension.name}`} checked={config.extensions.enabled[extension.name] ?? state === 'enabled'} disabled={blocked || busy || !connection.connected || updating || automaticOwnsServer} onChange={event => changeRuntime({ type: 'runtime.set_extension_enabled', name: extension.name, enabled: event.target.checked })} />
+          </SettingRow>;
+        }
         return <SettingRow key={extension.name} title={extension.name} description={extension.version} icon={<Puzzle size={18} />}><Badge tone={observed && state === 'enabled' ? 'success' : 'neutral'}>{observed && state === 'enabled' ? 'Enabled' : `${observed ? 'Installed' : 'Last reported'} · ${state || 'status unknown'}`}</Badge></SettingRow>;
       }) : <p className="provider-runtime-note">No bundled extensions reported.</p> : <p className="provider-runtime-note">Extension inventory unavailable.</p>}
       {observed && current?.extensions.some(extension => current.extensionStates?.[extension.name] === 'enabled') && <p className="provider-runtime-note">{nativeExtensionsNotice}</p>}
       {current?.extensions.some(extension => current.extensionStates?.[extension.name] === 'inactive') && <p className="provider-runtime-note">{observed ? 'This server reports inactive extensions.' : 'The last inventory reported inactive extensions.'} A server update is required to activate them.</p>}
-      {camoufox && <SettingRow title="Camoufox" description="Browser tools · uses the task’s selected model" icon={<Puzzle size={18} />}><Badge>{connection.connected ? 'Managed tool' : 'Last reported'}</Badge></SettingRow>}
+      {engine && <SettingRow title={engine === 'camoufox' ? 'Camoufox' : 'Chromium'} description="Browser tools · uses the task’s selected model" icon={<Puzzle size={18} />}><Badge>{connection.connected ? 'Managed tool' : 'Last reported'}</Badge></SettingRow>}
       <details className="ui-details provider-runtime-note"><summary>Extension management details</summary><p>General extension installation and independent Pi upgrades are not offered here. Pi and qualified extensions update as one compatible server release. Camoufox uses the task’s selected model; it has no separate model or credential setting.</p></details>
     </Section>
     </details>

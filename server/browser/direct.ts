@@ -11,7 +11,7 @@ const Act = z.strictObject({ observation: z.number().int().nonnegative(), input:
 export function registerDirectBrowser(gate: Gate, sessions: BrowserSessions, artifacts: Artifacts, taskId: string) {
   gate.register('browser.open', {
     version: 1, effects: ['unknown'], inputSchema: z.toJSONSchema(Open),
-    description: 'Direct Pi control: open an HTTP(S) URL in this task’s Camoufox browser. Returns a fresh observation, numbered element refs and tabs. The owner views this same session.',
+    description: 'Direct Pi control: open an HTTP(S) URL in this task’s browser. Returns a fresh observation, numbered element refs and tabs. The owner views this same session.',
     parse: input => Open.parse(input), target: args => String(args.url),
     execute: async (args, signal) => sessions.open(taskId, Open.parse(args).url, signal),
   });

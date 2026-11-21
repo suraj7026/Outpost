@@ -109,7 +109,7 @@ export class WorkerRuns {
     const settings = this.profile.settings();
     if (settings.drainErrors().length) throw managementError('pi_settings_invalid');
     settings.applyOverrides({ compaction: { enabled: false }, retry: { enabled: false } });
-    const extensions = await sessionExtensions({ cwd, agentDir: this.profile.directory, modelRuntime, mode: run.input.mode,
+    const extensions = await sessionExtensions({ cwd, agentDir: this.profile.directory, modelRuntime, mode: run.input.mode, extensionOverrides: run.input.extensionOverrides,
       systemPrompt: `${run.input.systemPrompt}\nThe actual task workspace is ${cwd}.` });
     if (cancelled(run)) return;
     const { session } = await createAgentSession({ cwd, agentDir: this.profile.directory, modelRuntime, model,

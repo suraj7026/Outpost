@@ -32,6 +32,7 @@ const overlays = Object.freeze([
   'server/artifacts/files.ts',
   'server/artifacts/workspace-review.ts',
   'server/core/contracts.ts',
+  'server/core/ledger.ts',
   'server/diagnostics/recovery.ts',
   'server/environment/qualify-runtime.ts',
   'server/gateway/live.ts',
@@ -50,6 +51,7 @@ const overlays = Object.freeze([
   'server/pi-management/child-provider-bootstrap.ts',
   'server/pi-management/credential-store.ts',
   'server/pi-management/providers.ts',
+  'server/pi-management/runtime-config.ts',
   'server/pi-management/session-background.ts',
   'server/pi-management/session-extensions.ts',
   'server/pi-management/subscription-models.ts',
@@ -164,7 +166,7 @@ function patchBaselineCoordinator(bytes) {
     ["import { Scheduler } from '../scheduler/scheduler.js';\n",
       "import { registerAutomationTools } from '../scheduler/tools.js';\n"],
     ['    workspace.register(gate); registerInventory(gate); registerCommands(gate,workspace,new Set(this.options.executables ?? []),this.options.unrestrictedCommands);\n',
-      `    registerAutomationTools(gate,this.scheduler,{ workerAvailable: !!this.options.worker, assertWritable: () => {
+      `    registerAutomationTools(gate,this.scheduler,{ workerAvailable: !!this.options.worker, callerMode: () => gate.policy(taskId).data.mode, assertWritable: () => {
       requireThat(!this.maintenance.holding,'maintenance_in_progress');
       requireThat(this.dispatchEnabled,'recovery_dispatch_disabled');
     } });

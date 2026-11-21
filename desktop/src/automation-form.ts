@@ -166,7 +166,7 @@ export function scheduleDraft(schedule?: AutomationSchedule): AutomationDraft {
     name: schedule?.name ?? '',
     goal: schedule?.task.goal ?? '',
     profile: schedule?.task.profile ?? 'code',
-    mode: schedule?.task.mode ?? 'full_control',
+    mode: schedule?.task.mode ?? 'auto',
     start: localDateInput(schedule?.nextAt ?? Date.now() + 3600000),
     timezone: schedule?.calendar?.timezone ?? schedule?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
     frequency: schedule?.calendar ? 'calendar' : schedule?.intervalMs ? 'interval' : 'once',

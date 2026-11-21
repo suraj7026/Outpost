@@ -41,16 +41,16 @@ From the repository root:
 
 ```sh
 npm --prefix desktop run build
-npx tsx --test desktop/test-automation-form.ts
-node desktop/test-unified-conversation.mjs
-node desktop/test-providers.mjs
-node desktop/test-maintenance.mjs
-node desktop/test-connection-administration.mjs
-node desktop/test-server-terminal.mjs
-node desktop/test-environments.mjs
-node desktop/test-focus-treatment.mjs
+npx tsx --test desktop/tests/test-automation-form.ts
+node desktop/tests/test-unified-conversation.mjs
+node desktop/tests/test-providers.mjs
+node desktop/tests/test-maintenance.mjs
+node desktop/tests/test-connection-administration.mjs
+node desktop/tests/test-server-terminal.mjs
+node desktop/tests/test-environments.mjs
+node desktop/tests/test-focus-treatment.mjs
 ```
 
 Verified after implementation: production TypeScript/Vite build and signed native macOS app build; 6,480 unified-conversation assertions across 66 Chromium/WebKit cases; 1,051 terminal assertions; 125 environment-isolation checks per engine; 3,282 Chromium and 3,056 WebKit focus checks; provider, maintenance/import, device/recovery suites; and 11 schedule unit tests in each of two time zones. The native bundle passed `codesign --verify --deep --strict`. The native build was subsequently installed and relaunched at the owner's request. These checks establish behavior and build validity, not visual parity.
 
-The standalone workspace synthetic harness is run from `desktop`: `node test-workspace-refinement.mjs`. Time-zone unit checks also run with `TZ=America/New_York` and `TZ=Asia/Kolkata`. The browser suites use synthetic transport, not credentials or production servers. Test expectations were updated for the approved terminal placement, provider picker and unified chat list; safety assertions were retained.
+The standalone workspace synthetic harness is run from `desktop`: `node tests/test-workspace-refinement.mjs`. Time-zone unit checks also run with `TZ=America/New_York` and `TZ=Asia/Kolkata`. The browser suites use synthetic transport, not credentials or production servers. Test expectations were updated for the approved terminal placement, provider picker and unified chat list; safety assertions were retained.

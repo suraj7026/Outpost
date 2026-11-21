@@ -1,11 +1,13 @@
 import { z } from 'zod';
 import { ManagementRequest, ModelRef } from '../pi-management/contracts.js';
 import { SubagentRun } from '../pi-adapter/subagent-contract.js';
+import { ExtensionOverrides } from '../pi-management/runtime-config.js';
 import { Mode } from '../core/contracts.js';
 
 export const RunStart = z.strictObject({
   type: z.literal('run.start'), runId: z.uuid(), taskId: z.uuid(), model: ModelRef, mode: Mode.default('full_control'),
   prompt: z.string().min(1).max(20000), systemPrompt: z.string().min(1).max(65536),
+  extensionOverrides: ExtensionOverrides.optional(),
   sessionFile: z.string().regex(/^[a-zA-Z0-9_.-]+\.jsonl$/).optional(),
 });
 export type RunStart = z.infer<typeof RunStart>;

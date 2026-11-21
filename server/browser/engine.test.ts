@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { camoufoxOptions } from './engine.js';
+import { browserEngineFromEnvironment, camoufoxOptions } from './engine.js';
+
+test('browser engine defaults to Chromium unless Camoufox Python is configured', () => {
+  assert.equal(browserEngineFromEnvironment({}), 'chromium');
+  assert.equal(browserEngineFromEnvironment({ OUTPOST_CAMOUFOX_PYTHON: '/configured/python' }), 'camoufox');
+  assert.equal(browserEngineFromEnvironment({ OUTPOST_BROWSER_ENGINE: 'chromium', OUTPOST_CAMOUFOX_PYTHON: '/configured/python' }), 'chromium');
+  assert.equal(browserEngineFromEnvironment({ OUTPOST_BROWSER_ENGINE: 'camoufox' }), 'camoufox');
+  assert.throws(() => browserEngineFromEnvironment({ OUTPOST_BROWSER_ENGINE: 'unsupported' }));
+});
 
 test('Camoufox launch settings never inherit coordinator credentials or start a debug server', async () => {
   const old = process.env.OUTPOST_HOST_TOKEN;

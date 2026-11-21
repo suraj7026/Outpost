@@ -13,12 +13,18 @@ export interface CompactResult {
   deletedOutbox: number;
   deletedEvents: number;
 }
+export interface LedgerChange {
+  kind: string;
+  id: string;
+}
 const DEFAULT_RETAIN_DONE_OUTBOX_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_RETAIN_EVENTS_COUNT = 10_000;
 
 export class Ledger {
   readonly db: DatabaseSync;
   private depth = 0;
+  private pendingChanges: LedgerChange[] = [];
+  private listeners = new Set<(changes: readonly LedgerChange[]) => void>();
   constructor(readonly path = ':memory:') {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(path);
@@ -33,16 +39,33 @@ export class Ledger {
       INSERT OR IGNORE INTO migrations VALUES(1,strftime('%Y-%m-%dT%H:%M:%fZ','now'));`);
   }
   close() { this.db.close(); }
+  onChange(listener: (changes: readonly LedgerChange[]) => void) {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
   transaction<T>(fn: () => T): T {
     const level = this.depth;
+    const mark = this.pendingChanges.length;
     this.db.exec(level === 0 ? 'BEGIN IMMEDIATE' : `SAVEPOINT nested_${level}`);
     this.depth++;
+    let committed: LedgerChange[] | undefined;
     try {
       const result = fn(); requireThat(!(result instanceof Promise), 'async_transaction');
-      this.db.exec(level === 0 ? 'COMMIT' : `RELEASE nested_${level}`); return result;
+      this.db.exec(level === 0 ? 'COMMIT' : `RELEASE nested_${level}`);
+      if (level === 0 && this.pendingChanges.length > 0) {
+        committed = this.pendingChanges;
+        this.pendingChanges = [];
+      }
+      return result;
     } catch (error) {
+      this.pendingChanges.length = mark;
       this.db.exec(level === 0 ? 'ROLLBACK' : `ROLLBACK TO nested_${level}; RELEASE nested_${level}`); throw error;
-    } finally { this.depth--; }
+    } finally {
+      this.depth--;
+      if (committed) {
+        for (const listener of [...this.listeners]) listener(committed);
+      }
+    }
   }
   get<T = Data>(kind: string, key: string): RecordValue<T> | undefined {
     const row = this.db.prepare('SELECT * FROM records WHERE kind=? AND id=?').get(kind, key);
@@ -69,6 +92,7 @@ export class Ledger {
     const revision = expected + 1, updatedAt = now();
     this.db.prepare('INSERT INTO records VALUES(?,?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET revision=excluded.revision,data=excluded.data,updated_at=excluded.updated_at').run(kind,key,revision,canonical(data),updatedAt);
     this.db.prepare('INSERT INTO events(id,aggregate_id,revision,type,payload,created_at) VALUES(?,?,?,?,?,?)').run(id(),key,revision,eventType,canonical({ kind, id: key, revision, data, updatedAt }),updatedAt);
+    this.pendingChanges.push({ kind, id: key });
     return { kind, id: key, revision, data, updatedAt };
   }
   delete(kind: string, key: string, expected: number, eventType = `${kind}.deleted`): RecordValue<{ deleted: true }> & { deleted: true } {
@@ -80,6 +104,7 @@ export class Ledger {
     const record = { kind, id: key, revision, data: { deleted: true as const }, updatedAt, deleted: true as const };
     this.db.prepare('DELETE FROM records WHERE kind=? AND id=?').run(kind, key);
     this.db.prepare('INSERT INTO events(id,aggregate_id,revision,type,payload,created_at) VALUES(?,?,?,?,?,?)').run(id(),key,revision,eventType,canonical(record),updatedAt);
+    this.pendingChanges.push({ kind, id: key });
     return record;
   }
   enqueue(topic: string, payload: Json, key: string = id()) {

@@ -7,6 +7,7 @@ import { Ledger } from '../core/ledger.js';
 import { id } from '../core/contracts.js';
 import { Coordinator } from '../gateway/coordinator.js';
 import { InferenceConfiguration } from '../models/inference.js';
+import { WorkerClient } from '../pi-worker/client.js';
 import { RecoveryReport } from './recovery.js';
 
 function fixture(options: ConstructorParameters<typeof Coordinator>[2] = {}) {
@@ -66,6 +67,7 @@ test('all malformed recovery data fails closed, while boolean records tolerate e
 test('reports counts and configured host names, never work payloads, endpoints or credentials', () => {
   const f = fixture({
     inference: InferenceConfiguration.parse({ model: 'private-model', baseUrl: 'http://127.0.0.1:1/v1' }),
+    worker: new WorkerClient('http://127.0.0.1:1', 'PRIVATE-WORKER-TOKEN'.repeat(2)),
     hosts: { token: 'PRIVATE-HOST-TOKEN', endpoints: { local: 'http://private-host:4519', other: 'http://other-private-host:4519' } },
   });
   try {

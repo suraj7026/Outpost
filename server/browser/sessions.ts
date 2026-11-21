@@ -1,6 +1,6 @@
 import type { BrowserContext, ElementHandle, Page } from 'playwright-camoufox';
 import { mkdir } from 'node:fs/promises';
-import { browserEngine, openTaskBrowser } from './engine.js';
+import { openTaskBrowser, type BrowserEngine } from './engine.js';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { createHash, randomUUID } from 'node:crypto';
@@ -42,6 +42,7 @@ export interface BrowserFrameResult {
   capturedAt: string | null;
 }
 export interface BrowserSessionOptions {
+  engine?: BrowserEngine;
   python?: string;
   maxSessions?: number;
   idleMs?: number;
@@ -70,11 +71,13 @@ export class BrowserSessions {
     this.timer.unref();
   }
 
+  get engine(): BrowserEngine { return this.options.engine ?? 'camoufox'; }
+
   private publish(taskId: string, state: string, mode: Mode, action: string) {
     const previous = this.db.get('browser', taskId), session = this.sessions.get(taskId);
     this.db.put('browser', taskId, previous?.revision ?? 0, {
       taskId, state, mode, action, url: session?.page.url() ?? previous?.data.url ?? '',
-      identity: 'task-profile', engine: browserEngine,
+      identity: 'task-profile', engine: this.engine,
     });
   }
 
@@ -101,10 +104,10 @@ export class BrowserSessions {
     const saved = this.sessions.get(taskId);
     if (saved) { this.activePage(saved); return saved; }
     requireThat(new Set([...this.sessions.keys(), ...this.busy.keys()]).size <= (this.options.maxSessions ?? 4), 'browser_capacity');
-    const directory = join(this.root, 'workspaces', taskId, 'browser-profile-camoufox');
+    const directory = join(this.root, 'workspaces', taskId, `browser-profile-${this.engine}`);
     await mkdir(directory, { recursive: true, mode: 0o700 });
     const open = this.options.openContext ?? openTaskBrowser;
-    const context = await open(directory, this.options.python, signal);
+    const context = await open(directory, this.options.python, signal, this.engine);
     try {
       signal.throwIfAborted();
       const session: Session = { context, page: context.pages()[0] ?? await context.newPage(), observation: 0, observed: false, refs: new Map(), frames: new Map(), lastUsed: Date.now() };

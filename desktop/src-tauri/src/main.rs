@@ -31,7 +31,9 @@ fn main() {
             let registry =
                 transport::environments::Registry::new(directory, legacy.mutation_gate())?;
             // Fence stale ephemeral routes before the webview can issue its first request.
-            let _ = setup.restore_bindings(&registry);
+            if setup.restore_bindings(&registry).is_err() {
+                            eprintln!("Outpost could not restore saved server routes at startup; connection recovery will retry.");
+                        }
             app.manage(transport::server_setup::terminal::Terminals::default());
             app.manage(transport::server_setup::reboot::Reboots::default());
             app.manage(std::sync::Arc::new(setup));

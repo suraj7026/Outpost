@@ -19,7 +19,7 @@ const SaveInput = z.strictObject({
     intervalMs: z.number().int().min(60000).nullable().describe('null for one-time or calendar schedules; otherwise elapsed milliseconds between runs, at least 60000. Every 86400000 ms is elapsed time and is not calendar-daily scheduling across DST.'),
     calendar: CalendarScheduleDefinition.optional().describe('Optional wall-clock calendar recurrence using a standard five-field cron expression in a named IANA timezone so runs stay on local time across DST (gap is "skip", fold defaults to "earlier"). Mutually exclusive with non-null intervalMs.'),
     missed: z.enum(['skip', 'coalesce']).describe('For missed runs: skip drops overdue occurrences; coalesce starts one catch-up task rather than replaying every missed interval or slot.'),
-    task: Schedule.shape.task.describe('Self-contained instructions for a NEW agent task, not a shell command or a continuation of this chat. Uses its saved mode (default full_control). Auto requires exact review of schedule writes, including Full Control children. modelRef requires a configured Pi worker.'),
+    task: Schedule.shape.task.describe('Self-contained instructions for a NEW agent task, not a shell command or a continuation of this chat. Uses its saved mode (default auto). Auto tasks cannot save or resume full_control schedules (specify task.mode "auto"); Auto requires exact review of schedule writes. modelRef requires a configured Pi worker.'),
   }),
 });
 const PauseInput = z.strictObject({
@@ -35,6 +35,7 @@ const DeleteInput = z.strictObject({
 
 export function registerAutomationTools(gate: Gate, scheduler: Scheduler, options: {
   workerAvailable: boolean;
+  callerMode: () => 'full_control' | 'auto';
   assertWritable: () => void;
 }) {
   const current = (automationId: string, expectedRevision: number) => {
@@ -42,8 +43,8 @@ export function registerAutomationTools(gate: Gate, scheduler: Scheduler, option
     requireThat((record?.revision ?? 0) === expectedRevision, 'stale_revision');
     return record;
   };
-  const validateTask = (schedule: Schedule) => {
-
+  const validateTask = (schedule: Schedule, callerMode: 'full_control' | 'auto') => {
+    requireThat(!(callerMode === 'auto' && schedule.task.mode === 'full_control'), 'authority_escalation_denied');
     requireThat(!schedule.task.modelRef || options.workerAvailable, 'pi_worker_required');
   };
   const assertWritable = () => {
@@ -57,7 +58,7 @@ export function registerAutomationTools(gate: Gate, scheduler: Scheduler, option
     assertWritable();
     const record = current(args.automationId, args.expectedRevision);
     prepareSchedule(args.schedule, record ? Schedule.parse(record.data) : undefined);
-    validateTask(args.schedule);
+    validateTask(args.schedule, options.callerMode());
     return args;
   };
   const validatePause = (input: unknown) => {
@@ -65,7 +66,7 @@ export function registerAutomationTools(gate: Gate, scheduler: Scheduler, option
     assertWritable();
     const record = current(args.automationId, args.expectedRevision);
     requireThat(record, 'not_found');
-    if (!args.paused) validateTask(Schedule.parse(record.data));
+    if (!args.paused) validateTask(Schedule.parse(record.data), options.callerMode());
     return args;
   };
   const validateDelete = (input: unknown) => {
@@ -90,7 +91,7 @@ export function registerAutomationTools(gate: Gate, scheduler: Scheduler, option
   });
   gate.register('automation.save', {
     version: 1, effects: ['automation.write'], inputSchema: z.toJSONSchema(SaveInput),
-    description: 'Create or replace a server-owned Outpost Automation visible in the Automations UI. Supply a stable automationId, expectedRevision (0 for new) and a complete schedule. Supports one-time schedules (intervalMs: null, no calendar), fixed elapsed-time intervals >=60000 ms (not calendar-daily across DST), or wall-clock calendar schedules (intervalMs: null with calendar: { kind: "cron", expression, timezone, gap: "skip", fold }) in a named IANA timezone so local times stay consistent across DST. Each occurrence queues a NEW task in the saved mode (default full_control); Auto requires exact approval of this schedule write; the server must be running. Saving is not proof that a scheduled task ran. Inspect before retrying uncertain/stale writes.',
+    description: 'Create or replace a server-owned Outpost Automation visible in the Automations UI. Supply a stable automationId, expectedRevision (0 for new) and a complete schedule. Supports one-time schedules (intervalMs: null, no calendar), fixed elapsed-time intervals >=60000 ms (not calendar-daily across DST), or wall-clock calendar schedules (intervalMs: null with calendar: { kind: "cron", expression, timezone, gap: "skip", fold }) in a named IANA timezone so local times stay consistent across DST. Each occurrence queues a NEW task in the saved mode (default auto; Auto tasks cannot save full_control schedules); Auto requires exact approval of this schedule write; the server must be running. Saving is not proof that a scheduled task ran. Inspect before retrying uncertain/stale writes.',
     parse: input => z.record(z.string(), z.json()).parse(validateSave(input)),
     target: args => `automation ${args.automationId}: ${SaveInput.parse(args).schedule.name}`,
     execute: async input => gate.db.transaction(() => {
@@ -100,7 +101,7 @@ export function registerAutomationTools(gate: Gate, scheduler: Scheduler, option
   });
   gate.register('automation.set_paused', {
     version: 1, effects: ['automation.write'], inputSchema: z.toJSONSchema(PauseInput),
-    description: 'Pause or resume an existing Outpost Automation using its current revision from automation.list. Preserves the schedule and task settings. Pausing does not delete the schedule or cancel tasks already queued/running. Resuming retains nextAt and the missed-interval policy, so a past-due schedule may run immediately; use automation.save to change nextAt first if needed. Use automation.delete to delete a schedule; no OS-cron changes.',
+    description: 'Pause or resume an existing Outpost Automation using its current revision from automation.list. Preserves the schedule and task settings. Pausing does not delete the schedule or cancel tasks already queued/running. Resuming retains nextAt and the missed-interval policy, so a past-due schedule may run immediately; use automation.save to change nextAt first if needed. Auto tasks cannot resume full_control schedules. Use automation.delete to delete a schedule; no OS-cron changes.',
     parse: validatePause,
     target: args => `${args.paused ? 'pause' : 'resume'} automation ${args.automationId}`,
     execute: async input => gate.db.transaction(() => {

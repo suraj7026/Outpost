@@ -32,6 +32,7 @@ export interface RuntimeInfo {
   autoPolicyVersion?: number;
   sharedMemory?: boolean;
   piManagement?: boolean;
+  defaultTaskMode?: 'auto' | 'full_control';
   configured: boolean;
   model: string | null;
   hostAdministration: boolean;

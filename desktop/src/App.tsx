@@ -87,7 +87,9 @@ function Composer({
   const [goal, setGoal] = useState(""),
     [profile, setProfile] = useState(initialProfile),
     [model, setModel] = useState("");
-  const [mode, setMode] = useState<Mode>('full_control');
+  const [modeOverride, setMode] = useState<{ environment: Connection['environmentId']; mode: Mode }>();
+  const mode = modeOverride && modeOverride.environment === connection.environmentId
+    ? modeOverride.mode : connection.runtime?.defaultTaskMode ?? 'auto';
   const modeBlocked = modeBlocker(mode, connection.runtime);
   const [modelRef, setModelRef] = useState<ModelRef | null>(null);
   const managed = !!connection.runtime?.piManagement;
@@ -169,7 +171,7 @@ function Composer({
           }}
         />
         <div className="composer-toolbar">
-          <ControlMode label="New task control mode" value={mode} runtime={connection.runtime} onModeChange={setMode} disabled={!connection.connected || connection.busy || connection.retired || !!connection.info?.pending || !!connection.info?.pendingError || recordedPreview()} />
+          <ControlMode label="New task control mode" value={mode} runtime={connection.runtime} onModeChange={mode => setMode({ environment: connection.environmentId, mode })} disabled={!connection.connected || connection.busy || connection.retired || !!connection.info?.pending || !!connection.info?.pendingError || recordedPreview()} />
           <div className="composer-model-control">
           {managed ? <ModelPicker catalogue={connection.agentCatalogue} value={selectedRef} onChange={setModelRef} disabled={!connection.connected || connection.busy || !!connection.info?.pending || connection.retired || !!connection.info?.pendingError} /> : <ComposerModelSelect
             aria-label="Ollama model"

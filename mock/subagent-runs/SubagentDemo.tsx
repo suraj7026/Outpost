@@ -6,7 +6,7 @@ type RunState = 'completed' | 'running' | 'failed' | 'stopped';
 type RunTab = 'activity' | 'result';
 const runTitle = 'Update navigation and approval regressions';
 const model = 'GPT-6 Astra';
-const files = ['desktop/test-startup-navigation.mjs', 'desktop/test-workspace-refinement.mjs'];
+const files = ['desktop/tests/test-startup-navigation.mjs', 'desktop/tests/test-workspace-refinement.mjs'];
 const assignment = 'Update only the navigation and approval regression tests. Replace the removed Approvals page with chat-based attention indicators, cover saved-page migration to All chats, and verify the exact-action review flow. Preserve the automation, memory, chat, and replica checks. Do not change production code or create commits. Report the validation results and any remaining issues.';
 const outcome = {
   completed: { label: 'Completed', time: '1m 12s', summary: 'Updated the tests for chat-based approvals and verified that navigation, action review, and saved-page restoration still work.' },
@@ -56,11 +56,11 @@ function Activity({ state }: { state: RunState }) {
     </details>
     <div className="subagent-run-message"><span className="subagent-run-author"><GitBranch size={15} aria-hidden="true" />Subagent</span><p>I’ll inspect the current navigation tests and review-dialog contract, update only the two test files, and run the targeted regressions.</p></div>
     <div className="subagent-section-title">Recorded activity</div>
-    <ToolRow kind="read" title="Read navigation and approval tests" output={'desktop/test-startup-navigation.mjs\ndesktop/test-workspace-refinement.mjs\n\nRead the existing test cases and fixture setup.'} />
+    <ToolRow kind="read" title="Read navigation and approval tests" output={'desktop/tests/test-startup-navigation.mjs\ndesktop/tests/test-workspace-refinement.mjs\n\nRead the existing test cases and fixture setup.'} />
     <ToolRow kind="read" title="Read exact-action review contract" output={'desktop/src/ActionReviewDialog.tsx\ndesktop/src/startup-navigation.ts\n\nInspected revision, owner, and approval guards.'} />
     <ToolRow kind="edit" title="Update 2 regression test files" output={'Added stored Approvals → All chats migration coverage.\nReplaced the obsolete Approvals-page fixture with exact-action review.\nKept automation, memory, chat, and replica checks.'} />
     <ToolRow kind="command" title="Run startup navigation tests" command="node test-startup-navigation.mjs" output={'51 scenarios, 436 assertions passed.\nExit code 0'} />
-    <ToolRow kind="command" title="Run workspace regression tests" state={state} command="node test-workspace-refinement.mjs" output={state === 'completed' ? 'Workspace refinement checks passed.\nExit code 0' : state === 'running' ? 'Checking approval, dispatch, and stale-action handling…\nWaiting for the test process to finish.' : state === 'failed' ? 'AssertionError: expected the exact-action review dialog to be visible.\nExit code 1\n\nSample failure for this design preview.' : 'Run stopped before the test process completed.\nNo successful validation result recorded.'} />
+    <ToolRow kind="command" title="Run workspace regression tests" state={state} command="node tests/test-workspace-refinement.mjs" output={state === 'completed' ? 'Workspace refinement checks passed.\nExit code 0' : state === 'running' ? 'Checking approval, dispatch, and stale-action handling…\nWaiting for the test process to finish.' : state === 'failed' ? 'AssertionError: expected the exact-action review dialog to be visible.\nExit code 1\n\nSample failure for this design preview.' : 'Run stopped before the test process completed.\nNo successful validation result recorded.'} />
     {state === 'completed' && <ToolRow kind="command" title="Check whitespace and patch formatting" command="git diff --check" output={'No whitespace errors.\nExit code 0'} />}
     <div className="subagent-run-message subagent-run-outcome"><span className="subagent-run-author"><StatusIcon state={state} />{state === 'completed' ? 'Returned to parent' : state === 'running' ? 'Working' : 'Partial result'}</span><p>{outcome[state].summary}</p></div>
   </div>;

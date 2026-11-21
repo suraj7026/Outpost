@@ -76,13 +76,13 @@ node --test scripts/test-sign-releases.mjs
 node scripts/test-pi-update.mjs --qualify
 python3 -m unittest discover -s deploy/environment -p 'test_auto_update.py'
 python3 -m unittest discover -s deploy/environment -p 'test_host_update.py'
-node --test desktop/test-automatic-updates.ts
+node --test desktop/tests/test-automatic-updates.ts
 cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked --no-default-features update
 npm run build
 npm --prefix desktop run build
-node desktop/test-maintenance.mjs
-node desktop/test-workspace-panel.mjs
-OUTPOST_TEST_BROWSER=webkit node desktop/test-workspace-panel.mjs
+node desktop/tests/test-maintenance.mjs
+node desktop/tests/test-workspace-panel.mjs
+OUTPOST_TEST_BROWSER=webkit node desktop/tests/test-workspace-panel.mjs
 ```
 
 Unit/fixture tests do not substitute for a disposable Linux systemd qualification and an actual app-driven enrollment/update rehearsal. Enabling the grant on a live server is a separate one-time user action; implementing or rebuilding the feature alone does not enroll existing installations.

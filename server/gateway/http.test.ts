@@ -24,7 +24,7 @@ for (const mode of [undefined,'ask_permission','auto','full_control']) test(`sig
         assert.notEqual((await fetch(base+'/v1/commands',{ method: 'POST',body: JSON.stringify(create) })).status,200);
         assert.equal(db.list('task').length,0);
     assert.equal((await request('/v1/commands',create)).status,200); assert.equal((await request('/v1/commands',create)).status,200);
-    assert.equal(db.need('policy',taskId).data.mode,mode === 'auto' || mode === 'ask_permission' ? 'auto' : 'full_control');
+    assert.equal(db.need('policy',taskId).data.mode,mode === 'full_control' ? 'full_control' : 'auto');
     await coordinator.drain();
     const proposal = command('action.propose',taskId,1,{ tool: 'system.inspect',arguments: {} });
     assert.equal((await request('/v1/commands',proposal)).status,200); await coordinator.drain();

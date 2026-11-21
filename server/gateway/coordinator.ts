@@ -13,7 +13,7 @@ import { Workspace, Artifacts } from '../artifacts/files.js';
 import { WorkspaceReview, WorkspaceFilesInput, WorkspaceReadInput } from '../artifacts/workspace-review.js';
 import { registerCommands } from '../processes/runner.js';
 import { registerInventory } from '../operations/machine.js';
-import { PiRuntime } from '../pi-adapter/runtime.js';
+import { runtimeConfig, RuntimeConfigRequest, updateRuntimeConfig } from '../pi-management/runtime-config.js';
 import { RemotePiRuntime } from '../pi-adapter/remote-runtime.js';
 import { WorkerClient } from '../pi-worker/client.js';
 import { ManagementRequest, ModelRef } from '../pi-management/contracts.js';
@@ -49,7 +49,7 @@ export class Coordinator {
   readonly live: LiveFeed;
   readonly devices: Devices; readonly tasks: Tasks; readonly artifacts: Artifacts; readonly memory: MemoryStore; readonly scheduler: Scheduler;
   private managementWrites = new Map<string, number>();
-  private gates = new Map<string,Gate>(); private runtimes = new Map<string,PiRuntime | RemotePiRuntime>(); private jobs = new Set<string>();
+  private gates = new Map<string,Gate>(); private runtimes = new Map<string,RemotePiRuntime>(); private jobs = new Set<string>();
   private baseCatalogue: ReturnType<Gate['catalogue']> | undefined;
     private runtimeJobs = new Set<Promise<void>>();
       private drains = new Set<Promise<void>>();
@@ -101,7 +101,7 @@ export class Coordinator {
   }
   private registerTools(gate: Gate, taskId: string, workspace: Workspace) {
     workspace.register(gate); registerInventory(gate); registerCommands(gate,workspace,new Set(this.options.executables ?? []),this.options.unrestrictedCommands);
-    registerAutomationTools(gate,this.scheduler,{ workerAvailable: !!this.options.worker, assertWritable: () => {
+    registerAutomationTools(gate,this.scheduler,{ workerAvailable: !!this.options.worker, callerMode: () => gate.policy(taskId).data.mode, assertWritable: () => {
       requireThat(!this.maintenance.holding,'maintenance_in_progress');
       requireThat(this.dispatchEnabled,'recovery_dispatch_disabled');
     } });
@@ -235,8 +235,14 @@ export class Coordinator {
   }
   async agentRequest(deviceId: string, input: unknown) {
     requireThat(this.options.worker, 'pi_worker_unavailable', 'Server Pi management is not enabled.');
-    const request = ManagementRequest.parse(input);
     requireThat(!this.db.need('device', deviceId).data.revoked, 'revoked_device');
+    if (input && typeof input === 'object' && 'type' in input &&
+      (input.type === 'runtime.set_extension_enabled' || input.type === 'runtime.set_default_task_mode')) {
+      requireThat(!this.closing, 'coordinator_stopping');
+      requireThat(!this.maintenance.holding, 'maintenance_in_progress');
+      return updateRuntimeConfig(this.db, RuntimeConfigRequest.parse(input));
+    }
+    const request = ManagementRequest.parse(input);
     if (['maintenance.stage', 'maintenance.prepare', 'maintenance.status', 'maintenance.cancel'].includes(request.type)) return this.maintenance.request(deviceId, request);
     requireThat(!['maintenance.hold', 'maintenance.release'].includes(request.type), 'maintenance_internal_operation');
     if (this.maintenance.holding) requireThat(['catalogue', 'runtime.inventory', 'transfer.inventory', 'transfer.history', 'transfer.status', 'transfer.cancel', 'login.status', 'login.answer', 'login.cancel'].includes(request.type), 'maintenance_in_progress');
@@ -251,6 +257,15 @@ export class Coordinator {
     try {
       const result = await this.options.worker.request({ type: 'management', owner: deviceId, request });
       settled = true;
+      if (request.type === 'runtime.inventory') {
+        const inventory = z.object({ extensionStates: z.record(z.string(), z.string()).optional() }).passthrough().parse(result);
+        const config = runtimeConfig(this.db);
+        const extensionStates = { ...inventory.extensionStates };
+        for (const [name, enabled] of Object.entries(config.extensions.enabled)) {
+          if (!enabled && extensionStates[name] === 'enabled') extensionStates[name] = 'disabled';
+        }
+        return { ...inventory, extensionStates, config };
+      }
       return result;
     }
     finally {
@@ -262,7 +277,7 @@ export class Coordinator {
     }
   }
   runtimeStatus() {
-    return { controlModes: [...controlModes], autoPolicyVersion, piManagement: !!this.options.worker, configured: !!this.options.worker || !!this.options.inference || !!(this.options.apiKey && this.options.roles),model: this.options.inference?.model ?? null,hostAdministration: !!this.options.hosts,browserEngine: this.browsers ? 'camoufox' : null,browserDirect: !!this.browsers,browserTakeover: !!this.browserControl,unrestrictedCommands: !!this.options.unrestrictedCommands };
+    return { controlModes: [...controlModes], autoPolicyVersion, piManagement: !!this.options.worker, configured: !!this.options.worker,defaultTaskMode: runtimeConfig(this.db).defaultTaskMode,model: this.options.inference?.model ?? null,hostAdministration: !!this.options.hosts,browserEngine: this.browsers?.engine ?? null,browserDirect: !!this.browsers,browserTakeover: !!this.browserControl,unrestrictedCommands: !!this.options.unrestrictedCommands };
   }
   environmentDescriptor() {
     return this.environment.descriptor({ worker: !!this.options.worker, hostAdministration: !!this.options.hosts });
@@ -340,19 +355,11 @@ export class Coordinator {
   }
   private runPi(taskId: string, prompt: string, selection?: ModelRef) {
     const task = this.db.need<Task>('task',taskId);
-    let pending: Promise<void>;
-    if (this.options.worker) {
-      const saved = this.runtimes.get(taskId);
-      const runtime = saved instanceof RemotePiRuntime ? saved : new RemotePiRuntime(this.db,this.gate(taskId),this.options.worker,this.live);
-      this.runtimes.set(taskId,runtime);
-      pending = runtime.run(taskId,prompt,selection ?? { providerId: task.data.provider ?? 'outpost-ollama', modelId: task.data.model ?? this.options.inference?.model ?? '' });
-    } else {
-      const inference = this.options.inference ? { ...this.options.inference,...(task.data.model ? { model: task.data.model } : {}) } : undefined;
-      const saved = this.runtimes.get(taskId);
-      const runtime = saved instanceof PiRuntime ? saved : new PiRuntime(this.db,this.gate(taskId),join(this.root,'pi',taskId),this.live);
-      this.runtimes.set(taskId,runtime);
-      pending = runtime.run(taskId,join(this.options.workspaceRoot ?? join(this.root,'workspaces'),taskId),prompt,this.options.apiKey ?? 'ollama',this.options.roles,inference);
-    }
+    const worker = this.options.worker;
+    requireThat(worker, 'pi_worker_unavailable');
+    const runtime = this.runtimes.get(taskId) ?? new RemotePiRuntime(this.db,this.gate(taskId),worker,this.live);
+    this.runtimes.set(taskId,runtime);
+    const pending = runtime.run(taskId,prompt,selection ?? { providerId: task.data.provider ?? 'outpost-ollama', modelId: task.data.model ?? this.options.inference?.model ?? '' });
     this.runtimeJobs.add(pending);
     void pending.catch(error => {
       const current = this.db.need<Task>('task',taskId);
@@ -382,7 +389,7 @@ export class Coordinator {
           if (blockedTasks.has(taskId)) continue;
           if (!runtime?.isActive(taskId) && this.db.need<Task>('task', taskId).data.state === 'waiting_for_approval') { blockedTasks.add(taskId); continue; }
           if (this.browsers?.isHeld(taskId)) { blockedTasks.add(taskId); continue; }
-          if (runtime instanceof RemotePiRuntime && runtime.isActive(taskId) && data.modelRef && !runtime.canSteer(ModelRef.parse(data.modelRef))) {
+          if (runtime?.isActive(taskId) && data.modelRef && !runtime.canSteer(ModelRef.parse(data.modelRef))) {
             blockedTasks.add(taskId); continue;
           }
         }
@@ -398,7 +405,7 @@ export class Coordinator {
             const taskId = String(data.taskId);
             const runtime = this.runtimes.get(taskId);
             if (runtime?.isActive(taskId)) await runtime.steer(taskId,String(data.text));
-            else if (this.options.worker || this.options.inference || (this.options.apiKey && this.options.roles)) {
+            else if (this.options.worker) {
               const task = this.db.need<Task>('task',taskId);
               if (!['paused','cancelled','completed'].includes(task.data.state)) {
                 this.db.put('task',taskId,task.revision,{ ...task.data,state: 'running',blocker: null });
@@ -409,9 +416,9 @@ export class Coordinator {
           else if (topic === 'task.run' || topic === 'task.resume') {
             const taskId = String(data.taskId), task = this.db.need<Task>('task',taskId);
             if (task.data.state === 'queued') {
-              if (!this.options.worker && !this.options.inference && (!this.options.apiKey || !this.options.roles)) this.db.put('task',taskId,task.revision,{ ...task.data,state: 'waiting_for_capacity',blocker: 'Configure an Ollama endpoint and model, or qualified Cloud roles. Local tools can be proposed explicitly.' });
+              if (!this.options.worker) this.db.put('task',taskId,task.revision,{ ...task.data,state: 'waiting_for_capacity',blocker: 'Configure a Pi worker and select a model. Local tools can be proposed explicitly.' });
               else {
-                this.tasks.claim(taskId,this.options.worker ? 'pi-server-worker' : 'pi-local');
+                this.tasks.claim(taskId,'pi-server-worker');
                 this.runPi(taskId,task.data.goal,data.modelRef ? ModelRef.parse(data.modelRef) : undefined);
               }
             }

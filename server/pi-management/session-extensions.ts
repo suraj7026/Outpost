@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { bundledExtensions } from './bundled-extensions.js';
 import { managementError } from './contracts.js';
 import { SessionBackground } from './session-background.js';
+import type { ExtensionOverrides } from './runtime-config.js';
 import { Mode } from '../core/contracts.js';
 
 const manifest = z.object({ pi: z.object({ extensions: z.array(z.string()).min(1),
@@ -13,11 +14,11 @@ const manifest = z.object({ pi: z.object({ extensions: z.array(z.string()).min(1
 const nativeAllowance = `Installed release extensions are available natively, including their tools and child agents. They may execute, read, and write with the worker's native privileges, without routing through outpost_action. This is an explicit exception to any instruction above that all actual work must use outpost_action. Existing coordinator-gated tools still use outpost_action and retain validation, execution boundaries, and evidence requirements, without per-action approval.`;
 
 /** Release packages only: no ambient settings packages, cwd extensions, or automatic installs. */
-export async function sessionExtensions(options: { cwd: string; agentDir: string; systemPrompt: string; mode?: z.input<typeof Mode>; releaseDirectory?: string; modelRuntime?: ModelRuntime }) {
+export async function sessionExtensions(options: { cwd: string; agentDir: string; systemPrompt: string; mode?: z.input<typeof Mode>; extensionOverrides?: z.infer<typeof ExtensionOverrides> | undefined; releaseDirectory?: string; modelRuntime?: ModelRuntime }) {
   const release = options.releaseDirectory ?? fileURLToPath(new URL('../../', import.meta.url));
   const auto = Mode.parse(options.mode ?? 'full_control') === 'auto';
-    // Decide before resolving/importing packages: even extension factory/startup code can execute.
-    const extensions = auto ? [] : bundledExtensions(release).extensions;
+  // Filter before importing packages: even extension factory/startup code can execute.
+  const extensions = auto ? [] : bundledExtensions(release).extensions.filter(({ name }) => options.extensionOverrides?.[name] !== false);
   const entries: string[] = [];
   const packages = extensions.map(({ name }) => {
     const directory = realpathSync(join(release, 'node_modules', name));
@@ -36,7 +37,7 @@ export async function sessionExtensions(options: { cwd: string; agentDir: string
   const loader = new DefaultResourceLoader({ cwd: options.cwd, agentDir: options.agentDir,
     settingsManager: SettingsManager.inMemory(), eventBus: events, additionalExtensionPaths: packages,
     noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
-    systemPrompt: auto ? options.systemPrompt : `${options.systemPrompt}\n\n${nativeAllowance}`, appendSystemPrompt: [] });
+    systemPrompt: !extensions.length ? options.systemPrompt : `${options.systemPrompt}\n\n${nativeAllowance}`, appendSystemPrompt: [] });
   await loader.reload();
   const loaded = loader.getExtensions();
   // Profiles already compose the package provider with credential/transport handling.

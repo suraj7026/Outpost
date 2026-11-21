@@ -64,6 +64,18 @@ function initializeKeychain() {
   finally { input.fill(0); der.fill(0); }
 }
 
+export function signReleaseFeed(index, key) {
+  const payload = Buffer.from(JSON.stringify(index));
+  return { payload: payload.toString('base64'), signature: sign(null, payload, key).toString('base64'), publisherPublicKey: rawPublicKey(key) };
+}
+
+export function verifyReleaseFeed(envelope, key) {
+  const payload = Buffer.from(envelope.payload, 'base64');
+  assert.equal(envelope.publisherPublicKey, rawPublicKey(key));
+  assert.ok(verify(null, payload, createPublicKey(key), Buffer.from(envelope.signature, 'base64')), 'Existing feed signature rejected');
+  return JSON.parse(payload);
+}
+
 export function signArtifact(metadata, bytes, key, contents) {
   assert.equal(key.asymmetricKeyType, 'ed25519');
   assert.equal(metadata.schema, 1);

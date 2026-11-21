@@ -1,16 +1,19 @@
 import { z } from 'zod';
 import { Mode, RunState, id, requireThat } from '../core/contracts.js';
 import { Ledger } from '../core/ledger.js';
+import { runtimeConfig } from '../pi-management/runtime-config.js';
 import { ModelRef } from '../pi-management/contracts.js';
 import { retireLegacyApprovals } from '../policy/migration.js';
 
-export const NewTask = z.strictObject({ goal: z.string().trim().min(1).max(20000), profile: z.enum(['code','browser','operations','research','cowork','chat']), mode: Mode.default('full_control'), model: z.string().trim().min(1).max(200).optional(), modelRef: ModelRef.optional() }).refine(value => !(value.model && value.modelRef), 'Choose either a legacy model or a provider-qualified model');
+export const NewTask = z.strictObject({ goal: z.string().trim().min(1).max(20000), profile: z.enum(['code','browser','operations','research','cowork','chat']), mode: Mode.default('auto'), model: z.string().trim().min(1).max(200).optional(), modelRef: ModelRef.optional() }).refine(value => !(value.model && value.modelRef), 'Choose either a legacy model or a provider-qualified model');
 export interface Task { goal: string; profile: string; model?: string; provider?: string; state: z.infer<typeof RunState>; runId: string; instructionSequence: number; plan: { title: string; state: string }[]; evidence: string[]; blocker: string | null }
 const terminal = new Set(['cancelled','completed']);
 export class Tasks {
   constructor(readonly db: Ledger) {}
   create(taskId: string, input: unknown) {
-    const data = NewTask.parse(input);
+    const parsed = NewTask.parse(input);
+    const data = (input as z.input<typeof NewTask>).mode === undefined
+      ? { ...parsed, mode: runtimeConfig(this.db).defaultTaskMode } : parsed;
     const task = this.db.put<Task>('task',taskId,0,{ goal: data.goal,profile: data.profile,...(data.modelRef ? { model: data.modelRef.modelId, provider: data.modelRef.providerId } : data.model ? { model: data.model } : {}),state: 'queued',runId: id(),instructionSequence: 1,plan: [],evidence: [],blocker: null },'task.created');
     this.db.put('policy',taskId,0,{ mode: data.mode });
     this.db.put('message',id(),0,{ taskId,author: 'owner',text: data.goal,sequence: 1 },'instruction.accepted');

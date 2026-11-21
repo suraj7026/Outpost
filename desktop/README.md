@@ -59,7 +59,7 @@ A chat's attention indicator opens the exact-action dialog. Approval/deny/dispat
 
 Dark colors use sidebar `#0F0F0F`, workspace `#1E1E1E`, raised controls `#282828`, selected states/dividers `#363636`, and neutral text. Cards and dialogs use nearby neutral surfaces; semantic status colors remain. Light theme, native glass preferences, and forced-color accessibility retain their own behavior. Page actions use 36px controls, toolbar fields use 40px, and dialogs share 16px corners and consistent padding. Long schedule forms keep their header/footer visible while fields scroll. Specialized browser, image, and setup viewers retain their working dimensions.
 
-Validation: `node desktop/test-ui-consistency.mjs` (also `OUTPOST_TEST_BROWSER=webkit`), `node desktop/test-settings-refinement.mjs`, `node desktop/test-startup-navigation.mjs`, and `node_modules/.bin/tsx --tsconfig desktop/tsconfig.json --test desktop/test-chat-attention.ts`. From `desktop`, `node test-dialog-consistency.mjs` and `node test-workspace-refinement.mjs` cover forms and mutation guards. All use synthetic connections, not live servers.
+Validation: `node desktop/tests/test-ui-consistency.mjs` (also `OUTPOST_TEST_BROWSER=webkit`), `node desktop/tests/test-settings-refinement.mjs`, `node desktop/tests/test-startup-navigation.mjs`, and `node_modules/.bin/tsx --tsconfig desktop/tsconfig.json --test desktop/tests/test-chat-attention.ts`. From `desktop`, `node tests/test-dialog-consistency.mjs` and `node tests/test-workspace-refinement.mjs` cover forms and mutation guards. All use synthetic connections, not live servers.
 
 ## File and browser workspace
 
@@ -75,7 +75,7 @@ The Browser tab reuses the live server browser and its explicit Take control / R
 - Native downloads verify scope, path, byte length, and SHA-256, then save a uniquely named copy into Downloads. Files changed since preview require refreshing before download. No remote file writes are performed by the reviewer.
 - Existing remote servers must be updated to a compatible bundled release for the new workspace query types. Both the main and legacy-compatible bundles include them. Unsupported queries show **Server update required** with an **Open Server updates** link scoped to the chat's server; legacy unbound connections instead link to setup guidance. Permission/network failures are not treated as missing features. A verified automatic update refreshes that server's open file/listing without a manual Retry; reconnecting also reloads them. The app never substitutes action arguments for saved file contents. Published artifacts and existing browser APIs remain usable.
 
-Validation: `node desktop/test-workspace-panel.mjs` and `OUTPOST_TEST_BROWSER=webkit node desktop/test-workspace-panel.mjs` exercise the production build using isolated synthetic IPC. Unit tests: `node_modules/.bin/tsx --tsconfig desktop/tsconfig.json --test desktop/test-workspace-files.ts desktop/test-workspace-resize.ts desktop/test-document-content.ts`. Server tests live in `server/artifacts/workspace-review.test.ts` and `server/gateway/workspace-review.test.ts`; native download tests use `cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked --no-default-features transport::tests::workspace`.
+Validation: `node desktop/tests/test-workspace-panel.mjs` and `OUTPOST_TEST_BROWSER=webkit node desktop/tests/test-workspace-panel.mjs` exercise the production build using isolated synthetic IPC. Unit tests: `node_modules/.bin/tsx --tsconfig desktop/tsconfig.json --test desktop/tests/test-workspace-files.ts desktop/tests/test-workspace-resize.ts desktop/tests/test-document-content.ts`. Server tests live in `server/artifacts/workspace-review.test.ts` and `server/gateway/workspace-review.test.ts`; native download tests use `cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked --no-default-features transport::tests::workspace`.
 
 ## Subagent runs
 
@@ -87,7 +87,7 @@ Native subagent launches appear as compact chat rows with status, observed assig
 - Native subagents retain their existing server-worker privileges and native-extension execution policy, without individual action approvals. This UI does not introduce an approval sandbox or change extension enablement.
 - Display records are bounded and omit hidden reasoning, raw native metadata, capability tokens, and internal paths. Content renders as inert text, without HTML execution or embedded remote loads. See the [server contract and privacy limits](../server/pi-adapter/SUBAGENT-RUNS.md).
 
-Validation: `node desktop/test-subagents.mjs` and `OUTPOST_TEST_BROWSER=webkit node desktop/test-subagents.mjs` exercise the built real app with synthetic IPC. Unit tests: `node_modules/.bin/tsx --tsconfig desktop/tsconfig.json --test desktop/test-subagent-model.ts`. No live servers or native subagent jobs are launched by these browser tests.
+Validation: `node desktop/tests/test-subagents.mjs` and `OUTPOST_TEST_BROWSER=webkit node desktop/tests/test-subagents.mjs` exercise the built real app with synthetic IPC. Unit tests: `node_modules/.bin/tsx --tsconfig desktop/tsconfig.json --test desktop/tests/test-subagent-model.ts`. No live servers or native subagent jobs are launched by these browser tests.
 
 ## Server updates
 
@@ -139,14 +139,14 @@ Use **Settings → Servers → your server → Models & providers**. Managed ser
 ```sh
 # From the repository root:
 npm --prefix desktop run build
-node desktop/test-connection-administration.mjs # synthetic IPC; no Keychain or live server
-node desktop/test-environments.mjs
-node desktop/test-appearance.mjs
-OUTPOST_TEST_BROWSER=webkit node desktop/test-appearance.mjs
-node desktop/test-conversation-detail.mjs # synthetic Compact/Extended and thinking lifecycle tests in Chromium + WebKit
-node desktop/test-terminal-theme.mjs
+node desktop/tests/test-connection-administration.mjs # synthetic IPC; no Keychain or live server
+node desktop/tests/test-environments.mjs
+node desktop/tests/test-appearance.mjs
+OUTPOST_TEST_BROWSER=webkit node desktop/tests/test-appearance.mjs
+node desktop/tests/test-conversation-detail.mjs # synthetic Compact/Extended and thinking lifecycle tests in Chromium + WebKit
+node desktop/tests/test-terminal-theme.mjs
 # Install the browser first if missing: npx playwright install webkit
-OUTPOST_TEST_BROWSER=webkit node desktop/test-environments.mjs
+OUTPOST_TEST_BROWSER=webkit node desktop/tests/test-environments.mjs
 cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked --no-default-features
 
 # Explicit opt-in only: uses the real paired Keychain identity and private server.
@@ -156,6 +156,6 @@ OUTPOST_LIVE_CLIENT=1 cargo test --manifest-path desktop/src-tauri/Cargo.toml li
 
 The earlier single-environment implementation passed the live Rust roundtrip and was inspected in the packaged app with the existing identity. That historical evidence does not qualify the current multi-environment changes: their reviewed native and Chromium/WebKit tests use synthetic identities/IPC, and the live-Keychain test remains intentionally ignored.
 
-From the repository root, `node desktop/test-browser-modes.mjs` checks browser viewing, takeover, transient input, unknown outcomes, competing-device states, enlarged view and stale task replies at three widths; it also supports `OUTPOST_TEST_BROWSER=webkit`.
+From the repository root, `node desktop/tests/test-browser-modes.mjs` checks browser viewing, takeover, transient input, unknown outcomes, competing-device states, enlarged view and stale task replies at three widths; it also supports `OUTPOST_TEST_BROWSER=webkit`.
 
-From the repository root, `node desktop/test-studio-ui.mjs` runs isolated approved-style assertions and Studio interaction tests against the built frontend, including bundled-font checks and cloud-only picker/dispatch checks. `node desktop/test-typography.mjs` verifies the shared font stack, rendered fonts and fallback, offline loading, and Settings-row alignment at desktop/tablet/phone widths; it also supports `OUTPOST_TEST_BROWSER=webkit`. `node desktop/test-cloud-models.mjs` covers the cloud-filter and selection rules. `node desktop/test-image-viewer.mjs` runs synthetic image-viewer checks; set `OUTPOST_TEST_BROWSER=webkit` to run them in WebKit (Chromium is also used to generate valid test images). `node desktop/test-scroll-containment.mjs` checks fixed chrome and independent scrolling with long content, including streaming and resizing; it supports the same WebKit switch. `node desktop/test-ui.mjs /path/to/recorded-preview.json` runs the browser UI checks. Input must explicitly contain `{snapshot,runtime,models}` from a synthetic fixture or an authorized recording; use synthetic input for regression runs. No sample records or keys are bundled. Recorded preview mode refuses all mutations. `node desktop/test-stream-ui.mjs /path/to/recorded-preview.json` additionally exercises live updates through a controlled Tauri IPC fixture (14 checks). The original recorded-data run passed 48 assertions across 1440, 1050, 768 and 390px, plus light mode and offline handling. This does not claim automated native mouse/keyboard testing; macOS Accessibility permission was unavailable.
+From the repository root, `node desktop/tests/test-studio-ui.mjs` runs isolated approved-style assertions and Studio interaction tests against the built frontend, including bundled-font checks and cloud-only picker/dispatch checks. `node desktop/tests/test-typography.mjs` verifies the shared font stack, rendered fonts and fallback, offline loading, and Settings-row alignment at desktop/tablet/phone widths; it also supports `OUTPOST_TEST_BROWSER=webkit`. `node desktop/tests/test-cloud-models.mjs` covers the cloud-filter and selection rules. `node desktop/tests/test-image-viewer.mjs` runs synthetic image-viewer checks; set `OUTPOST_TEST_BROWSER=webkit` to run them in WebKit (Chromium is also used to generate valid test images). `node desktop/tests/test-scroll-containment.mjs` checks fixed chrome and independent scrolling with long content, including streaming and resizing; it supports the same WebKit switch. `node desktop/tests/test-ui.mjs /path/to/recorded-preview.json` runs the browser UI checks. Input must explicitly contain `{snapshot,runtime,models}` from a synthetic fixture or an authorized recording; use synthetic input for regression runs. No sample records or keys are bundled. Recorded preview mode refuses all mutations. `node desktop/tests/test-stream-ui.mjs /path/to/recorded-preview.json` additionally exercises live updates through a controlled Tauri IPC fixture (14 checks). The original recorded-data run passed 48 assertions across 1440, 1050, 768 and 390px, plus light mode and offline handling. This does not claim automated native mouse/keyboard testing; macOS Accessibility permission was unavailable.

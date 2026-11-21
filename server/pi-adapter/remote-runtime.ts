@@ -6,6 +6,7 @@ import { digest, requireThat, Fault } from '../core/contracts.js';
 import { Gate } from '../policy/trust.js';
 import { LiveFeed } from '../gateway/live.js';
 import type { Task } from '../tasks/tasks.js';
+import { runtimeConfig } from '../pi-management/runtime-config.js';
 import { ModelRef } from '../pi-management/contracts.js';
 import { Projection, RunPoll } from '../pi-worker/contracts.js';
 import { interruptedSubagent } from './subagent-contract.js';
@@ -45,7 +46,7 @@ export class RemotePiRuntime {
     const model = ModelRef.parse(selection), run = { taskId, runId: randomUUID(), model, cancelled: false };
     this.gate.startRuntime(taskId);
     this.current = run;
-    const previous = this.db.get<{ file: string }>('pi_session', taskId);
+    const previous = this.db.get<{ file: string; adapterVersion?: number }>('pi_session', taskId);
     const operations = new Map<string, { fingerprint: string; done: Promise<void> }>();
     const observations = new Map<string, Projection>();
     const rejectChildDisplay = (value: unknown, sessionId: string | undefined) => {
@@ -63,10 +64,12 @@ export class RemotePiRuntime {
     };
     let cursor = 0;
     try {
+      const extensionOverrides = runtimeConfig(this.db).extensions.enabled;
       await this.worker.request({ type: 'run.start', runId: run.runId, taskId, model, prompt,
         mode: this.gate.policy(taskId).data.mode,
         systemPrompt: outpostSystemPrompt(this.gate.catalogue(), undefined, this.gate.policy(taskId).data.mode),
-        ...(previous?.data.file ? { sessionFile: basename(previous.data.file) } : {}) });
+        ...(Object.keys(extensionOverrides).length ? { extensionOverrides } : {}),
+        ...(previous?.data.file && previous.data.adapterVersion !== 1 ? { sessionFile: basename(previous.data.file) } : {}) });
       if (run.cancelled) { this.gate.stop(taskId); await this.settleAbort(run.runId); }
       while (true) {
         const poll = ObservedRunPoll.parse(await this.worker.request({ type: 'run.poll', runId: run.runId, after: cursor }));
